@@ -1,0 +1,12 @@
+.*
+tests
+vendor
+Makefile
+Dockerfile*
+docker-compose.yml
+phpunit.xml
+composer.*
+package-lock.json
+*.log
+*.tmp
+README.md
