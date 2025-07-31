@@ -23,3 +23,12 @@ test-case: .build.stamp
 rebuild:
 	docker compose build --no-cache phpunit
 	@touch .build.stamp
+
+release: .releaseignore
+	@echo "Creating release..."
+	rm -rf release
+	mkdir release
+	rsync -av --exclude-from='.releaseignore' ./ release/
+	cd release && zip -r ../kofi-members-$(VERSION).zip .
+	rm -rf release
+	@echo "Release created: kofi-members-$(VERSION).zip"

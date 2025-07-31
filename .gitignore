@@ -33,3 +33,4 @@ Desktop.ini
 # === Misc ===
 *.sublime-project
 *.sublime-workspace
+release/*
