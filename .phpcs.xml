@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<ruleset name="FoodGeek WordPress Plugin Ruleset">
+  <description>Custom ruleset for WordPress plugin development, based on the WordPress Coding Standards.</description>
+
+  <!-- Base standard -->
+  <rule ref="WordPress" />
+
+  <!-- Exclude rules not applicable to WP plugin development -->
+  <exclude name="PSR1.Classes.ClassDeclaration.MissingNamespace" />
+  <exclude name="Generic.Files.LineLength.TooLong" />
+  <exclude name="PEAR.Files.IncludingFile.BracketsNotRequired" />
+  <exclude name="Generic.Commenting.Todo.CommentFound" />
+  <exclude name="WordPress.Files.FileName" />
+
+
+  <!-- Scan all PHP files -->
+  <file>.</file>
+
+  <!-- Exclude third-party and build dirs -->
+  <exclude-pattern>*/vendor/*</exclude-pattern>
+  <exclude-pattern>*/node_modules/*</exclude-pattern>
+  <exclude-pattern>*/tests/_output/*</exclude-pattern>
+
+  <!-- Report settings -->
+  <arg name="colors"/>
+  <arg name="parallel" value="4"/>
+</ruleset>

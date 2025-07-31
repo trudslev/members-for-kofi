@@ -1,0 +1,36 @@
+services:
+  phpunit:
+    build:
+      context: .
+      dockerfile: Dockerfile.test
+    env_file:
+      - .env
+    depends_on:
+      - db
+    volumes:
+      - .:/var/www/html/wp-content/plugins/kofi-members
+    entrypoint: /var/www/html/wp-content/plugins/kofi-members/tests/setup-tests.sh
+    networks:
+      - testnet
+
+  db:
+    image: mysql:lts
+    environment:
+      MYSQL_USER: ${WORDPRESS_DB_USER:-wp}
+      MYSQL_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wp}
+      MYSQL_ROOT_PASSWORD: ${WORDPRESS_DB_PASSWORD:-wp} 
+      MYSQL_DATABASE: ${WORDPRESS_DB_NAME:-wordpress_test}
+    networks:
+      - testnet
+    volumes:
+      - type: volume
+        source: dbdata
+        target: /var/lib/mysql
+        volume:
+          nocopy: true
+
+volumes:
+  dbdata:
+
+networks:
+  testnet:

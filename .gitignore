@@ -1,0 +1,35 @@
+# === General ===
+*.log
+*.tmp
+*.swp
+*.bak
+*.DS_Store
+*.idea/
+
+# === PHP & Composer ===
+vendor/
+composer.lock
+
+# === PHPUnit ===
+.build.stamp
+.phpunit.result.cache
+tests/output/
+coverage/
+.phpunit.cache/
+
+# === VS Code ===
+.vscode/*
+
+# === Docker ===
+.env
+docker-compose.override.yml
+**/node_modules/
+
+# === OS-specific ===
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# === Misc ===
+*.sublime-project
+*.sublime-workspace
