@@ -6,7 +6,7 @@
 
 - Listens for Ko-fi webhook events.
 - Automatically creates new users or updates existing ones.
-- Assigns WordPress roles based on Members for Ko-fihip tiers.
+- Assigns WordPress roles based on Ko-fi membership tiers.
 - Supports default roles for unmapped tiers.
 - Optional expiration of assigned roles.
 - Daily cron job to clean up expired roles.
