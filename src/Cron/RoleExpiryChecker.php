@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,19 +15,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KofiMembers
+ * @package MembersForKofi
  */
 
-namespace KofiMembers\Cron;
+namespace MembersForKofi\Cron;
 
-use KofiMembers\Logging\UserLogger;
+use MembersForKofi\Logging\UserLogger;
 
 /**
  * Class RoleExpiryChecker
  *
- * Handles the scheduling and execution of role expiry checks for Ko-fi Members.
+ * Handles the scheduling and execution of role expiry checks for Members for Ko-fi.
  *
- * @package KofiMembers\Cron
+ * @package MembersForKofi\Cron
  */
 class RoleExpiryChecker {
 	/**

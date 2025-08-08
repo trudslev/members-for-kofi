@@ -1,10 +1,10 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
  * PHP version 7.4+
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -18,31 +18,31 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
  * @category WordPress_Plugin
- * @package  KofiMembers
+ * @package  MembersForKofi
  * @author   Sune Trudslev <sune@trudslev.net>
  * @license  https://www.gnu.org/licenses/gpl-3.0.html GNU General Public License v3.0
- * @link     https://github.com/trudslev/kofi-members
+ * @link     https://github.com/trudslev/members-for-kofi
  */
 
-namespace KofiMembers;
+namespace MembersForKofi;
 
-use KofiMembers\Admin\AdminSettings;
-use KofiMembers\Logging\LoggerFactory;
-use KofiMembers\Cron\RoleExpiryChecker;
-use KofiMembers\Webhook\Webhook;
-use KofiMembers\Logging\UserLogger;
+use MembersForKofi\Admin\AdminSettings;
+use MembersForKofi\Logging\LoggerFactory;
+use MembersForKofi\Cron\RoleExpiryChecker;
+use MembersForKofi\Webhook\Webhook;
+use MembersForKofi\Logging\UserLogger;
 
 /**
- * Main plugin class for Ko-fi Members.
+ * Main plugin class for Members for Ko-fi.
  *
  * Handles initialization, activation, deactivation, and uninstall routines,
  * as well as admin menu, settings, logger, cron, and webhook integration.
  *
  * @category WordPress_Plugin
- * @package  KofiMembers
+ * @package  MembersForKofi
  * @author   Sune Trudslev <sune@trudslev.net>
  * @license  https://www.gnu.org/licenses/gpl-3.0.html GNU General Public License v3.0
- * @link     https://github.com/trudslev/kofi-members
+ * @link     https://github.com/trudslev/members-for-kofi
  */
 class Plugin {
 	/**
@@ -158,16 +158,16 @@ class Plugin {
 	}
 
 	/**
-	 * Adds the Ko-fi Members menu to the WordPress admin dashboard.
+	 * Adds the Members for Ko-fi menu to the WordPress admin dashboard.
 	 *
 	 * Registers the main menu page for the plugin in the admin interface.
 	 */
 	public function add_menu(): void {
 		add_menu_page(
-			__( 'Ko-fi Members', 'kofi-members' ),
-			__( 'Ko-fi Members', 'kofi-members' ),
+			__( 'Members for Ko-fi', 'members-for-kofi' ),
+			__( 'Members for Ko-fi', 'members-for-kofi' ),
 			'manage_options',
-			'kofi-members',
+			'members-for-kofi',
 			array( $this, 'render_settings_page' ),
 			'dashicons-heart',
 			80
@@ -198,7 +198,7 @@ class Plugin {
 	 * @return void
 	 */
 	public function initialize_logger(): void {
-		LoggerFactory::get_logger()->info( 'Ko-fi Members plugin initialized' );
+		LoggerFactory::get_logger()->info( 'Members for Ko-fi plugin initialized' );
 	}
 
 	/**
@@ -229,7 +229,7 @@ class Plugin {
 	 * @return void
 	 */
 	public static function add_rewrite_rules(): void {
-		add_rewrite_rule( '^kofi-webhook/?$', 'index.php?kofi_webhook=1', 'top' );
+		add_rewrite_rule( '^webhook-kofi/?$', 'index.php?kofi_webhook=1', 'top' );
 	}
 
 	/**

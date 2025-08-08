@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,10 +15,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KofiMembers
+ * @package MembersForKofi
  */
 
-namespace KofiMembers\Logging;
+namespace MembersForKofi\Logging;
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
@@ -30,7 +30,7 @@ use Monolog\Formatter\LineFormatter;
  * This class provides methods to create a logger with specific settings,
  * reset the logger instance, and retrieve the logger instance.
  *
- * @package KofiMembers\Logging
+ * @package MembersForKofi\Logging
  */
 class LoggerFactory {
 
@@ -76,7 +76,7 @@ class LoggerFactory {
 	 * @return Logger The configured logger instance.
 	 */
 	public static function create_logger( array $settings ): Logger {
-		$logger = new Logger( 'kofi-members' );
+		$logger = new Logger( 'members-for-kofi' );
 
 		$log_level = Logger::toMonologLevel( $settings['log_level'] ?? 'info' );
 
@@ -96,7 +96,7 @@ class LoggerFactory {
 				$wp_filesystem->mkdir( $log_dir, FS_CHMOD_DIR );
 			}
 
-			$log_path       = $log_dir . '/kofi-members.log';
+			$log_path       = $log_dir . '/members-for-kofi.log';
 			$stream_handler = new StreamHandler( $log_path, $log_level );
 			$line_format    = "[%datetime%] %level_name%: %message%\n%context%\n";
 			$formatter      = new LineFormatter( $line_format, 'Y-m-d H:i:s', true, true );

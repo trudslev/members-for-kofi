@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,25 +15,25 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KofiMembers
+ * @package MembersForKofi
  */
 
-namespace KofiMembers\Webhook;
+namespace MembersForKofi\Webhook;
 
 use WP_User;
-use KofiMembers\Logging\LoggerFactory;
+use MembersForKofi\Logging\LoggerFactory;
 use Monolog\Logger;
-use KofiMembers\Logging\UserLogger;
+use MembersForKofi\Logging\UserLogger;
 
 use get_option;
 
 /**
- * Handles incoming webhook requests for the Ko-fi Members plugin.
+ * Handles incoming webhook requests for the Members for Ko-fi plugin.
  *
  * This class is responsible for processing webhook payloads, verifying
  * tokens, creating users, and assigning roles based on the received data.
  *
- * @package KofiMembers
+ * @package MembersForKofi
  */
 class Webhook {
 
@@ -53,30 +53,6 @@ class Webhook {
 	 */
 	public function __construct( ?Logger $logger = null ) {
 		$this->logger = $logger ?? LoggerFactory::get_logger();
-	}
-
-	/**
-	 * Registers the webhook endpoint with the WordPress REST API.
-	 *
-	 * This function sets up the REST API route for handling webhook requests.
-	 *
-	 * @return void
-	 */
-	public function register(): void {
-		add_action(
-			'rest_api_init',
-			function () {
-				register_rest_route(
-					'kofi-members/v1',
-					'/webhook',
-					array(
-						'methods'             => 'POST',
-						'callback'            => array( $this, 'handle' ),
-						'permission_callback' => '__return_true',
-					)
-				);
-			}
-		);
 	}
 
 	/**

@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,19 +15,19 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KoFiMembers
+ * @package MembersForKofi
  */
 
-namespace KofiMembers\Tests\Logging;
+namespace MembersForKofi\Tests\Logging;
 
-use KofiMembers\Logging\UserLogger;
+use MembersForKofi\Logging\UserLogger;
 
 /**
  * Class UserLoggerTest
  *
  * Unit tests for the UserLogger class.
  *
- * @package KoFiMembers\Tests\Logging
+ * @package MembersForKofi\Tests\Logging
  */
 class UserLoggerTest extends \WP_UnitTestCase {
 	/**
@@ -60,7 +60,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	/**
 	 * Tests logging an action.
 	 *
-	 * @covers \KofiMembers\Logging\UserLogger::log_action
+	 * @covers \MembersForKofi\Logging\UserLogger::log_action
 	 */
 	public function test_log_action(): void {
 		global $wpdb;
@@ -84,7 +84,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	/**
 	 * Tests logging a role assignment.
 	 *
-	 * @covers \KofiMembers\Logging\UserLogger::log_role_assignment
+	 * @covers \MembersForKofi\Logging\UserLogger::log_role_assignment
 	 */
 	public function test_log_role_assignment(): void {
 		global $wpdb;
@@ -106,7 +106,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	/**
 	 * Tests logging a role removal.
 	 *
-	 * @covers \KofiMembers\Logging\UserLogger::log_role_removal
+	 * @covers \MembersForKofi\Logging\UserLogger::log_role_removal
 	 */
 	public function test_log_role_removal(): void {
 		global $wpdb;
@@ -128,7 +128,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	/**
 	 * Tests logging a donation.
 	 *
-	 * @covers \KofiMembers\Logging\UserLogger::log_donation
+	 * @covers \MembersForKofi\Logging\UserLogger::log_donation
 	 */
 	public function test_log_donation(): void {
 		global $wpdb;

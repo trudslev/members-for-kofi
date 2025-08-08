@@ -1,10 +1,10 @@
 <?php
 /**
- * PHPUnit bootstrap file for Ko-fi Members plugin.
+ * PHPUnit bootstrap file for Members for Ko-fi plugin.
  *
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -17,7 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KofiMembers
+ * @package MembersForKofi
  * @subpackage Tests
  * @license https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
  */
@@ -49,7 +49,7 @@ require_once "{$kofi_members_tests_dir}/includes/functions.php";
  * @return void
  */
 function kofi_members_manually_load_plugin() {
-	require dirname( __DIR__ ) . '/kofi-members.php';
+	require dirname( __DIR__ ) . '/members-for-kofi.php';
 }
 tests_add_filter( 'muplugins_loaded', 'kofi_members_manually_load_plugin' );
 

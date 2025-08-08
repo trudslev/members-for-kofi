@@ -1,6 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
     const tabs = document.querySelectorAll('.nav-tab');
-    const tabContents = document.querySelectorAll('.kofi-members-tab');
+    const tabContents = document.querySelectorAll('.members-for-kofi-tab');
     const activeTabInput = document.getElementById('active_tab');
     const saveButton = document.querySelector('input[type="submit"]'); // Select the Save Settings button
 
@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
             // Show the corresponding tab content
             const activeTabId = this.getAttribute('href').split('tab=')[1];
-            document.getElementById(`kofi-members-tab-${activeTabId}`).style.display = '';
+            document.getElementById(`members-for-kofi-tab-${activeTabId}`).style.display = '';
 
             // Update the hidden input field with the active tab
             if (activeTabInput) {
@@ -142,7 +142,7 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
     const copyButton = document.getElementById('copy-webhook-url');
-    const webhookInput = document.getElementById('kofi-webhook-url');
+    const webhookInput = document.getElementById('webhook-kofi-url');
 
     if (copyButton && webhookInput) {
         copyButton.addEventListener('click', function () {

@@ -29,6 +29,6 @@ release: .releaseignore
 	rm -rf release
 	mkdir release
 	rsync -av --exclude-from='.releaseignore' ./ release/
-	cd release && zip -r ../kofi-members-$(VERSION).zip .
+	cd release && zip -r ../members-for-kofi.zip .
 	rm -rf release
-	@echo "Release created: kofi-members-$(VERSION).zip"
+	@echo "Release created: members-for-kofi.zip"
