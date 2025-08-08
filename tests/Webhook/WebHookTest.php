@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,18 +15,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KoFiMembers
+ * @package MembersForKofi
  */
 
 use PHPUnit\Framework\TestCase;
-use KofiMembers\Webhook\Webhook;
-use KofiMembers\Logging\UserLogger;
-use KofiMembers\Logging\LoggerFactory;
+use MembersForKofi\Webhook\Webhook;
+use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Logging\LoggerFactory;
 use Monolog\Logger;
 use Dotenv\Dotenv;
 
 /**
- * Unit tests for the Webhook class in the Ko-fi Members plugin.
+ * Unit tests for the Webhook class in the Members for Ko-fi plugin.
  *
  * This class contains test cases to validate the behavior of the Webhook class,
  * including token validation, payload handling, and role assignment.
@@ -190,7 +190,7 @@ class WebhookTest extends TestCase {
 				}
 			);
 
-		$request = new \WP_REST_Request( 'POST', '/kofi-members/v1/webhook' );
+		$request = new \WP_REST_Request( 'POST', '/members-for-kofi/v1/webhook' );
 		$request->set_header( 'Content-Type', 'application/json' );
 		$request->set_body(
 			json_encode(

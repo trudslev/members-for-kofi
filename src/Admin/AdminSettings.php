@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -15,12 +15,12 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * @package KoFiMembers
+ * @package MembersForKofi
  */
 
-namespace KofiMembers\Admin;
+namespace MembersForKofi\Admin;
 
-use KofiMembers\Webhook\Webhook;
+use MembersForKofi\Webhook\Webhook;
 
 use function add_settings_section;
 use function add_settings_field;
@@ -29,12 +29,12 @@ use function add_settings_error;
 use function get_editable_roles;
 
 /**
- * Handles the admin settings for the Ko-fi Members plugin.
+ * Handles the admin settings for the Members for Ko-fi plugin.
  *
  * This class is responsible for registering and rendering the settings
  * for the plugin in the WordPress admin dashboard.
  *
- * @package KoFiMembers
+ * @package MembersForKofi
  */
 class AdminSettings {
 
@@ -57,7 +57,7 @@ class AdminSettings {
 	}
 
 	/**
-	 * Registers the settings for the Ko-fi Members plugin.
+	 * Registers the settings for the Members for Ko-fi plugin.
 	 *
 	 * This function sets up the settings sections and fields for the plugin
 	 * in the WordPress admin dashboard.
@@ -74,31 +74,31 @@ class AdminSettings {
 		);
 
 		// General tab.
-		add_settings_section( 'kofi_members_general', __( 'General Settings', 'kofi-members' ), '__return_null', 'kofi-members' );
-		add_settings_field( 'verification_token', __( 'Verification Token', 'kofi-members' ), array( $this, 'render_verification_token_field' ), 'kofi-members', 'kofi_members_general' );
-		add_settings_field( 'only_subscriptions', __( 'Only Accept Subscriptions', 'kofi-members' ), array( $this, 'render_only_subscriptions_field' ), 'kofi-members', 'kofi_members_general' );
-		add_settings_field( 'tier_role_map', __( 'Tier to Role Mapping', 'kofi-members' ), array( $this, 'render_tier_role_map_field' ), 'kofi-members', 'kofi_members_general' );
-		add_settings_field( 'default_role', __( 'Default Role (if no match)', 'kofi-members' ), array( $this, 'render_default_role_field' ), 'kofi-members', 'kofi_members_general' );
-		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'kofi-members' ), array( $this, 'render_expiry_toggle_field' ), 'kofi-members', 'kofi_members_general' );
-		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'kofi-members' ), array( $this, 'render_role_expiry_field' ), 'kofi-members', 'kofi_members_general' );
+		add_settings_section( 'kofi_members_general', __( 'General Settings', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
+		add_settings_field( 'verification_token', __( 'Verification Token', 'members-for-kofi' ), array( $this, 'render_verification_token_field' ), 'members-for-kofi', 'kofi_members_general' );
+		add_settings_field( 'only_subscriptions', __( 'Only Accept Subscriptions', 'members-for-kofi' ), array( $this, 'render_only_subscriptions_field' ), 'members-for-kofi', 'kofi_members_general' );
+		add_settings_field( 'tier_role_map', __( 'Tier to Role Mapping', 'members-for-kofi' ), array( $this, 'render_tier_role_map_field' ), 'members-for-kofi', 'kofi_members_general' );
+		add_settings_field( 'default_role', __( 'Default Role (if no match)', 'members-for-kofi' ), array( $this, 'render_default_role_field' ), 'members-for-kofi', 'kofi_members_general' );
+		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'members-for-kofi' ), array( $this, 'render_expiry_toggle_field' ), 'members-for-kofi', 'kofi_members_general' );
+		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'members-for-kofi' ), array( $this, 'render_role_expiry_field' ), 'members-for-kofi', 'kofi_members_general' );
 
 		// Logging tab.
-		add_settings_section( 'kofi_members_logging', __( 'Logging', 'kofi-members' ), '__return_null', 'kofi-members' );
-		add_settings_field( 'log_enabled', __( 'Enable Logging', 'kofi-members' ), array( $this, 'render_logging_field' ), 'kofi-members', 'kofi_members_logging' );
-		add_settings_field( 'log_level', __( 'Log Level', 'kofi-members' ), array( $this, 'render_log_level_field' ), 'kofi-members', 'kofi_members_logging' );
+		add_settings_section( 'kofi_members_logging', __( 'Logging', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
+		add_settings_field( 'log_enabled', __( 'Enable Logging', 'members-for-kofi' ), array( $this, 'render_logging_field' ), 'members-for-kofi', 'kofi_members_logging' );
+		add_settings_field( 'log_level', __( 'Log Level', 'members-for-kofi' ), array( $this, 'render_log_level_field' ), 'members-for-kofi', 'kofi_members_logging' );
 	}
 
 	/**
-	 * Enqueues the admin JavaScript file for the Ko-fi Members settings page.
+	 * Enqueues the admin JavaScript file for the Members for Ko-fi settings page.
 	 *
 	 * @return void
 	 */
 	public function enqueue_admin_scripts(): void {
 		$screen = get_current_screen();
 
-		if ( isset( $screen->id ) && 'toplevel_page_kofi-members' === $screen->id ) {
+		if ( isset( $screen->id ) && 'toplevel_page_members-for-kofi' === $screen->id ) {
 			wp_enqueue_script(
-				'kofi-members-admin-settings',
+				'members-for-kofi-admin-settings',
 				plugins_url( 'assets/js/admin-settings.js', dirname( __DIR__ ) ),
 				array(),
 				'1.0.0',
@@ -106,22 +106,22 @@ class AdminSettings {
 			);
 
 			wp_localize_script(
-				'kofi-members-admin-settings',
+				'members-for-kofi-admin-settings',
 				'kofiMembers',
 				array(
 					'ajaxurl'          => admin_url( 'admin-ajax.php' ),
 					'paginationNonce'  => wp_create_nonce( 'kofi_members_pagination' ),
 					'clearLogsNonce'   => wp_create_nonce( 'kofi_members_clear_logs' ),
 					'rowsPerPageNonce' => wp_create_nonce( 'kofi_members_update_rows_per_page' ),
-					'clearLogsConfirm' => __( 'Are you sure you want to clear all logs? This action cannot be undone.', 'kofi-members' ),
-					'errorMessage'     => __( 'An error occurred. Please try again.', 'kofi-members' ),
+					'clearLogsConfirm' => __( 'Are you sure you want to clear all logs? This action cannot be undone.', 'members-for-kofi' ),
+					'errorMessage'     => __( 'An error occurred. Please try again.', 'members-for-kofi' ),
 				)
 			);
 		}
 	}
 
 	/**
-	 * Sanitizes the options for the Ko-fi Members plugin.
+	 * Sanitizes the options for the Members for Ko-fi plugin.
 	 *
 	 * This function validates and sanitizes the input options
 	 * provided by the user in the settings page.
@@ -132,11 +132,11 @@ class AdminSettings {
 	public function sanitize_options( array $options ): array {
 		$errors = array();
 		if ( empty( $options['verification_token'] ) ) {
-			$errors[] = __( 'Verification Token is required.', 'kofi-members' );
+			$errors[] = __( 'Verification Token is required.', 'members-for-kofi' );
 		}
 
 		if ( empty( $options['role_expiry_days'] ) || ! is_numeric( $options['role_expiry_days'] ) ) {
-			$errors[] = __( 'Role Expiry Days is required and must be a number.', 'kofi-members' );
+			$errors[] = __( 'Role Expiry Days is required and must be a number.', 'members-for-kofi' );
 		}
 
 		if ( ! empty( $errors ) ) {
@@ -177,7 +177,7 @@ class AdminSettings {
 	 */
 	public function render_verification_token_field(): void {
 		$options     = get_option( 'kofi_members_options' );
-		$webhook_url = home_url( '/kofi-webhook/' );
+		$webhook_url = home_url( '/webhook-kofi/' );
 
 		// Verification Token Input.
 		echo '<input type="text" name="kofi_members_options[verification_token]" value="' . esc_attr( $options['verification_token'] ?? '' ) . '" class="regular-text">';
@@ -185,8 +185,8 @@ class AdminSettings {
 		// Description for Verification Token.
 		$description = sprintf(
 			// translators: %s is a link to the Ko-fi Webhooks Management page.
-			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box.', 'kofi-members' ),
-			'<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank">' . esc_html__( 'Ko-fi Webhooks Management', 'kofi-members' ) . '</a>'
+			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box.', 'members-for-kofi' ),
+			'<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank">' . esc_html__( 'Ko-fi Webhooks Management', 'members-for-kofi' ) . '</a>'
 		);
 		echo '<p class="description">' . wp_kses(
 			$description,
@@ -200,12 +200,12 @@ class AdminSettings {
 
 		// Webhook URL Textbox and Copy Button.
 		echo '<div style="margin-top: 20px;">';
-		echo '<label for="kofi-webhook-url" style="font-weight: bold; display: block; margin-bottom: 5px;">' . esc_html__( 'Webhook URL:', 'kofi-members' ) . '</label>';
+		echo '<label for="webhook-kofi-url" style="font-weight: bold; display: block; margin-bottom: 5px;">' . esc_html__( 'Webhook URL:', 'members-for-kofi' ) . '</label>';
 		echo '<div style="display: flex; align-items: center; width: 500px;">';
-		echo '<input type="text" id="kofi-webhook-url" value="' . esc_url( $webhook_url ) . '" readonly style="flex: 1; margin-right: 10px;" class="regular-text">';
-		echo '<button type="button" id="copy-webhook-url" class="button button-secondary">' . esc_html__( 'Copy to Clipboard', 'kofi-members' ) . '</button>';
+		echo '<input type="text" id="webhook-kofi-url" value="' . esc_url( $webhook_url ) . '" readonly style="flex: 1; margin-right: 10px;" class="regular-text">';
+		echo '<button type="button" id="copy-webhook-url" class="button button-secondary">' . esc_html__( 'Copy to Clipboard', 'members-for-kofi' ) . '</button>';
 		echo '</div>';
-		echo '<p class="description">' . esc_html__( 'Use this URL to configure your Ko-fi webhook.', 'kofi-members' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'Use this URL to configure your Ko-fi webhook.', 'members-for-kofi' ) . '</p>';
 		echo '</div>';
 	}
 
@@ -221,7 +221,7 @@ class AdminSettings {
 		$options = get_option( 'kofi_members_options', array() );
 		$checked = ! empty( $options['only_subscriptions'] );
 		echo '<label><input type="checkbox" name="kofi_members_options[only_subscriptions]" value="1" ' . checked( $checked, true, false ) . '> Only assign roles to subscribers.</label>';
-		echo '<p class="description">' . esc_html__( 'When enabled, users must be active subscribers to receive a role.', 'kofi-members' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'When enabled, users must be active subscribers to receive a role.', 'members-for-kofi' ) . '</p>';
 	}
 
 	/**
@@ -239,7 +239,7 @@ class AdminSettings {
 		$disallowed_roles = Webhook::DISALLOWED_ROLES;
 
 		echo '<table id="tier-role-map-table" class="form-table" style="margin-top:0">';
-		echo '<thead><tr><th>' . esc_html__( 'Ko-fi Tier', 'kofi-members' ) . '</th><th>' . esc_html__( 'Role', 'kofi-members' ) . '</th><th></th></tr></thead><tbody>';
+		echo '<thead><tr><th>' . esc_html__( 'Ko-fi Tier', 'members-for-kofi' ) . '</th><th>' . esc_html__( 'Role', 'members-for-kofi' ) . '</th><th></th></tr></thead><tbody>';
 
 		if ( empty( $map ) ) {
 			$map = array( '' => '' );
@@ -280,8 +280,8 @@ class AdminSettings {
 		echo '</tr>';
 		echo '</template>';
 
-		echo '<p><button type="button" class="button" id="add-tier-role-row">' . esc_html__( 'Add Tier Mapping', 'kofi-members' ) . '</button></p>';
-		echo '<p><em>' . esc_html__( 'Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched.', 'kofi-members' ) . '</em></p>';
+		echo '<p><button type="button" class="button" id="add-tier-role-row">' . esc_html__( 'Add Tier Mapping', 'members-for-kofi' ) . '</button></p>';
+		echo '<p><em>' . esc_html__( 'Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched.', 'members-for-kofi' ) . '</em></p>';
 	}
 
 	/**
@@ -298,12 +298,12 @@ class AdminSettings {
 		$selected = $options['default_role'] ?? array();
 
 		echo '<select name="kofi_members_options[default_role]">';
-		echo '<option value="">' . esc_html__( '— No default —', 'kofi-members' ) . '</option>';
+		echo '<option value="">' . esc_html__( '— No default —', 'members-for-kofi' ) . '</option>';
 		foreach ( $roles as $role_key => $role_details ) {
 			echo '<option value="' . esc_attr( $role_key ) . '"' . selected( $role_key, $selected, false ) . '>' . esc_html( $role_details['name'] ) . '</option>';
 		}
 		echo '</select>';
-		echo '<p class="description">' . esc_html__( 'If no tier matches, or if you are not using tiers, this role will be assigned to the user.', 'kofi-members' ) . '</p>';
+		echo '<p class="description">' . esc_html__( 'If no tier matches, or if you are not using tiers, this role will be assigned to the user.', 'members-for-kofi' ) . '</p>';
 	}
 
 	/**
@@ -347,8 +347,8 @@ class AdminSettings {
 	 */
 	public function render_logging_field(): void {
 		$options = get_option( 'kofi_members_options' );
-		echo '<input type="checkbox" name="kofi_members_options[log_enabled]" value="1"' . checked( 1, $options['log_enabled'] ?? 0, false ) . '> ' . esc_html__( 'Enable logging to file', 'kofi-members' );
-		echo '<p class="description">' . esc_html__( 'Logs plugin activity to a file for debugging and auditing.', 'kofi-members' ) . '</p>';
+		echo '<input type="checkbox" name="kofi_members_options[log_enabled]" value="1"' . checked( 1, $options['log_enabled'] ?? 0, false ) . '> ' . esc_html__( 'Enable logging to file', 'members-for-kofi' );
+		echo '<p class="description">' . esc_html__( 'Logs plugin activity to a file for debugging and auditing.', 'members-for-kofi' ) . '</p>';
 	}
 
 	/**
@@ -401,12 +401,12 @@ class AdminSettings {
 		$this->render_log_level_select(
 			'log_level',
 			$current,
-			esc_html__( 'Minimum severity of log messages to record.', 'kofi-members' )
+			esc_html__( 'Minimum severity of log messages to record.', 'members-for-kofi' )
 		);
 	}
 
 	/**
-	 * Renders the settings page for the Ko-fi Members plugin.
+	 * Renders the settings page for the Members for Ko-fi plugin.
 	 * This function outputs the HTML for the settings page in the WordPress admin dashboard,
 	 * allowing users to configure the plugin's settings.
 	 *
@@ -424,16 +424,16 @@ class AdminSettings {
 
 		?>
 		<div class="wrap">
-			<h1><?php esc_html_e( 'Ko-fi Members Settings', 'kofi-members' ); ?></h1>
+			<h1><?php esc_html_e( 'Members for Ko-fi Settings', 'members-for-kofi' ); ?></h1>
 			<h2 class="nav-tab-wrapper">
-				<a href="?page=kofi-members&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'General', 'kofi-members' ); ?>
+				<a href="?page=members-for-kofi&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'General', 'members-for-kofi' ); ?>
 				</a>
-				<a href="?page=kofi-members&tab=logging" class="nav-tab <?php echo 'logging' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Logging', 'kofi-members' ); ?>
+				<a href="?page=members-for-kofi&tab=logging" class="nav-tab <?php echo 'logging' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Logging', 'members-for-kofi' ); ?>
 				</a>
-				<a href="?page=kofi-members&tab=user_logs" class="nav-tab <?php echo 'user_logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'User Logs', 'kofi-members' ); ?>
+				<a href="?page=members-for-kofi&tab=user_logs" class="nav-tab <?php echo 'user_logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?>
 				</a>
 			</h2>
 
@@ -442,22 +442,22 @@ class AdminSettings {
 					<?php settings_fields( 'kofi_members_options' ); ?>
 				<?php endif; ?>
 
-				<div id="kofi-members-tab-general" class="kofi-members-tab" style="<?php echo 'general' === $active_tab ? '' : 'display:none;'; ?>">
-					<h2><?php esc_html_e( 'General Settings', 'kofi-members' ); ?></h2>
+				<div id="members-for-kofi-tab-general" class="members-for-kofi-tab" style="<?php echo 'general' === $active_tab ? '' : 'display:none;'; ?>">
+					<h2><?php esc_html_e( 'General Settings', 'members-for-kofi' ); ?></h2>
 					<table class="form-table">
-						<?php do_settings_fields( 'kofi-members', 'kofi_members_general' ); ?>
+						<?php do_settings_fields( 'members-for-kofi', 'kofi_members_general' ); ?>
 					</table>
 				</div>
 
-				<div id="kofi-members-tab-logging" class="kofi-members-tab" style="<?php echo 'logging' === $active_tab ? '' : 'display:none;'; ?>">
-					<h2><?php esc_html_e( 'Logging Settings', 'kofi-members' ); ?></h2>
+				<div id="members-for-kofi-tab-logging" class="members-for-kofi-tab" style="<?php echo 'logging' === $active_tab ? '' : 'display:none;'; ?>">
+					<h2><?php esc_html_e( 'Logging Settings', 'members-for-kofi' ); ?></h2>
 					<table class="form-table">
-						<?php do_settings_fields( 'kofi-members', 'kofi_members_logging' ); ?>
+						<?php do_settings_fields( 'members-for-kofi', 'kofi_members_logging' ); ?>
 					</table>
 				</div>
 
-				<div id="kofi-members-tab-user_logs" class="kofi-members-tab" style="<?php echo 'user_logs' === $active_tab ? '' : 'display:none;'; ?>">
-					<h2><?php esc_html_e( 'User Logs', 'kofi-members' ); ?></h2>
+				<div id="members-for-kofi-tab-user_logs" class="members-for-kofi-tab" style="<?php echo 'user_logs' === $active_tab ? '' : 'display:none;'; ?>">
+					<h2><?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?></h2>
 					<?php $this->render_user_logs_tab(); ?>
 				</div>
 
@@ -514,14 +514,14 @@ class AdminSettings {
 
 		// Verify the current user has permission to view logs.
 		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'kofi-members' ) );
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
 		}
 
 		$paged = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
 
 		// Ensure the paged parameter is valid.
 		if ( $paged < 1 ) {
-			wp_send_json_error( __( 'Invalid page number.', 'kofi-members' ) );
+			wp_send_json_error( __( 'Invalid page number.', 'members-for-kofi' ) );
 		}
 
 		// Render only the logs table for the requested page.
@@ -556,7 +556,7 @@ class AdminSettings {
 
 			wp_send_json_success( $content );
 		} else {
-			wp_send_json_error( __( 'Logs table does not exist.', 'kofi-members' ) );
+			wp_send_json_error( __( 'Logs table does not exist.', 'members-for-kofi' ) );
 		}
 	}
 
@@ -617,17 +617,17 @@ class AdminSettings {
 		<table class="widefat fixed striped">
 			<thead>
 				<tr>
-					<th><?php esc_html_e( 'Timestamp', 'kofi-members' ); ?></th>
-					<th><?php esc_html_e( 'User ID', 'kofi-members' ); ?></th>
-					<th><?php esc_html_e( 'Email', 'kofi-members' ); ?></th>
-					<th><?php esc_html_e( 'Action', 'kofi-members' ); ?></th>
-					<th><?php esc_html_e( 'Role', 'kofi-members' ); ?></th>
+					<th><?php esc_html_e( 'Timestamp', 'members-for-kofi' ); ?></th>
+					<th><?php esc_html_e( 'User ID', 'members-for-kofi' ); ?></th>
+					<th><?php esc_html_e( 'Email', 'members-for-kofi' ); ?></th>
+					<th><?php esc_html_e( 'Action', 'members-for-kofi' ); ?></th>
+					<th><?php esc_html_e( 'Role', 'members-for-kofi' ); ?></th>
 				</tr>
 			</thead>
 			<tbody>
 				<?php if ( empty( $logs ) ) : ?>
 					<tr>
-						<td colspan="5"><?php esc_html_e( 'No logs available.', 'kofi-members' ); ?></td>
+						<td colspan="5"><?php esc_html_e( 'No logs available.', 'members-for-kofi' ); ?></td>
 					</tr>
 				<?php else : ?>
 					<?php foreach ( $logs as $log ) : ?>
@@ -645,18 +645,18 @@ class AdminSettings {
 
 		<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px;">
 			<!-- Clear Logs Button -->
-			<form method="post" action="<?php echo esc_url( add_query_arg( 'tab', 'user_logs', admin_url( 'admin.php?page=kofi-members' ) ) ); ?>" style="margin-right: 15px;">
+			<form method="post" action="<?php echo esc_url( add_query_arg( 'tab', 'user_logs', admin_url( 'admin.php?page=members-for-kofi' ) ) ); ?>" style="margin-right: 15px;">
 				<?php wp_nonce_field( 'clear_user_logs_action', 'clear_user_logs_nonce' ); ?>
 				<button type="button" name="clear_logs" class="button button-secondary">
-					<?php esc_html_e( 'Clear Logs', 'kofi-members' ); ?>
+					<?php esc_html_e( 'Clear Logs', 'members-for-kofi' ); ?>
 				</button>
 			</form>
 
 			<!-- Rows Per Page Dropdown -->
 			<form method="get" style="margin-right: 15px;">
-				<input type="hidden" name="page" value="kofi-members">
+				<input type="hidden" name="page" value="members-for-kofi">
 				<input type="hidden" name="tab" value="user_logs">
-				<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'kofi-members' ); ?></label>
+				<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
 				<select name="rows_per_page" id="rows_per_page" style="width: auto;">
 					<?php foreach ( array( 10, 25, 50, 100 ) as $option ) : ?>
 						<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
@@ -674,15 +674,15 @@ class AdminSettings {
 								'base'      => add_query_arg(
 									array(
 										'paged' => '%#%',
-										'page'  => 'kofi-members',
+										'page'  => 'members-for-kofi',
 										'tab'   => 'user_logs',
 									)
 								),
 								'format'    => '',
 								'current'   => $current_page,
 								'total'     => $total_pages,
-								'prev_text' => __( '&laquo; Previous', 'kofi-members' ),
-								'next_text' => __( 'Next &raquo;', 'kofi-members' ),
+								'prev_text' => __( '&laquo; Previous', 'members-for-kofi' ),
+								'next_text' => __( 'Next &raquo;', 'members-for-kofi' ),
 							)
 						)
 					);

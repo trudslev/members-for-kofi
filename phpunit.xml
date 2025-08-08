@@ -16,6 +16,6 @@
     </coverage>
 
     <php>
-        <env name="WP_TESTS_PHPUNIT_POLYFILLS_PATH" value="/var/www/html/wp-content/plugins/kofi-members/vendor/yoast/phpunit-polyfills"/>
+        <env name="WP_TESTS_PHPUNIT_POLYFILLS_PATH" value="/var/www/html/wp-content/plugins/members-for-kofi/vendor/yoast/phpunit-polyfills"/>
     </php>
 </phpunit>

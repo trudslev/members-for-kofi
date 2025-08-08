@@ -8,8 +8,8 @@ services:
     depends_on:
       - db
     volumes:
-      - .:/var/www/html/wp-content/plugins/kofi-members
-    entrypoint: /var/www/html/wp-content/plugins/kofi-members/tests/setup-tests.sh
+      - .:/var/www/html/wp-content/plugins/members-for-kofi
+    entrypoint: /var/www/html/wp-content/plugins/members-for-kofi/tests/setup-tests.sh
     networks:
       - testnet
 

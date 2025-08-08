@@ -1,6 +1,6 @@
-# Ko-fi Members for WordPress
+# Members for Ko-fi for WordPress
 
-**Ko-fi Members** is a WordPress plugin that integrates with [Ko-fi](https://ko-fi.com) to manage members based on donation tiers. It automatically creates users, assigns roles, and manages expiration of those roles based on webhook payloads received from Ko-fi.
+**Members for Ko-fi** is a WordPress plugin that integrates with [Ko-fi](https://ko-fi.com) to manage members based on donation tiers. It automatically creates users, assigns roles, and manages expiration of those roles based on webhook payloads received from Ko-fi.
 
 ## Features
 
@@ -16,11 +16,11 @@
 ## Installation
 
 1. Clone the repository or download it as a ZIP file.
-2. Upload the plugin to your WordPress installation under `wp-content/plugins/kofi-members`.
+2. Upload the plugin to your WordPress installation under `wp-content/plugins/members-for-kofi`.
 3. Activate the plugin in the WordPress admin panel.
-4. Configure your settings via the Ko-fi Members admin page.
+4. Configure your settings via the Members for Ko-fi admin page.
 5. Go to `https://ko-fi.com/manage/webhooks?src=sidemenu`.
-6. Set your Ko-fi webhook to `https://your-site.com/kofi-webhook`.
+6. Set your Ko-fi webhook to `https://your-site.com/webhook-kofi`.
 6. Copy the Verification Token (under Advanced) to the settings.
 
 ## Configuration
@@ -34,7 +34,7 @@
 
 ## Logging
 
-Log messages are written to `wp-content/logs/kofi-members.log`. 
+Log messages are written to `wp-content/logs/members-for-kofi.log`. 
 
 ## Development
 
@@ -50,7 +50,7 @@ make test
 
 ## License
 
-This plugin is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.html). You are free to use, modify, and distribute it under the terms of that license.
+This plugin is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute it under the terms of that license.
 
 ## Contributing
 

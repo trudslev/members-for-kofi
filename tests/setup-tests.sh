@@ -9,7 +9,7 @@ DB_PASS="${WORDPRESS_DB_PASSWORD}"
 DB_HOST="${WORDPRESS_DB_HOST}"
 
 TESTS_DIR="/tmp/wordpress-tests-lib"
-PLUGIN_DIR="/var/www/html/wp-content/plugins/kofi-members"
+PLUGIN_DIR="/var/www/html/wp-content/plugins/members-for-kofi"
 
 echo ">>> Cloning WordPress develop repo..."
 rm -rf "$TESTS_DIR"

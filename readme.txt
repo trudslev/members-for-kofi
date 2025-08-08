@@ -1,4 +1,4 @@
-=== Ko-fi Members ===
+=== Members for Ko-fi ===
 Contributors: trudslev
 Donate link: https://ko-fi.com/
 Tags: ko-fi, membership, roles, webhook, user management
@@ -13,7 +13,7 @@ Integrate with Ko-fi to manage WordPress users or roles via webhook.
 
 == Description ==
 
-Ko-fi Members is a WordPress plugin that integrates with Ko-fi to manage WordPress users and roles based on Ko-fi webhooks. This plugin allows you to automate user role assignments, log donations, and manage memberships seamlessly.
+Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage WordPress users and roles based on Ko-fi webhooks. This plugin allows you to automate user role assignments, log donations, and manage memberships seamlessly.
 
 **Features:**
 - Automatically assign roles to users based on Ko-fi donations or memberships.
@@ -28,9 +28,9 @@ Ko-fi Members is a WordPress plugin that integrates with Ko-fi to manage WordPre
 
 == Installation ==
 
-1. Upload the plugin files to the `/wp-content/plugins/kofi-members` directory, or install the plugin through the WordPress plugins screen directly.
+1. Upload the plugin files to the `/wp-content/plugins/members-for-kofi` directory, or install the plugin through the WordPress plugins screen directly.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
-3. Configure the plugin settings under **Settings > Ko-fi Members**.
+3. Configure the plugin settings under **Settings > Members for Ko-fi**.
 4. Set up your Ko-fi webhook to point to your WordPress site.
 
 == Frequently Asked Questions ==
@@ -38,7 +38,7 @@ Ko-fi Members is a WordPress plugin that integrates with Ko-fi to manage WordPre
 = How do I set up the Ko-fi webhook? =
 1. Log in to your Ko-fi account.
 2. Go to **Settings > Webhooks**.
-3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/wp-json/kofi-members/v1/webhook`).
+3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/wp-json/members-for-kofi/v1/webhook`).
 
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.

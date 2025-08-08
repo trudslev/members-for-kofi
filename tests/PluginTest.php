@@ -1,8 +1,8 @@
 <?php
 /**
- * This file is part of the Ko-fi Members plugin.
+ * This file is part of the Members for Ko-fi plugin.
  *
- * Ko-fi Members is free software: you can redistribute it and/or modify
+ * Members for Ko-fi is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
@@ -18,15 +18,15 @@
  * @package Ko-fiMembers
  */
 
-namespace KofiMembers\Tests;
+namespace MembersForKofi\Tests;
 
-use KofiMembers\Plugin;
+use MembersForKofi\Plugin;
 use WP_UnitTestCase;
 
 /**
  * Class PluginTest
  *
- * This class contains unit tests for the Ko-fi Members plugin.
+ * This class contains unit tests for the Members for Ko-fi plugin.
  */
 class PluginTest extends WP_UnitTestCase {
 
@@ -72,7 +72,7 @@ class PluginTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that the Ko-fi Members admin menu is registered.
+	 * Tests that the Members for Ko-fi admin menu is registered.
 	 */
 	public function test_add_menu_registers_menu_page(): void {
 		global $menu;
@@ -80,13 +80,13 @@ class PluginTest extends WP_UnitTestCase {
 
 		$found = false;
 		foreach ( $menu as $item ) {
-			if ( is_array( $item ) && in_array( 'Ko-fi Members', $item, true ) ) {
+			if ( is_array( $item ) && in_array( 'Members for Ko-fi', $item, true ) ) {
 				$found = true;
 				break;
 			}
 		}
 
-		$this->assertTrue( $found, 'Expected Ko-fi Members admin menu to be registered' );
+		$this->assertTrue( $found, 'Expected Members for Ko-fi admin menu to be registered' );
 	}
 
 	/**
