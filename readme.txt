@@ -1,6 +1,6 @@
 === Members for Ko-fi ===
 Contributors: trudslev
-Donate link: https://ko-fi.com/
+Donate link: https://ko-fi.com/foodgeek
 Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 6.8
@@ -38,7 +38,7 @@ Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage Wor
 = How do I set up the Ko-fi webhook? =
 1. Log in to your Ko-fi account.
 2. Go to **Settings > Webhooks**.
-3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/wp-json/members-for-kofi/v1/webhook`).
+3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/webhook-kofi`).
 
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.
