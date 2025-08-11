@@ -82,10 +82,6 @@ class AdminSettings {
 		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'members-for-kofi' ), array( $this, 'render_expiry_toggle_field' ), 'members-for-kofi', 'kofi_members_general' );
 		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'members-for-kofi' ), array( $this, 'render_role_expiry_field' ), 'members-for-kofi', 'kofi_members_general' );
 
-		// Logging tab.
-		add_settings_section( 'kofi_members_logging', __( 'Logging', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
-		add_settings_field( 'log_enabled', __( 'Enable Logging', 'members-for-kofi' ), array( $this, 'render_logging_field' ), 'members-for-kofi', 'kofi_members_logging' );
-		add_settings_field( 'log_level', __( 'Log Level', 'members-for-kofi' ), array( $this, 'render_log_level_field' ), 'members-for-kofi', 'kofi_members_logging' );
 	}
 
 	/**
@@ -162,8 +158,6 @@ class AdminSettings {
 			'default_role'       => sanitize_key( $options['default_role'] ?? '' ),
 			'enable_expiry'      => isset( $options['enable_expiry'] ),
 			'role_expiry_days'   => absint( $options['role_expiry_days'] ?? 35 ),
-			'log_enabled'        => isset( $options['log_enabled'] ) ? (bool) $options['log_enabled'] : false,
-			'log_level'          => sanitize_text_field( $options['log_level'] ?? 'info' ),
 		);
 	}
 
@@ -417,7 +411,7 @@ class AdminSettings {
 		$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( wp_unslash( $_GET['tab'] ) ) : 'general';
 
 		// Ensure the active tab is valid.
-		$valid_tabs = array( 'general', 'logging', 'user_logs' );
+		$valid_tabs = array( 'general', 'user_logs' );
 		if ( ! in_array( $active_tab, $valid_tabs, true ) ) {
 			$active_tab = 'general';
 		}
@@ -428,9 +422,6 @@ class AdminSettings {
 			<h2 class="nav-tab-wrapper">
 				<a href="?page=members-for-kofi&tab=general" class="nav-tab <?php echo 'general' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'General', 'members-for-kofi' ); ?>
-				</a>
-				<a href="?page=members-for-kofi&tab=logging" class="nav-tab <?php echo 'logging' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Logging', 'members-for-kofi' ); ?>
 				</a>
 				<a href="?page=members-for-kofi&tab=user_logs" class="nav-tab <?php echo 'user_logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?>
@@ -449,12 +440,6 @@ class AdminSettings {
 					</table>
 				</div>
 
-				<div id="members-for-kofi-tab-logging" class="members-for-kofi-tab" style="<?php echo 'logging' === $active_tab ? '' : 'display:none;'; ?>">
-					<h2><?php esc_html_e( 'Logging Settings', 'members-for-kofi' ); ?></h2>
-					<table class="form-table">
-						<?php do_settings_fields( 'members-for-kofi', 'kofi_members_logging' ); ?>
-					</table>
-				</div>
 
 				<div id="members-for-kofi-tab-user_logs" class="members-for-kofi-tab" style="<?php echo 'user_logs' === $active_tab ? '' : 'display:none;'; ?>">
 					<h2><?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?></h2>

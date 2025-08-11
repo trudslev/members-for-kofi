@@ -21,8 +21,7 @@
 namespace MembersForKofi\Webhook;
 
 use WP_User;
-use MembersForKofi\Logging\LoggerFactory;
-use Monolog\Logger;
+use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 
 use get_option;
@@ -40,20 +39,9 @@ class Webhook {
 	public const DISALLOWED_ROLES = array( 'administrator' );
 
 	/**
-	 * Logger instance for logging webhook events and errors.
-	 *
-	 * @var Logger
-	 */
-	private Logger $logger;
-
-	/**
 	 * Constructor for the Webhook class.
-	 *
-	 * @param Logger|null $logger Optional logger instance for logging events.
 	 */
-	public function __construct( ?Logger $logger = null ) {
-		$this->logger = $logger ?? LoggerFactory::get_logger();
-	}
+	public function __construct() {}
 
 	/**
 	 * Handles incoming webhook requests.
@@ -71,10 +59,27 @@ class Webhook {
 				$data = $request->get_json_params();
 			} else {
 				parse_str( file_get_contents( 'php://input' ), $payload );
-				if ( ! key_exists( 'data', $payload ) ) {
+				if ( ! is_array( $payload ) || ! array_key_exists( 'data', $payload ) ) {
 					return new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
 				}
-				$data = json_decode( $payload['data'], true );
+				// Sanitize the raw JSON string before decoding.
+				$raw_json = wp_unslash( $payload['data'] );
+				$raw_json = wp_check_invalid_utf8( $raw_json );
+				// Basic trim to avoid leading/trailing junk.
+				$raw_json = trim( $raw_json );
+				$data     = json_decode( $raw_json, true );
+				if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $data ) ) {
+					return new \WP_REST_Response( array( 'error' => 'Malformed JSON payload' ), 400 );
+				}
+				// Recursively sanitize text fields (shallow sanitize for scalar values).
+				array_walk_recursive(
+					$data,
+					static function ( &$value ) {
+						if ( is_string( $value ) ) {
+							$value = sanitize_text_field( $value );
+						}
+					}
+				);
 			}
 		}
 
@@ -93,7 +98,7 @@ class Webhook {
 	 */
 	private function process( array $body ): \WP_REST_Response {
 		$options = get_option( 'kofi_members_options' );
-		$this->logger->info( 'Webhook received', array( 'body' => $body ) );
+		DebugLogger::info( 'Webhook received', array( 'body' => $body ) );
 
 		if ( empty( $body['verification_token'] ) ) {
 			return new \WP_REST_Response( array( 'error' => 'Missing verification token' ), 400 );
@@ -101,12 +106,12 @@ class Webhook {
 
 		$verification_token = $options['verification_token'] ?? '';
 		if ( empty( $verification_token ) || $body['verification_token'] !== $verification_token ) {
-			$this->logger->warning( 'Invalid verification token' );
+			DebugLogger::warning( 'Invalid verification token' );
 			return new \WP_REST_Response( array( 'error' => 'Unauthorized' ), 401 );
 		}
 
 		if ( empty( $body['email'] ) || ! is_email( $body['email'] ) ) {
-			$this->logger->warning( 'Invalid or missing email' );
+			DebugLogger::warning( 'Invalid or missing email' );
 			return new \WP_REST_Response( array( 'error' => 'Invalid email' ), 400 );
 		}
 
@@ -125,11 +130,11 @@ class Webhook {
 			if ( ! $user ) {
 				$user_id = $this->create_user( $email );
 				if ( is_wp_error( $user_id ) ) {
-					$this->logger->error( 'User creation failed', array( 'error' => $user_id->get_error_message() ) );
+					DebugLogger::error( 'User creation failed', array( 'error' => $user_id->get_error_message() ) );
 					return new \WP_REST_Response( array( 'error' => 'User creation failed' ), 500 );
 				}
 				$user = get_user_by( 'ID', $user_id );
-				$this->logger->info(
+				DebugLogger::info(
 					'New user created',
 					array(
 						'user_id' => $user_id,
@@ -146,7 +151,7 @@ class Webhook {
 				$user->add_role( $role );
 				update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
 				update_user_meta( $user->ID, 'kofi_role_assigned_at', time() );
-				$this->logger->info(
+				DebugLogger::info(
 					'Assigned role to user',
 					array(
 						'user_id' => $user->ID,
@@ -158,12 +163,12 @@ class Webhook {
 				// Log role assignment.
 				$user_logger->log_role_assignment( $user->ID, $email, $role );
 			} else {
-				$this->logger->info( 'No matching tier or default role for user', array( 'tier' => $tier_name ) );
+				DebugLogger::info( 'No matching tier or default role for user', array( 'tier' => $tier_name ) );
 			}
 
 			// Log the donation.
 			$user_logger->log_donation( $user->ID, $email, $amount, $currency );
-			$this->logger->info(
+			DebugLogger::info(
 				'Donation logged',
 				array(
 					'user_id'  => $user->ID,

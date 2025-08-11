@@ -10,8 +10,8 @@
 - Supports default roles for unmapped tiers.
 - Optional expiration of assigned roles.
 - Daily cron job to clean up expired roles.
-- Built-in debug logging.
-- Built-in user logging, so you can see when your users have supported you and what roles they have been assigned.
+- Built-in user logging stored in a WordPress database table (no file logging).
+- Lightweight debug logging to the PHP error log when WP_DEBUG is enabled.
 
 ## Installation
 
@@ -30,17 +30,16 @@
 - **Default Role**: Fallback role if no mapping is found.
 - **Only Subscriptions**: Optionally ignore one-time donations.
 - **Role Expiry**: Automatically remove roles after a set number of days.
-- **Logging**: Enable file logging with severity thresholds.
+- **Logging**: User activity is stored in the plugin's user log table. Optional debug output goes to the PHP error log when WP_DEBUG is true. No file log is written.
 
 ## Logging
 
-Log messages are written to `wp-content/logs/members-for-kofi.log`. 
+The plugin records user-related events (donations, role assignments) in a dedicated custom database table for auditability. No rotating or persistent filesystem log is created. For development or troubleshooting, if `WP_DEBUG` is enabled a minimal debug logger writes contextual messages to the PHP error log.
 
 ## Development
 
 This plugin uses:
-- [Monolog](https://github.com/Seldaek/monolog) for logging
-- [PHPUnit](https://phpunit.de/) for testing
+- PHPUnit for testing
 
 To run tests:
 
@@ -50,7 +49,7 @@ make test
 
 ## License
 
-This plugin is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute it under the terms of that license.
+This plugin is licensed under the [GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute it under the terms of that license.
 
 ## Contributing
 

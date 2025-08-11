@@ -21,8 +21,7 @@
 use PHPUnit\Framework\TestCase;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Logging\UserLogger;
-use MembersForKofi\Logging\LoggerFactory;
-use Monolog\Logger;
+// Logging to files removed.
 use Dotenv\Dotenv;
 
 /**
@@ -33,12 +32,7 @@ use Dotenv\Dotenv;
  */
 class WebhookTest extends TestCase {
 
-	/**
-	 * Logger instance for logging test-related messages.
-	 *
-	 * @var Logger
-	 */
-	private Logger $logger;
+	// No logger property needed.
 
 	/**
 	 * Sets up the test environment before each test.
@@ -63,12 +57,7 @@ class WebhookTest extends TestCase {
 			)
 		);
 
-		// You can still use your logger factory.
-		$this->logger = LoggerFactory::create_logger(
-			array(
-				'log_enabled' => false,
-			)
-		);
+		// File logging removed; nothing to set up.
 
 		// Ensure the table is created before each test.
 		global $wpdb;
@@ -85,8 +74,7 @@ class WebhookTest extends TestCase {
 		// Clean up the options after tests.
 		delete_option( 'kofi_members_options' );
 
-		// Reset the logger to avoid side effects in other tests.
-		LoggerFactory::reset();
+		// No logger reset required.
 
 		// Drop the user logs table after tests.
 		global $wpdb;
@@ -98,7 +86,7 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook rejects requests with an invalid verification token.
 	 */
 	public function test_rejects_invalid_token(): void {
-		$webhook = new Webhook( $this->logger );
+		$webhook = new Webhook();
 
 		$response = $webhook->handle(
 			null,
@@ -115,7 +103,7 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook rejects requests missing the email field.
 	 */
 	public function test_rejects_missing_email(): void {
-		$webhook = new Webhook( $this->logger );
+		$webhook = new Webhook();
 
 		$response = $webhook->handle(
 			null,
@@ -131,7 +119,7 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook correctly handles a valid subscription payload.
 	 */
 	public function test_handles_valid_subscription_payload(): void {
-		$webhook = new Webhook( $this->logger );
+		$webhook = new Webhook();
 
 		$response = $webhook->handle(
 			null,
@@ -150,7 +138,7 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook rejects requests missing the verification token.
 	 */
 	public function test_rejects_missing_token(): void {
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle( null, array() );
 		$this->assertSame( 400, $response->get_status() );
 	}
@@ -159,8 +147,9 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook accepts requests with a valid verification token.
 	 */
 	public function test_accepts_valid_token(): void {
-		$webhook  = new Webhook( $this->logger );
-		$response = $webhook->handle( null, array( 'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ) );
+		$webhook  = new Webhook();
+		$token    = sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' );
+		$response = $webhook->handle( null, array( 'verification_token' => $token ) );
 		$this->assertNotEquals( 403, $response->get_status() );
 	}
 
@@ -168,58 +157,16 @@ class WebhookTest extends TestCase {
 	 * Tests that the webhook rejects requests with a missing payload.
 	 */
 	public function test_rejects_missing_payload(): void {
-		$webhook  = new Webhook( $this->logger );
-		$response = $webhook->handle( null, array( 'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ) );
+		$webhook  = new Webhook();
+		$token    = sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' );
+		$response = $webhook->handle( null, array( 'verification_token' => $token ) );
 		$this->assertSame( 400, $response->get_status() );
 	}
 
 	/**
 	 * Tests that the webhook logs appropriate messages when handling a valid payload.
 	 */
-	public function test_logs_with_valid_payload(): void {
-		$messages    = array();
-		$mock_logger = $this->getMockBuilder( Logger::class )
-			->disableOriginalConstructor()
-			->onlyMethods( array( 'info' ) )
-			->getMock();
-
-		$mock_logger->method( 'info' )
-			->willReturnCallback(
-				function ( $message ) use ( &$messages ) {
-					$messages[] = $message;
-				}
-			);
-
-		$request = new \WP_REST_Request( 'POST', '/members-for-kofi/v1/webhook' );
-		$request->set_header( 'Content-Type', 'application/json' );
-		$request->set_body(
-			json_encode(
-				array(
-					'email'                   => 'test@example.com',
-					'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
-					'tier_name'               => 'Gold',
-					'is_subscription_payment' => true,
-				)
-			)
-		);
-
-		$webhook  = new Webhook( $mock_logger );
-		$response = $webhook->handle( $request, null );
-
-		// Response should be 200 OK.
-		$this->assertSame( 200, $response->get_status() );
-
-		// Assert both log messages were captured.
-		$this->assertTrue(
-			$this->log_message_found( $messages, 'Webhook received' ),
-			'Expected "Webhook received" to be logged'
-		);
-
-		$this->assertTrue(
-			$this->log_message_found( $messages, 'New user created' ),
-			'Expected "New user created" to be logged'
-		);
-	}
+	// Removed test_logs_with_valid_payload (file logging removed).
 
 	/**
 	 * Tests that the webhook skips user creation for one-time payments
@@ -229,17 +176,17 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(),
 				'only_subscriptions' => true,
 			)
 		);
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'email'                   => 'user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => false,
@@ -256,7 +203,7 @@ class WebhookTest extends TestCase {
 	 * that the webhook responds with a 500 status code.
 	 */
 	public function test_handles_user_creation_failure(): void {
-		$mock_webhook = new class($this->logger) extends Webhook {
+		$mock_webhook = new class() extends Webhook {
 			/**
 			 * Creates a user with the given email address.
 			 *
@@ -271,7 +218,7 @@ class WebhookTest extends TestCase {
 		$response = $mock_webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'email'                   => 'fail-user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -288,17 +235,17 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array( 'Gold' => 'subscriber' ),
 				'only_subscriptions' => false,
 			)
 		);
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'email'                   => 'tier-user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -321,8 +268,8 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
-				'tier_role_map'      => array(), // No mapping
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'tier_role_map'      => array(), // No mapping.
 				'only_subscriptions' => false,
 			)
 		);
@@ -330,12 +277,12 @@ class WebhookTest extends TestCase {
 		$email   = 'unknown@example.com';
 		$user_id = wp_create_user( $email, wp_generate_password(), $email );
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_name'               => 'NoSuchTier',
 				'is_subscription_payment' => true,
 			)
@@ -355,7 +302,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(), // No matching tier.
 				'default_role'       => 'contributor',
 				'only_subscriptions' => false,
@@ -365,12 +312,12 @@ class WebhookTest extends TestCase {
 		$email   = 'defaultrole@example.com';
 		$user_id = wp_create_user( $email, wp_generate_password(), $email );
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_name'               => 'NonExistentTier',
 				'is_subscription_payment' => true,
 			)
@@ -392,7 +339,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
@@ -403,12 +350,12 @@ class WebhookTest extends TestCase {
 
 		$email = 'meta@example.com';
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
 			)
@@ -435,7 +382,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold', 'Silver' ),
 					'role' => array( 'editor', 'author' ),
@@ -446,12 +393,12 @@ class WebhookTest extends TestCase {
 		);
 
 		$email    = 'gold@example.com';
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
 			)
@@ -473,7 +420,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
@@ -485,12 +432,12 @@ class WebhookTest extends TestCase {
 
 		$email = 'fallback@example.com';
 
-		$webhook  = new Webhook( $this->logger );
+		$webhook  = new Webhook();
 		$response = $webhook->handle(
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ),
+				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_name'               => 'Platinum', // Not mapped
 				'is_subscription_payment' => true,
 			)
@@ -509,12 +456,5 @@ class WebhookTest extends TestCase {
 	 * @param string $needle   The specific message to search for.
 	 * @return bool True if the message is found, false otherwise.
 	 */
-	private function log_message_found( array $messages, string $needle ): bool {
-		foreach ( $messages as $msg ) {
-			if ( str_contains( $msg, $needle ) ) {
-				return true;
-			}
-		}
-		return false;
-	}
+	// Helper method log_message_found removed (logging to files no longer implemented).
 }

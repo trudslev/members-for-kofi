@@ -55,8 +55,6 @@ class AdminSettingsRenderTest extends TestCase {
 				'default_role'       => 'subscriber',
 				'enable_expiry'      => true,
 				'role_expiry_days'   => 42,
-				'log_enabled'        => true,
-				'log_level'          => 'warning',
 			)
 		);
 	}
@@ -145,19 +143,5 @@ class AdminSettingsRenderTest extends TestCase {
 	 * Ensures that the rendered output contains the expected input field
 	 * for the log enabled option with the correct name attribute.
 	 */
-	public function test_render_logging_field(): void {
-		$output = $this->capture_render( array( $this->settings, 'render_logging_field' ) );
-		$this->assertStringContainsString( 'name="kofi_members_options[log_enabled]"', $output );
-	}
-
-	/**
-	 * Tests the rendering of the log level field.
-	 *
-	 * Ensures that the rendered output contains the expected option
-	 * for the log level with the correct value and selected attribute.
-	 */
-	public function test_render_log_level_field(): void {
-		$output = $this->capture_render( array( $this->settings, 'render_log_level_field' ) );
-		$this->assertMatchesRegularExpression( '/<option value="warning"\s+selected(=("|\'|)selected("|\'|))?>/i', $output );
-	}
+	// Logging fields removed; corresponding render tests dropped.
 }
