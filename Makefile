@@ -38,8 +38,6 @@ release: .releaseignore
 site-up:
 	chmod +x bin/site-init.sh || true
 	docker compose -f docker-compose.site.yml up -d db wordpress
-	# Give WP a moment to extract core files before running wpcli
-	sleep 5
 	bash bin/site-init.sh
 
 site-shell:
@@ -51,5 +49,4 @@ site-down:
 site-reset: site-down
 	docker compose -f docker-compose.site.yml down -v
 	docker compose -f docker-compose.site.yml up -d db wordpress
-	sleep 5
 	bash bin/site-init.sh

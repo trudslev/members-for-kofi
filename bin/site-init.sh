@@ -57,7 +57,10 @@ fi
 # Create must-use plugin to disable outgoing mail if requested
 if [ "$DISABLE_MAIL" = "1" ]; then
   echo "Ensuring mail is disabled (WP_TEST_DISABLE_MAIL=1).";
-  docker compose -f docker-compose.site.yml exec -T wordpress bash -c "mkdir -p wp-content/mu-plugins; cat > wp-content/mu-plugins/disable-mail.php <<'PHP'
+  docker compose -f docker-compose.site.yml exec -T wordpress bash <<'BASH'
+set -e
+mkdir -p wp-content/mu-plugins
+cat > wp-content/mu-plugins/disable-mail.php <<'PHP'
 <?php
 /**
  * Auto-created for test environment: disable actual mail sending.
@@ -65,10 +68,12 @@ if [ "$DISABLE_MAIL" = "1" ]; then
 if ( ! function_exists( 'add_filter' ) ) { return; }
 if ( ! defined( 'WP_TEST_DISABLE_MAIL' ) ) { define( 'WP_TEST_DISABLE_MAIL', true ); }
 add_filter( 'pre_wp_mail', function( $null, $atts ) {
-    error_log( '[members-for-kofi test] wp_mail intercepted to: ' . ( isset( $atts['to'] ) ? $atts['to'] : '' ) );
+    $to = isset( $atts['to'] ) ? $atts['to'] : '';
+    error_log( '[members-for-kofi test] wp_mail intercepted to: ' . $to );
     return true; // short-circuit: pretend sent successfully
 }, 10, 2 );
-PHP"
+PHP
+BASH
 fi
 
 # Activate plugin
