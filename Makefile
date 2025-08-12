@@ -32,3 +32,21 @@ release: .releaseignore
 	cd release && zip -r ../members-for-kofi.zip .
 	rm -rf release
 	@echo "Release created: members-for-kofi.zip"
+
+# --- Local WordPress test site (manual QA) ---
+
+site-up:
+	chmod +x bin/site-init.sh || true
+	docker compose -f docker-compose.site.yml up -d db wordpress
+	bash bin/site-init.sh
+
+site-shell:
+	docker compose -f docker-compose.site.yml run --rm wpcli bash
+
+site-down:
+	docker compose -f docker-compose.site.yml down
+
+site-reset: site-down
+	docker compose -f docker-compose.site.yml down -v
+	docker compose -f docker-compose.site.yml up -d db wordpress
+	bash bin/site-init.sh

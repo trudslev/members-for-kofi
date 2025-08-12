@@ -6,19 +6,19 @@ Requires at least: 5.6
 Tested up to: 6.8
 Requires PHP: 7.4
 Stable tag: 1.0.0
-License: GPLv2 or later
-License URI: https://www.gnu.org/licenses/gpl-2.0.html
+License: GPLv3 or later
+License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
 Integrate with Ko-fi to manage WordPress users or roles via webhook.
 
 == Description ==
 
-Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage WordPress users and roles based on Ko-fi webhooks. This plugin allows you to automate user role assignments, log donations, and manage memberships seamlessly.
+Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage WordPress users and roles based on Ko-fi webhooks. This plugin allows you to automate user role assignments, log donations (in a database table), and manage memberships seamlessly.
 
 **Features:**
 - Automatically assign roles to users based on Ko-fi donations or memberships.
-- Log user actions, such as donations and role changes, in a dedicated database table.
-- Configure logging levels and enable email notifications for logs.
+- Log user actions, such as donations and role changes, in a dedicated database table (no file logging).
+- Lightweight debug logging to the PHP error log when WP_DEBUG is enabled.
 - Fully compatible with GDPR and WordPress privacy tools.
 
 **Use Cases:**
@@ -48,17 +48,17 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 
 == Screenshots ==
 
-1. **Settings Page**: Configure plugin options, including logging and role mapping.
-2. **User Logs**: View detailed logs of user actions, such as donations and role changes.
+1. **Settings Page**: Configure plugin options, including role mapping.
+2. **User Logs**: View logs of user actions, such as donations and role changes.
 3. **Webhook Configuration**: Example of setting up the Ko-fi webhook.
 
 == Changelog ==
 
 = 1.0.0 =
 * Initial release.
-* Added support for Ko-fi webhooks.
+* Support for Ko-fi webhooks.
 * Automatic role assignment based on donations or memberships.
-* Logging of user actions with configurable log levels.
+* Logging of user actions in database.
 
 == Upgrade Notice ==
 
@@ -67,4 +67,4 @@ Initial release. No upgrade steps required.
 
 == License ==
 
-This plugin is licensed under the GPLv2 or later. See the [GNU General Public License](https://www.gnu.org/licenses/gpl-2.0.html) for more details.
+This plugin is licensed under the GPLv3 or later. See the [GNU General Public License](https://www.gnu.org/licenses/gpl-3.0.html) for more details.

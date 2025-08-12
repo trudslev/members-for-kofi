@@ -50,8 +50,8 @@ class AdminSettingsTest extends TestCase {
 		parent::setUp();
 
 		// Ensure the option exists so sanitize_options doesn't return false.
-		if ( get_option( 'kofi_members_options' ) === false ) {
-			add_option( 'kofi_members_options', array() );
+		if ( get_option( 'members_for_kofi_options' ) === false ) {
+			add_option( 'members_for_kofi_options', array() );
 		}
 
 		$this->settings = new AdminSettings();
@@ -74,8 +74,6 @@ class AdminSettingsTest extends TestCase {
 			'default_role'       => 'subscriber',
 			'enable_expiry'      => true,
 			'role_expiry_days'   => '14',
-			'log_enabled'        => true,
-			'log_level'          => 'warning',
 		);
 
 		$sanitized = $this->settings->sanitize_options( $input );
@@ -86,8 +84,6 @@ class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'subscriber', $sanitized['default_role'] );
 		$this->assertTrue( $sanitized['enable_expiry'] );
 		$this->assertSame( 14, $sanitized['role_expiry_days'] );
-		$this->assertTrue( $sanitized['log_enabled'] );
-		$this->assertSame( 'warning', $sanitized['log_level'] );
 	}
 
 	/**
@@ -125,22 +121,5 @@ class AdminSettingsTest extends TestCase {
 	 * Verifies that the renderLogLevelField method outputs the correct
 	 * HTML for the log level select field, including the selected option.
 	 */
-	public function test_render_log_level_field_outputs_select(): void {
-		update_option(
-			'kofi_members_options',
-			array(
-				'log_level' => 'warning',
-			)
-		);
-
-		$settings = new AdminSettings();
-
-		ob_start();
-		$settings->render_log_level_field();
-		$output = ob_get_clean();
-
-		$this->assertStringContainsString( '<select name="kofi_members_options[log_level]">', $output );
-		$this->assertStringContainsString( '<option value="warning" selected=\'selected\'>', $output );
-		$this->assertStringContainsString( 'Minimum severity of log messages to record.', $output );
-	}
+	// Logging field tests removed since file logging feature was dropped.
 }

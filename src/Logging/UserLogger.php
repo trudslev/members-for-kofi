@@ -39,7 +39,7 @@ class UserLogger {
 	public function log_action( int $user_id, string $email, string $action, ?string $role = null, ?float $amount = null, ?string $currency = null ): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		$wpdb->insert(
 			$table_name,
@@ -54,6 +54,9 @@ class UserLogger {
 			),
 			array( '%d', '%s', '%s', '%s', '%f', '%s', '%s' )
 		);
+
+		// Invalidate cached total logs count so UI refresh reflects new entries.
+		delete_transient( 'members_for_kofi_total_logs' );
 	}
 
 	/**
@@ -98,7 +101,7 @@ class UserLogger {
 	public static function get_create_table_sql(): string {
 		global $wpdb;
 
-		$table_name      = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name      = $wpdb->prefix . 'members_for_kofi_user_logs';
 		$charset_collate = $wpdb->get_charset_collate();
 
 		return "CREATE TABLE `$table_name` (
@@ -138,7 +141,7 @@ class UserLogger {
 	public static function drop_table(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', $table_name ) );
 	}
 }

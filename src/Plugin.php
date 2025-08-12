@@ -27,7 +27,7 @@
 namespace MembersForKofi;
 
 use MembersForKofi\Admin\AdminSettings;
-use MembersForKofi\Logging\LoggerFactory;
+use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Cron\RoleExpiryChecker;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Logging\UserLogger;
@@ -92,9 +92,9 @@ class Plugin {
 	public static function activate(): void {
 
 		// Initialize default plugin options.
-		if ( false === get_option( 'kofi_members_options' ) ) {
+		if ( false === get_option( 'members_for_kofi_options' ) ) {
 			add_option(
-				'kofi_members_options',
+				'members_for_kofi_options',
 				array(
 					'verification_token' => '',
 					'only_subscriptions' => true,
@@ -102,8 +102,6 @@ class Plugin {
 					'default_role'       => '',
 					'enable_expiry'      => true,
 					'role_expiry_days'   => 35,
-					'log_enabled'        => false,
-					'log_level'          => 'info',
 				)
 			);
 		}
@@ -139,7 +137,7 @@ class Plugin {
 	 */
 	public static function uninstall(): void {
 		// Remove options.
-		delete_option( 'kofi_members_options' );
+		delete_option( 'members_for_kofi_options' );
 
 		// Remove rewrite rules added by this plugin.
 		global $wp_rewrite;
@@ -198,7 +196,7 @@ class Plugin {
 	 * @return void
 	 */
 	public function initialize_logger(): void {
-		LoggerFactory::get_logger()->info( 'Members for Ko-fi plugin initialized' );
+		DebugLogger::info( 'Plugin initialized' );
 	}
 
 	/**
