@@ -11,3 +11,4 @@ package-lock.json
 *.tmp
 README.md
 release
+bin
