@@ -97,7 +97,7 @@ class Webhook {
 	 * @return \WP_REST_Response The response object indicating success or failure.
 	 */
 	private function process( array $body ): \WP_REST_Response {
-		$options = get_option( 'kofi_members_options' );
+		$options = get_option( 'members_for_kofi_options' );
 		DebugLogger::info( 'Webhook received', array( 'body' => $body ) );
 
 		if ( empty( $body['verification_token'] ) ) {
@@ -177,6 +177,11 @@ class Webhook {
 					'currency' => $currency,
 				)
 			);
+		} else {
+			// Subscription required but payment not a subscription.
+			DebugLogger::info( 'Ignoring non-subscription payment due to only_subscriptions setting', array( 'email' => $email ) );
+			// Still log the ignored event for visibility (user_id 0 when user absent).
+			$user_logger->log_action( $user ? $user->ID : 0, $email, 'Ignored non-subscription payment' );
 		}
 
 		return new \WP_REST_Response( array( 'success' => true ), 200 );
@@ -203,12 +208,31 @@ class Webhook {
 		$map          = $options['tier_role_map'] ?? array();
 		$default_role = $options['default_role'] ?? '';
 
-		foreach ( $map['tier'] ?? array() as $index => $tier_name ) {
-			if ( strcasecmp( $tier_name, $tier ) === 0 ) {
-				return $map['role'][ $index ] ?? $default_role;
+		if ( empty( $tier ) ) {
+			return ! empty( $default_role ) ? $default_role : null;
+		}
+
+		// Support parallel array format (legacy) or associative map (current sanitizer output).
+		if ( isset( $map['tier'], $map['role'] ) && is_array( $map['tier'] ) && is_array( $map['role'] ) ) {
+			foreach ( $map['tier'] as $index => $tier_name ) {
+				if ( strcasecmp( (string) $tier_name, $tier ) === 0 ) {
+					if ( isset( $map['role'][ $index ] ) && ! empty( $map['role'][ $index ] ) ) {
+						return $map['role'][ $index ];
+					}
+					return ! empty( $default_role ) ? $default_role : null;
+				}
+			}
+		} else {
+			foreach ( $map as $tier_name => $role ) {
+				if ( strcasecmp( (string) $tier_name, $tier ) === 0 ) {
+					if ( ! empty( $role ) ) {
+						return $role;
+					}
+					return ! empty( $default_role ) ? $default_role : null;
+				}
 			}
 		}
 
-		return $default_role ? $default_role : null;
+		return ! empty( $default_role ) ? $default_role : null;
 	}
 }

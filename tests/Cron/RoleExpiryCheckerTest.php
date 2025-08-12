@@ -58,7 +58,7 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	protected function tearDown(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
 
 		parent::tearDown();

@@ -47,7 +47,7 @@ class AdminSettingsRenderTest extends TestCase {
 		$this->settings = new AdminSettings();
 
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => 'sample-token',
 				'only_subscriptions' => true,
@@ -79,7 +79,7 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_verification_token_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
-		$this->assertStringContainsString( 'name="kofi_members_options[verification_token]"', $output );
+		$this->assertStringContainsString( 'name="members_for_kofi_options[verification_token]"', $output );
 	}
 
 	/**
@@ -90,7 +90,7 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_only_subscriptions_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
-		$this->assertStringContainsString( 'name="kofi_members_options[only_subscriptions]"', $output );
+		$this->assertStringContainsString( 'name="members_for_kofi_options[only_subscriptions]"', $output );
 	}
 
 	/**
@@ -112,7 +112,7 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_default_role_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_default_role_field' ) );
-		$this->assertStringContainsString( 'name="kofi_members_options[default_role]"', $output );
+		$this->assertStringContainsString( 'name="members_for_kofi_options[default_role]"', $output );
 	}
 
 	/**
@@ -123,7 +123,7 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_expiry_toggle_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
-		$this->assertStringContainsString( 'name="kofi_members_options[enable_expiry]"', $output );
+		$this->assertStringContainsString( 'name="members_for_kofi_options[enable_expiry]"', $output );
 	}
 
 	/**
@@ -134,7 +134,7 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_role_expiry_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_role_expiry_field' ) );
-		$this->assertMatchesRegularExpression( '/<input[^>]*name="kofi_members_options\[role_expiry_days\]"/', $output );
+		$this->assertMatchesRegularExpression( '/<input[^>]*name="members_for_kofi_options\[role_expiry_days\]"/', $output );
 	}
 
 	/**

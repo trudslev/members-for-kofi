@@ -50,8 +50,8 @@ class AdminSettingsTest extends TestCase {
 		parent::setUp();
 
 		// Ensure the option exists so sanitize_options doesn't return false.
-		if ( get_option( 'kofi_members_options' ) === false ) {
-			add_option( 'kofi_members_options', array() );
+		if ( get_option( 'members_for_kofi_options' ) === false ) {
+			add_option( 'members_for_kofi_options', array() );
 		}
 
 		$this->settings = new AdminSettings();

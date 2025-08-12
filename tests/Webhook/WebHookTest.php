@@ -49,7 +49,7 @@ class WebhookTest extends TestCase {
 
 		// Set the expected plugin options so the webhook can validate tokens.
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ? sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) : 'fallback-token',
 				'tier_role_map'      => array(),
@@ -72,13 +72,13 @@ class WebhookTest extends TestCase {
 	 */
 	protected function tearDown(): void {
 		// Clean up the options after tests.
-		delete_option( 'kofi_members_options' );
+		delete_option( 'members_for_kofi_options' );
 
 		// No logger reset required.
 
 		// Drop the user logs table after tests.
 		global $wpdb;
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
 	}
 
@@ -124,7 +124,7 @@ class WebhookTest extends TestCase {
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token',
+				'verification_token'      => isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ? sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) : 'fallback-token',
 				'email'                   => 'user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -174,7 +174,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_skips_user_creation_for_one_time_payment_when_only_subscriptions_is_true(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(),
@@ -233,7 +233,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_assigns_role_based_on_tier(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array( 'Gold' => 'subscriber' ),
@@ -266,7 +266,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_no_role_assigned_when_tier_unknown(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(), // No mapping.
@@ -300,7 +300,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_assigns_default_role_when_tier_unknown(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(), // No matching tier.
@@ -337,7 +337,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_user_meta_updated_on_role_assignment(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(
@@ -380,7 +380,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_assigns_role_from_tier_map(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
 				'tier_role_map'      => array(
@@ -438,7 +438,7 @@ class WebhookTest extends TestCase {
 			array(
 				'email'                   => $email,
 				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
-				'tier_name'               => 'Platinum', // Not mapped
+				'tier_name'               => 'Platinum',
 				'is_subscription_payment' => true,
 			)
 		);

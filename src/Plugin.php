@@ -92,9 +92,9 @@ class Plugin {
 	public static function activate(): void {
 
 		// Initialize default plugin options.
-		if ( false === get_option( 'kofi_members_options' ) ) {
+		if ( false === get_option( 'members_for_kofi_options' ) ) {
 			add_option(
-				'kofi_members_options',
+				'members_for_kofi_options',
 				array(
 					'verification_token' => '',
 					'only_subscriptions' => true,
@@ -137,7 +137,7 @@ class Plugin {
 	 */
 	public static function uninstall(): void {
 		// Remove options.
-		delete_option( 'kofi_members_options' );
+		delete_option( 'members_for_kofi_options' );
 
 		// Remove rewrite rules added by this plugin.
 		global $wp_rewrite;

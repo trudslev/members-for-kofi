@@ -20,7 +20,8 @@ class DebugLogger {
 	 * @return void
 	 */
 	public static function log( string $level, string $message, array $context = array() ): void {
-		if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
+		$force_debug = defined( 'MEMBERS_FOR_KOFI_FORCE_DEBUG' ) && MEMBERS_FOR_KOFI_FORCE_DEBUG;
+		if ( ( defined( 'WP_DEBUG' ) && WP_DEBUG ) || $force_debug ) {
 			$prefix = '[Members for Ko-fi][' . strtoupper( $level ) . '] ';
 			$line   = $prefix . $message;
 			if ( ! empty( $context ) ) {

@@ -51,7 +51,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	protected function tearDown(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
 
 		parent::tearDown();
@@ -65,7 +65,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	public function test_log_action(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		// Log an action.
 		$user_logger = new UserLogger();
@@ -89,14 +89,13 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	public function test_log_role_assignment(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		// Log a role assignment.
 		$user_logger = new UserLogger();
 		$user_logger->log_role_assignment( 1, 'test@example.com', 'subscriber' );
 
 		// Verify the data was inserted into the table.
-		// $result = $wpdb->get_row( "SELECT * FROM $table_name WHERE user_id = 1", ARRAY_A );
 		$result = $wpdb->get_row( "SELECT * FROM $table_name", ARRAY_A );
 		$this->assertNotEmpty( $result );
 		$this->assertEquals( 'subscriber', $result['role'] );
@@ -111,7 +110,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	public function test_log_role_removal(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		// Log a role removal.
 		$user_logger = new UserLogger();
@@ -133,7 +132,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	public function test_log_donation(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'kofi_members_user_logs';
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		// Log a donation.
 		$user_logger = new UserLogger();
