@@ -19,7 +19,7 @@
  *
  * @category WordPress_Plugin
  * @package  MembersForKofi
- * @author   Sune Trudslev <sune@trudslev.net>
+ * @author   Sune Trudslev <thegeek@foodgeek.io>
  * @license  https://www.gnu.org/licenses/gpl-3.0.html GNU General Public License v3.0
  * @link     https://github.com/trudslev/members-for-kofi
  */
@@ -37,12 +37,6 @@ use MembersForKofi\Logging\UserLogger;
  *
  * Handles initialization, activation, deactivation, and uninstall routines,
  * as well as admin menu, settings, logger, cron, and webhook integration.
- *
- * @category WordPress_Plugin
- * @package  MembersForKofi
- * @author   Sune Trudslev <sune@trudslev.net>
- * @license  https://www.gnu.org/licenses/gpl-3.0.html GNU General Public License v3.0
- * @link     https://github.com/trudslev/members-for-kofi
  */
 class Plugin {
 	/**
