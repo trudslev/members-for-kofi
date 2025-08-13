@@ -31,6 +31,9 @@ SVN_URL:=https://plugins.svn.wordpress.org/$(PLUGIN_SLUG)
 SVN_DIR:=/tmp/$(PLUGIN_SLUG)-svn
 ZIP_NAME:=$(PLUGIN_SLUG)-$(VERSION).zip
 GIT_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
+WPORG_USER?=
+WPORG_PASS?=
+SVN_COMMIT_NON_INTERACTIVE?=0
 OUT_DIR?=/tmp
 STAGE_DIR:=$(OUT_DIR)/$(PLUGIN_SLUG)-stage
 ZIP_FULL:=$(OUT_DIR)/$(ZIP_NAME)
@@ -104,7 +107,13 @@ deploy-svn: release
 commit-svn:
 	@echo "Committing to WordPress.org SVN..."
 	@if [ ! -d $(SVN_DIR) ]; then echo 'Run make deploy-svn first'; exit 1; fi
-	cd $(SVN_DIR) && svn commit -m "Release $(VERSION)" || true
+	cd $(SVN_DIR) && \
+	USER_ARG="" && PASS_ARG="" && NI_ARGS="" && \
+	if [ -n "$(WPORG_USER)" ]; then USER_ARG="--username $(WPORG_USER)"; fi; \
+	if [ -n "$(WPORG_PASS)" ]; then PASS_ARG="--password $(WPORG_PASS) --no-auth-cache"; fi; \
+	if [ "$(SVN_COMMIT_NON_INTERACTIVE)" = "1" ]; then NI_ARGS="--non-interactive"; fi; \
+	echo "svn commit using $$USER_ARG $$NI_ARGS"; \
+	svn commit $$USER_ARG $$PASS_ARG $$NI_ARGS -m "Release $(VERSION)" || true
 	@echo "Done."
 
 # --- Local WordPress test site (manual QA) ---
