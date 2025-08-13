@@ -50,14 +50,13 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 
 1. **Settings Page**: Configure plugin options, including role mapping.
 2. **User Logs**: View logs of user actions, such as donations and role changes.
-3. **Webhook Configuration**: Example of setting up the Ko-fi webhook.
 
 == Changelog ==
 
 = 1.0.0 =
 * Initial release.
 * Support for Ko-fi webhooks.
-* Automatic role assignment based on donations or memberships.
+* Automatic role assignment based on donations or memberships tiers.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
