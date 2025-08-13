@@ -3,7 +3,7 @@ tests
 vendor
 Makefile
 Dockerfile*
-docker-compose.yml
+docker-compose.*yml
 phpunit.xml
 composer.*
 package-lock.json
