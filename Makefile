@@ -97,6 +97,8 @@ deploy-svn: release
 	fi
 	# Tag
 	cd $(SVN_DIR) && svn update && svn add --force trunk/* > /dev/null 2>&1 || true
+	# Ensure assets are versioned
+	cd $(SVN_DIR) && if [ -d assets ]; then svn add --force assets/* > /dev/null 2>&1 || true; fi
 	cd $(SVN_DIR) && svn rm $(SVN_DIR)/tags/$(VERSION) > /dev/null 2>&1 || true
 	cd $(SVN_DIR) && mkdir -p tags/$(VERSION) && rsync -a trunk/ tags/$(VERSION)/
 	cd $(SVN_DIR) && svn add --force tags/$(VERSION) > /dev/null 2>&1 || true
