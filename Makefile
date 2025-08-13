@@ -31,6 +31,9 @@ SVN_URL:=https://plugins.svn.wordpress.org/$(PLUGIN_SLUG)
 SVN_DIR:=/tmp/$(PLUGIN_SLUG)-svn
 ZIP_NAME:=$(PLUGIN_SLUG)-$(VERSION).zip
 GIT_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
+OUT_DIR?=/tmp
+STAGE_DIR:=$(OUT_DIR)/$(PLUGIN_SLUG)-stage
+ZIP_FULL:=$(OUT_DIR)/$(ZIP_NAME)
 
 .PHONY: ensure-main
 ensure-main:
@@ -41,17 +44,17 @@ ensure-main:
 .PHONY: release
 
 release: .releaseignore
-	@echo "Packaging $(PLUGIN_SLUG) version $(VERSION)"
-	rm -rf release $(ZIP_NAME) $(PLUGIN_SLUG).zip
-	mkdir -p release
-	rsync -a --exclude-from='.releaseignore' ./ release/$(PLUGIN_SLUG)/
-	# Ensure stable tag in readme.txt matches plugin version
+	@echo "Packaging $(PLUGIN_SLUG) version $(VERSION) -> $(ZIP_FULL)"
+	rm -rf $(STAGE_DIR) $(ZIP_FULL) $(ZIP_NAME) $(PLUGIN_SLUG).zip
+	mkdir -p $(STAGE_DIR)
+	rsync -a --exclude-from='.releaseignore' ./ $(STAGE_DIR)/$(PLUGIN_SLUG)/
+	# Ensure stable tag consistency
 	@if ! grep -q "Stable tag: $(VERSION)" readme.txt; then \
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \
 	fi
-	cd release && zip -rq ../$(ZIP_NAME) $(PLUGIN_SLUG)
-	rm -rf release
-	@echo "Created $(ZIP_NAME)"
+	cd $(STAGE_DIR) && zip -rq $(ZIP_FULL) $(PLUGIN_SLUG)
+	rm -rf $(STAGE_DIR)
+	@echo "Created artifact: $(ZIP_FULL)"
 
 # Create and push git tag (v<version>) – only on main
 .PHONY: git-tag
@@ -73,7 +76,7 @@ github-release: release git-tag
 	@if ! command -v gh >/dev/null; then echo 'gh CLI not installed – skipping GitHub release.'; exit 0; fi
 	@if gh release view v$(VERSION) >/dev/null 2>&1; then echo 'GitHub release already exists for v$(VERSION)'; exit 0; fi
 	@echo "Creating GitHub release v$(VERSION)"
-	gh release create v$(VERSION) $(ZIP_NAME) --title "v$(VERSION)" --notes "Release $(VERSION)"
+	gh release create v$(VERSION) $(ZIP_FULL) --title "v$(VERSION)" --notes "Release $(VERSION)"
 	@echo "GitHub release v$(VERSION) published."
 
 .PHONY: deploy-svn
