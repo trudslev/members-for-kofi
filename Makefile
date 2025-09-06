@@ -25,13 +25,21 @@ rebuild:
 	@touch .build.stamp
 
 release: .releaseignore
-	@echo "Creating release..."
-	rm -rf release
-	mkdir release
-	rsync -av --exclude-from='.releaseignore' ./ release/
-	cd release && zip -r ../members-for-kofi.zip .
-	rm -rf release
-	@echo "Release created: members-for-kofi.zip"
+	@echo "Creating production release..."
+	rm -rf build members-for-kofi.zip
+	mkdir build
+	# Sync source (excluding dev artifacts & vendor)
+	rsync -av --exclude-from='.releaseignore' ./ build/
+	# Bring in composer metadata temporarily for install
+	cp composer.json build/
+	@[ -f composer.lock ] && cp composer.lock build/ || true
+	# Install only production dependencies (none currently) to generate optimized autoloader
+	cd build && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
+	# Remove composer metadata from final package
+	rm -f build/composer.json build/composer.lock
+	cd build && zip -rq ../members-for-kofi.zip .
+	rm -rf build
+	@echo "Release created: members-for-kofi.zip (production only, no dev deps)"
 
 # --- Local WordPress test site (manual QA) ---
 
