@@ -47,6 +47,11 @@ To run tests:
 make test
 ```
 
+## Release History
+
+- 1.0.1: Packaging improvements (production-only vendor build). No functional changes.
+- 1.0.0: Initial release.
+
 ## License
 
 This plugin is licensed under the [GNU General Public License v3.0 or later](https://www.gnu.org/licenses/gpl-3.0.en.html). You are free to use, modify, and distribute it under the terms of that license.
