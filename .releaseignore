@@ -1,6 +1,5 @@
 .*
 tests
-vendor
 Makefile
 Dockerfile*
 docker-compose.*yml
