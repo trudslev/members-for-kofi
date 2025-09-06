@@ -24,7 +24,7 @@ defined( 'ABSPATH' ) || exit;
  * Plugin Name:       Members for Ko-fi
  * Plugin URI:        https://github.com/trudslev/members-for-kofi
  * Description:       Integrate with Ko-fi to manage WordPress users or roles via webhook.
- * Version:           1.0.0
+ * Version:           1.0.1
  * Author:            Sune Adelowo Trudslev
  * Author URI:        https://foodgeek.io
  * License:           GPL-3.0-or-later
