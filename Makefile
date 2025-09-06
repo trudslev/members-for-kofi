@@ -84,26 +84,33 @@ github-release: release git-tag
 
 .PHONY: deploy-svn
 deploy-svn: release
-	@echo "Deploying $(PLUGIN_SLUG) $(VERSION) to WordPress.org SVN"
+	@echo "Deploying $(PLUGIN_SLUG) $(VERSION) to WordPress.org SVN (production vendor only)"
 	@if [ -z "$(shell command -v svn)" ]; then echo 'svn not found'; exit 1; fi
 	rm -rf $(SVN_DIR)
 	svn checkout $(SVN_URL) $(SVN_DIR)
-	# Copy trunk
+	# Prepare clean trunk source (without local vendor or dev files)
 	rsync -a --delete --exclude-from='.releaseignore' ./ $(SVN_DIR)/trunk/
-	# Copy WordPress.org assets (from .wordpress-org/assets or legacy assets-wporg) to /assets (outside trunk)
+	# Build production autoloader inside trunk
+	@if [ -f composer.json ]; then \
+	  cp composer.json $(SVN_DIR)/trunk/; \
+	  [ -f composer.lock ] && cp composer.lock $(SVN_DIR)/trunk/ || true; \
+	  cd $(SVN_DIR)/trunk && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
+	  rm -f $(SVN_DIR)/trunk/composer.json $(SVN_DIR)/trunk/composer.lock; \
+	fi
+	# Copy WordPress.org assets to /assets (not inside trunk)
 	@if [ -d .wordpress-org/assets ]; then \
 		mkdir -p $(SVN_DIR)/assets; \
 		rsync -a .wordpress-org/assets/ $(SVN_DIR)/assets/; \
 	fi
-	# Tag
+	# SVN adds
 	cd $(SVN_DIR) && svn update && svn add --force trunk/* > /dev/null 2>&1 || true
-	# Ensure assets are versioned
 	cd $(SVN_DIR) && if [ -d assets ]; then svn add --force assets/* > /dev/null 2>&1 || true; fi
-	cd $(SVN_DIR) && svn rm $(SVN_DIR)/tags/$(VERSION) > /dev/null 2>&1 || true
-	cd $(SVN_DIR) && mkdir -p tags/$(VERSION) && rsync -a trunk/ tags/$(VERSION)/
+	# Recreate tag from trunk
+	cd $(SVN_DIR) && svn rm tags/$(VERSION) > /dev/null 2>&1 || true
+	cd $(SVN_DIR) && svn copy trunk tags/$(VERSION)
 	cd $(SVN_DIR) && svn add --force tags/$(VERSION) > /dev/null 2>&1 || true
 	cd $(SVN_DIR) && svn stat
-	@echo "Review the above svn status. If it looks correct, run: make commit-svn"
+	@echo "Review svn status. If correct: make commit-svn"
 
 .PHONY: commit-svn
 commit-svn:
