@@ -26,11 +26,14 @@
 
 namespace MembersForKofi;
 
+defined( 'ABSPATH' ) || exit;
+
 use MembersForKofi\Admin\AdminSettings;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Cron\RoleExpiryChecker;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Logging\RequestLogger;
 
 /**
  * Main plugin class for Members for Ko-fi.
@@ -96,16 +99,19 @@ class Plugin {
 					'default_role'       => '',
 					'enable_expiry'      => true,
 					'role_expiry_days'   => 35,
+					'auto_clear_logs'    => true,
+					'log_retention_days' => 30,
 				)
 			);
-		}
-
-		// Add rewrite rules and flush them.
+		}       // Add rewrite rules and flush them.
 		self::add_rewrite_rules();
 		flush_rewrite_rules();
 
 		// Create the user logs table.
 		UserLogger::create_table();
+
+		// Create the request logs table.
+		RequestLogger::create_table();
 	}
 
 	/**
@@ -147,6 +153,9 @@ class Plugin {
 
 		// Remove the user logs table.
 		UserLogger::drop_table();
+
+		// Remove the request logs table.
+		RequestLogger::drop_table();
 	}
 
 	/**
@@ -194,23 +203,37 @@ class Plugin {
 	}
 
 	/**
-	 * Initializes the scheduled cron job for role expiry checking.
+	 * Initializes the scheduled cron jobs.
 	 *
 	 * @return void
 	 */
 	public function initialize_cron(): void {
-		// Schedule the cron job if it isn't already scheduled.
+		// Schedule the role expiry cron job if it isn't already scheduled.
 		if ( ! wp_next_scheduled( 'kofi_members_check_expired_roles' ) ) {
 			wp_schedule_event( time(), 'daily', 'kofi_members_check_expired_roles' );
 		}
 
-		// Hook the cron job to the RoleExpiryChecker.
+		// Hook the role expiry cron job to the RoleExpiryChecker.
 		add_action(
 			'kofi_members_check_expired_roles',
 			function () {
 				$user_logger         = new UserLogger();
 				$role_expiry_checker = new RoleExpiryChecker( $user_logger );
 				$role_expiry_checker->check_and_remove_expired_roles();
+			}
+		);
+
+		// Schedule the log cleanup cron job if it isn't already scheduled.
+		if ( ! wp_next_scheduled( 'kofi_members_cleanup_logs' ) ) {
+			wp_schedule_event( time(), 'daily', 'kofi_members_cleanup_logs' );
+		}
+
+		// Hook the log cleanup cron job to the LogCleanup class.
+		add_action(
+			'kofi_members_cleanup_logs',
+			function () {
+				$log_cleanup = new Cron\LogCleanup();
+				$log_cleanup->execute();
 			}
 		);
 	}

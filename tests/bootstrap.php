@@ -55,3 +55,6 @@ tests_add_filter( 'muplugins_loaded', 'kofi_members_manually_load_plugin' );
 
 // Start up the WordPress testing environment.
 require "{$kofi_members_tests_dir}/includes/bootstrap.php";
+
+// Run activation hook to create tables after WordPress is loaded.
+\MembersForKofi\Plugin::activate();

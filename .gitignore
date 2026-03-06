@@ -34,3 +34,4 @@ Desktop.ini
 *.sublime-project
 *.sublime-workspace
 release/*
+reports/

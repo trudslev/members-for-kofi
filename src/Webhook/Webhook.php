@@ -20,9 +20,12 @@
 
 namespace MembersForKofi\Webhook;
 
+defined( 'ABSPATH' ) || exit;
+
 use WP_User;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Logging\RequestLogger;
 
 use get_option;
 
@@ -36,6 +39,22 @@ use get_option;
  */
 class Webhook {
 
+	/**
+	 * Roles that cannot be assigned via webhook for security reasons.
+	 *
+	 * The 'administrator' role is explicitly forbidden to prevent privilege escalation attacks.
+	 * This is a critical security boundary: if webhooks could assign admin roles, an attacker
+	 * who compromises the Ko-fi webhook endpoint could gain full WordPress admin access.
+	 *
+	 * This constant is used by AdminSettings to filter role selection dropdowns, ensuring
+	 * administrators cannot accidentally configure mappings that would create security vulnerabilities.
+	 *
+	 * @since 1.0.0
+	 * @var array<string> Array of role slugs that are not allowed via webhook assignment.
+	 *
+	 * @see AdminSettings::render_tier_role_map_field() Where this constant filters available roles.
+	 * @see AdminSettings::render_default_role_field() Where this constant filters default role options.
+	 */
 	public const DISALLOWED_ROLES = array( 'administrator' );
 
 	/**
@@ -54,13 +73,19 @@ class Webhook {
 	 * @return \WP_REST_Response The response object indicating success or failure.
 	 */
 	public function handle( ?\WP_REST_Request $request = null, ?array $data = null ): \WP_REST_Response {
+		// Initialize request logger and payload data.
+		$request_logger = new RequestLogger();
+		$payload_data   = array();
+
 		if ( null === $data ) {
 			if ( $request instanceof \WP_REST_Request ) {
 				$data = $request->get_json_params();
 			} else {
 				parse_str( file_get_contents( 'php://input' ), $payload );
 				if ( ! is_array( $payload ) || ! array_key_exists( 'data', $payload ) ) {
-					return new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
+					$response = new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
+					$request_logger->log_request( $payload_data, 400, false, 'Invalid payload' );
+					return $response;
 				}
 				// Sanitize the raw JSON string before decoding.
 				$raw_json = wp_unslash( $payload['data'] );
@@ -69,7 +94,9 @@ class Webhook {
 				$raw_json = trim( $raw_json );
 				$data     = json_decode( $raw_json, true );
 				if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $data ) ) {
-					return new \WP_REST_Response( array( 'error' => 'Malformed JSON payload' ), 400 );
+					$response = new \WP_REST_Response( array( 'error' => 'Malformed JSON payload' ), 400 );
+					$request_logger->log_request( $payload_data, 400, false, 'Malformed JSON payload' );
+					return $response;
 				}
 				// Recursively sanitize text fields (shallow sanitize for scalar values).
 				array_walk_recursive(
@@ -84,10 +111,25 @@ class Webhook {
 		}
 
 		if ( ! is_array( $data ) ) {
-			return new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
+			$response = new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
+			$request_logger->log_request( $payload_data, 400, false, 'Invalid payload' );
+			return $response;
 		}
 
-		return $this->process( $data );
+		// Store payload for logging.
+		$payload_data = $data;
+
+		// Process the request and log the result.
+		$response = $this->process( $data );
+
+		// Log the request with the response status.
+		$status_code = $response->get_status();
+		$success     = $status_code >= 200 && $status_code < 300;
+		$error       = $success ? '' : ( $response->get_data()['error'] ?? 'Unknown error' );
+
+		$request_logger->log_request( $payload_data, $status_code, $success, $error );
+
+		return $response;
 	}
 
 	/**
@@ -209,7 +251,7 @@ class Webhook {
 		$default_role = $options['default_role'] ?? '';
 
 		if ( empty( $tier ) ) {
-			return ! empty( $default_role ) ? $default_role : null;
+			return $this->validate_role( ! empty( $default_role ) ? $default_role : null );
 		}
 
 		// Support parallel array format (legacy) or associative map (current sanitizer output).
@@ -217,22 +259,49 @@ class Webhook {
 			foreach ( $map['tier'] as $index => $tier_name ) {
 				if ( strcasecmp( (string) $tier_name, $tier ) === 0 ) {
 					if ( isset( $map['role'][ $index ] ) && ! empty( $map['role'][ $index ] ) ) {
-						return $map['role'][ $index ];
+						return $this->validate_role( $map['role'][ $index ] );
 					}
-					return ! empty( $default_role ) ? $default_role : null;
+					return $this->validate_role( ! empty( $default_role ) ? $default_role : null );
 				}
 			}
 		} else {
 			foreach ( $map as $tier_name => $role ) {
 				if ( strcasecmp( (string) $tier_name, $tier ) === 0 ) {
 					if ( ! empty( $role ) ) {
-						return $role;
+						return $this->validate_role( $role );
 					}
-					return ! empty( $default_role ) ? $default_role : null;
+					return $this->validate_role( ! empty( $default_role ) ? $default_role : null );
 				}
 			}
 		}
 
-		return ! empty( $default_role ) ? $default_role : null;
+		return $this->validate_role( ! empty( $default_role ) ? $default_role : null );
+	}
+
+	/**
+	 * Validates that a role is allowed to be assigned via webhook.
+	 *
+	 * This is a critical security function that prevents disallowed roles
+	 * (such as administrator) from being assigned through webhooks, even if
+	 * they were somehow configured in the settings.
+	 *
+	 * @param string|null $role The role to validate.
+	 * @return string|null The role if valid, null if disallowed.
+	 */
+	private function validate_role( ?string $role ): ?string {
+		if ( empty( $role ) ) {
+			return null;
+		}
+
+		// Security: Block disallowed roles.
+		if ( in_array( $role, self::DISALLOWED_ROLES, true ) ) {
+			DebugLogger::error(
+				'Security: Blocked attempt to assign disallowed role via webhook',
+				array( 'role' => $role )
+			);
+			return null;
+		}
+
+		return $role;
 	}
 }

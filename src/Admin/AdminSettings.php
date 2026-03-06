@@ -20,6 +20,8 @@
 
 namespace MembersForKofi\Admin;
 
+defined( 'ABSPATH' ) || exit;
+
 use MembersForKofi\Webhook\Webhook;
 
 use function add_settings_section;
@@ -65,6 +67,7 @@ class AdminSettings {
 		add_action( 'wp_ajax_members_for_kofi_update_rows_per_page', array( $this, 'handle_update_rows_per_page' ) );
 		add_action( 'wp_ajax_members_for_kofi_filter_logs', array( $this, 'handle_filter_logs' ) );
 		add_action( 'wp_ajax_members_for_kofi_refresh_logs', array( $this, 'handle_refresh_logs' ) );
+		add_action( 'wp_ajax_members_for_kofi_switch_log_type', array( $this, 'handle_switch_log_type' ) );
 	}
 
 
@@ -85,21 +88,27 @@ class AdminSettings {
 			)
 		);
 
-		// General tab.
-		add_settings_section( 'members_for_kofi_general', __( 'General Settings', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
+		// Ko-fi Settings section.
+		add_settings_section( 'members_for_kofi_general', __( 'Ko-fi Settings', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
 		add_settings_field( 'verification_token', __( 'Verification Token', 'members-for-kofi' ), array( $this, 'render_verification_token_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-		add_settings_field( 'only_subscriptions', __( 'Only Accept Subscriptions', 'members-for-kofi' ), array( $this, 'render_only_subscriptions_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-		add_settings_field( 'tier_role_map', __( 'Tier to Role Mapping', 'members-for-kofi' ), array( $this, 'render_tier_role_map_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-		add_settings_field( 'default_role', __( 'Default Role (if no match)', 'members-for-kofi' ), array( $this, 'render_default_role_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'members-for-kofi' ), array( $this, 'render_expiry_toggle_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'members-for-kofi' ), array( $this, 'render_role_expiry_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-	}
 
-	/**
-	 * Enqueues the admin JavaScript file for the Members for Ko-fi settings page.
-	 *
-	 * @return void
-	 */
+		// Role Assignment section.
+		add_settings_section( 'members_for_kofi_role_assignment', __( 'Role Assignment', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
+		add_settings_field( 'only_subscriptions', __( 'Only Accept Subscriptions', 'members-for-kofi' ), array( $this, 'render_only_subscriptions_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
+		add_settings_field( 'tier_role_map', __( 'Tier to Role Mapping', 'members-for-kofi' ), array( $this, 'render_tier_role_map_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
+		add_settings_field( 'default_role', __( 'Default Role (if no match)', 'members-for-kofi' ), array( $this, 'render_default_role_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
+		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'members-for-kofi' ), array( $this, 'render_expiry_toggle_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
+		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'members-for-kofi' ), array( $this, 'render_role_expiry_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
+
+		// Logging section.
+		add_settings_section( 'members_for_kofi_logging', __( 'Logging', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
+		add_settings_field( 'auto_clear_logs', __( 'Automatically Clear Logs', 'members-for-kofi' ), array( $this, 'render_auto_clear_logs_field' ), 'members-for-kofi', 'members_for_kofi_logging' );
+		add_settings_field( 'log_retention_days', __( 'Number of Days to Keep Logs', 'members-for-kofi' ), array( $this, 'render_log_retention_days_field' ), 'members-for-kofi', 'members_for_kofi_logging' );
+	}   /**
+		 * Enqueues the admin JavaScript file for the Members for Ko-fi settings page.
+		 *
+		 * @return void
+		 */
 	public function enqueue_admin_scripts(): void {
 		$screen = get_current_screen();
 
@@ -116,14 +125,17 @@ class AdminSettings {
 				'members-for-kofi-admin-settings',
 				'kofiMembers',
 				array(
-					'ajaxurl'          => admin_url( 'admin-ajax.php' ),
-					'paginationNonce'  => wp_create_nonce( 'members_for_kofi_pagination' ),
-					'clearLogsNonce'   => wp_create_nonce( 'members_for_kofi_clear_logs' ),
-					'rowsPerPageNonce' => wp_create_nonce( 'members_for_kofi_update_rows_per_page' ),
-					'filterNonce'      => wp_create_nonce( 'members_for_kofi_filter_logs' ),
-					'refreshNonce'     => wp_create_nonce( 'members_for_kofi_refresh_logs' ),
-					'clearLogsConfirm' => __( 'Are you sure you want to clear all logs? This action cannot be undone.', 'members-for-kofi' ),
-					'errorMessage'     => __( 'An error occurred. Please try again.', 'members-for-kofi' ),
+					'ajaxurl'            => admin_url( 'admin-ajax.php' ),
+					'paginationNonce'    => wp_create_nonce( 'members_for_kofi_pagination' ),
+					'clearLogsNonce'     => wp_create_nonce( 'members_for_kofi_clear_logs' ),
+					'rowsPerPageNonce'   => wp_create_nonce( 'members_for_kofi_update_rows_per_page' ),
+					'filterNonce'        => wp_create_nonce( 'members_for_kofi_filter_logs' ),
+					'refreshNonce'       => wp_create_nonce( 'members_for_kofi_refresh_logs' ),
+					'switchLogTypeNonce' => wp_create_nonce( 'members_for_kofi_switch_log_type' ),
+					'clearLogsConfirm'   => __( 'Are you sure you want to clear all logs? This action cannot be undone.', 'members-for-kofi' ),
+					'errorMessage'       => __( 'An error occurred. Please try again.', 'members-for-kofi' ),
+					'searchLabelUser'    => __( 'Search (email / action / role)', 'members-for-kofi' ),
+					'searchLabelRequest' => __( 'Search (email / tier / status)', 'members-for-kofi' ),
 				)
 			);
 		}
@@ -164,8 +176,15 @@ class AdminSettings {
 			foreach ( $options['tier_role_map']['tier'] as $index => $tier_raw ) {
 				$tier = sanitize_text_field( $tier_raw );
 				$role = isset( $options['tier_role_map']['role'][ $index ] ) ? sanitize_key( $options['tier_role_map']['role'][ $index ] ) : '';
-				if ( $tier && $role ) {
+				// Security: Explicitly reject disallowed roles (e.g., administrator).
+				if ( $tier && $role && ! in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
 					$tier_map[ $tier ] = $role;
+				} elseif ( $tier && $role && in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+					$errors[] = sprintf(
+						// translators: %s is the role name that was rejected.
+						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
+						$role
+					);
 				}
 			}
 		} elseif ( isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ) {
@@ -173,10 +192,28 @@ class AdminSettings {
 			foreach ( $options['tier_role_map'] as $tier_raw => $role_raw ) {
 				$tier = sanitize_text_field( $tier_raw );
 				$role = sanitize_key( $role_raw );
-				if ( $tier && $role ) {
+				// Security: Explicitly reject disallowed roles (e.g., administrator).
+				if ( $tier && $role && ! in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
 					$tier_map[ $tier ] = $role;
+				} elseif ( $tier && $role && in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+					$errors[] = sprintf(
+						// translators: %s is the role name that was rejected.
+						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
+						$role
+					);
 				}
 			}
+		}
+
+		// Security: Validate default role is not in disallowed list.
+		$default_role = isset( $options['default_role'] ) ? sanitize_key( $options['default_role'] ) : '';
+		if ( $default_role && in_array( $default_role, Webhook::DISALLOWED_ROLES, true ) ) {
+			$errors[] = sprintf(
+				// translators: %s is the role name that was rejected.
+				__( 'Security: Role "%s" cannot be used as default role for security reasons.', 'members-for-kofi' ),
+				$default_role
+			);
+			$default_role = ''; // Clear invalid default role.
 		}
 
 		if ( ! empty( $errors ) ) {
@@ -186,35 +223,42 @@ class AdminSettings {
 			return $stored; // Return previous values.
 		}
 
+		// Sanitize logging settings.
+		$auto_clear_logs    = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
+		$log_retention_days = isset( $options['log_retention_days'] ) ? absint( $options['log_retention_days'] ) : 30;
+		if ( $log_retention_days < 1 ) {
+			$log_retention_days = 30;
+		}
+
 		return array(
 			'verification_token' => $verification_token,
 			'only_subscriptions' => ! empty( $options['only_subscriptions'] ),
 			'tier_role_map'      => $tier_map,
-			'default_role'       => isset( $options['default_role'] ) ? sanitize_key( $options['default_role'] ) : '',
+			'default_role'       => $default_role,
 			'enable_expiry'      => $enable_expiry,
 			'role_expiry_days'   => $role_expiry_days,
+			'auto_clear_logs'    => $auto_clear_logs,
+			'log_retention_days' => $log_retention_days,
 		);
-	}
-
-	/**
-	 * Renders the verification token field in the settings page.
-	 *
-	 * This function outputs the HTML for the verification token input field,
-	 * allowing users to enter the token required for webhook verification.
-	 *
-	 * @return void
-	 */
+	}   /**
+		 * Renders the verification token field in the settings page.
+		 *
+		 * This function outputs the HTML for the verification token input field,
+		 * allowing users to enter the token required for webhook verification.
+		 *
+		 * @return void
+		 */
 	public function render_verification_token_field(): void {
 		$options     = get_option( 'members_for_kofi_options' );
 		$webhook_url = home_url( '/webhook-kofi/' );
 
-		// Verification Token Input.
-		echo '<input type="text" name="members_for_kofi_options[verification_token]" value="' . esc_attr( $options['verification_token'] ?? '' ) . '" class="regular-text">';
+		// Verification Token Input - Use password type to mask sensitive token.
+		echo '<input type="password" name="members_for_kofi_options[verification_token]" value="' . esc_attr( $options['verification_token'] ?? '' ) . '" class="regular-text" autocomplete="off">';
 
 		// Description for Verification Token.
 		$description = sprintf(
 			// translators: %s is a link to the Ko-fi Webhooks Management page.
-			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box.', 'members-for-kofi' ),
+			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. The token is masked for security purposes.', 'members-for-kofi' ),
 			'<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank">' . esc_html__( 'Ko-fi Webhooks Management', 'members-for-kofi' ) . '</a>'
 		);
 		echo '<p class="description">' . wp_kses(
@@ -322,10 +366,15 @@ class AdminSettings {
 		$options  = get_option( 'members_for_kofi_options', array() );
 		$roles    = get_editable_roles();
 		$selected = $options['default_role'] ?? array();
+		$disallowed_roles = Webhook::DISALLOWED_ROLES;
 
 		echo '<select name="members_for_kofi_options[default_role]">';
 		echo '<option value="">' . esc_html__( '— No default —', 'members-for-kofi' ) . '</option>';
 		foreach ( $roles as $role_key => $role_details ) {
+			// Skip disallowed roles (e.g., administrator) for security.
+			if ( in_array( $role_key, $disallowed_roles, true ) ) {
+				continue;
+			}
 			echo '<option value="' . esc_attr( $role_key ) . '"' . selected( $role_key, $selected, false ) . '>' . esc_html( $role_details['name'] ) . '</option>';
 		}
 		echo '</select>';
@@ -364,6 +413,30 @@ class AdminSettings {
 	}
 
 	/**
+	 * Renders the auto clear logs checkbox field.
+	 *
+	 * @return void
+	 */
+	public static function render_auto_clear_logs_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$checked = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
+		echo '<input type="checkbox" id="members_for_kofi_auto_clear_logs" name="members_for_kofi_options[auto_clear_logs]" value="1" ' . checked( $checked, true, false ) . '>';
+		echo '<p class="description">' . esc_html__( 'Enable automatic deletion of old logs based on retention period.', 'members-for-kofi' ) . '</p>';
+	}
+
+	/**
+	 * Renders the log retention days field.
+	 *
+	 * @return void
+	 */
+	public static function render_log_retention_days_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$value   = isset( $options['log_retention_days'] ) ? intval( $options['log_retention_days'] ) : 30;
+		echo '<input type="number" id="members_for_kofi_log_retention_days" name="members_for_kofi_options[log_retention_days]" value="' . esc_attr( $value ) . '" min="1" class="small-text">';
+		echo '<p class="description">' . esc_html__( 'Number of days to keep logs before automatic deletion (minimum 1 day).', 'members-for-kofi' ) . '</p>';
+	}
+
+	/**
 	 * Renders the log level field in the settings page.
 	 *
 	 * This function outputs the HTML for selecting the minimum severity
@@ -381,68 +454,110 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_settings_page(): void {
-		$active_tab = 'general'; // Default; JS will switch without reload.
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading tab from URL for display only
+		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'settings';
+		if ( ! in_array( $active_tab, array( 'settings', 'logs' ), true ) ) {
+			$active_tab = 'settings';
+		}
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Members for Ko-fi Settings', 'members-for-kofi' ); ?></h1>
 			<h2 class="nav-tab-wrapper" role="tablist">
-				<a href="#" role="tab" data-tab="general" aria-selected="true" class="nav-tab nav-tab-active">
-					<?php esc_html_e( 'General', 'members-for-kofi' ); ?>
+				<a href="#" role="tab" data-tab="settings" aria-selected="<?php echo 'settings' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'settings' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Settings', 'members-for-kofi' ); ?>
 				</a>
-				<a href="#" role="tab" data-tab="user_logs" aria-selected="false" class="nav-tab">
-					<?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?>
+				<a href="#" role="tab" data-tab="logs" aria-selected="<?php echo 'logs' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Logs', 'members-for-kofi' ); ?>
 				</a>
 			</h2>
-			<input type="hidden" id="active_tab" value="general" />
-			<form method="post" action="options.php" id="members-for-kofi-general-form">
+			<input type="hidden" id="active_tab" value="<?php echo esc_attr( $active_tab ); ?>" />
+			<form method="post" action="options.php" id="members-for-kofi-settings-form">
 				<?php settings_fields( 'members_for_kofi_options' ); ?>
-				<div id="members-for-kofi-tab-general" class="members-for-kofi-tab" style="">
-					<h2><?php esc_html_e( 'General Settings', 'members-for-kofi' ); ?></h2>
+				<div id="members-for-kofi-tab-settings" class="members-for-kofi-tab" style="<?php echo 'settings' === $active_tab ? '' : 'display:none;'; ?>">
+					<h2><?php esc_html_e( 'Ko-fi Settings', 'members-for-kofi' ); ?></h2>
 					<table class="form-table">
 						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_general' ); ?>
+					</table>
+					<h2><?php esc_html_e( 'Role Assignment', 'members-for-kofi' ); ?></h2>
+					<table class="form-table">
+						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_role_assignment' ); ?>
+					</table>
+					<h2><?php esc_html_e( 'Logging', 'members-for-kofi' ); ?></h2>
+					<table class="form-table">
+						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_logging' ); ?>
 					</table>
 					<?php submit_button(); ?>
 				</div>
 			</form>
-			<div id="members-for-kofi-tab-user_logs" class="members-for-kofi-tab" style="display:none;">
-				<h2><?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?></h2>
-				<?php $this->render_user_logs_tab(); ?>
+			<div id="members-for-kofi-tab-logs" class="members-for-kofi-tab" style="<?php echo 'logs' === $active_tab ? '' : 'display:none;'; ?>">
+				<h2><?php esc_html_e( 'Logs', 'members-for-kofi' ); ?></h2>
+				<?php $this->render_logs_tab(); ?>
 			</div>
 		</div>
 		<?php
 	}
 
 	/**
-	 * Renders the "User Logs" tab in the settings page.
+	 * Renders the "Logs" tab in the settings page.
 	 *
-	 * This function outputs the HTML for displaying user logs and includes a button to clear logs.
+	 * This function outputs the HTML for displaying logs with a dropdown to switch between user and request logs.
 	 *
 	 * @param int|null $paged         The current page number, or null to auto-determine.
 	 * @param int      $rows_per_page The number of rows to display per page.
+	 * @param string   $log_type      The type of logs to display ('user' or 'request').
 	 * @return void
 	 */
-	public function render_user_logs_tab( int $paged = null, int $rows_per_page = 10 ): void {
+	public function render_logs_tab( ?int $paged = null, int $rows_per_page = 10, string $log_type = 'user' ): void {
 		global $wpdb;
 
-		$table_name = $this->get_logs_table_name();
-		$total_logs = get_transient( 'members_for_kofi_total_logs' );
+		// Determine which table to query based on log type.
+		if ( 'request' === $log_type ) {
+			$table_name    = $wpdb->prefix . 'members_for_kofi_request_logs';
+			$transient_key = 'members_for_kofi_total_request_logs';
+		} else {
+			$table_name    = $this->get_logs_table_name();
+			$transient_key = 'members_for_kofi_total_logs';
+		}
+
+		$total_logs = get_transient( $transient_key );
 
 		if ( false === $total_logs || 0 === (int) $total_logs ) {
 			// Recalculate if not cached or cached as zero (could be stale from prior table mismatch).
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- Counting rows in plugin-owned table.
 			$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
-			// Minimal debug retained: recount happened (verbose details removed).
-			\MembersForKofi\Logging\DebugLogger::debug( 'User logs recount executed' );
-			set_transient( 'members_for_kofi_total_logs', $total_logs, MINUTE_IN_SECONDS );
+			set_transient( $transient_key, $total_logs, MINUTE_IN_SECONDS );
 		}
 
 		$total_pages = ceil( $total_logs / $rows_per_page );
 
 		?>
+		<!-- Log Type Selector -->
+		<div style="margin-bottom:15px;">
+			<label for="log-type-selector" style="font-weight:bold; margin-right:10px;">
+				<?php esc_html_e( 'Log Type:', 'members-for-kofi' ); ?>
+			</label>
+			<select id="log-type-selector" style="min-width:150px;">
+				<option value="user" <?php selected( $log_type, 'user' ); ?>>
+					<?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?>
+				</option>
+				<option value="request" <?php selected( $log_type, 'request' ); ?>>
+					<?php esc_html_e( 'Request Logs', 'members-for-kofi' ); ?>
+				</option>
+			</select>
+		</div>
+
 		<!-- Logs Table Container -->
 		<div id="logs-controls" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
 			<div>
-				<label for="kofi-members-log-search" style="display:block;"><?php esc_html_e( 'Search (email / action / role)', 'members-for-kofi' ); ?></label>
+				<label for="kofi-members-log-search" style="display:block;">
+					<?php
+					if ( 'request' === $log_type ) {
+						esc_html_e( 'Search (email / tier / status)', 'members-for-kofi' );
+					} else {
+						esc_html_e( 'Search (email / action / role)', 'members-for-kofi' );
+					}
+					?>
+				</label>
 				<input type="search" id="kofi-members-log-search" style="min-width:280px;" />
 			</div>
 			<div>
@@ -453,8 +568,14 @@ class AdminSettings {
 				<button type="button" class="button" id="kofi-members-log-refresh-btn"><?php esc_html_e( 'Refresh', 'members-for-kofi' ); ?></button>
 			</div>
 		</div>
-		<div id="logs-table-container" data-current-search="">
-			<?php $this->render_logs_table( $paged, $rows_per_page ); ?>
+		<div id="logs-table-container" data-current-search="" data-log-type="<?php echo esc_attr( $log_type ); ?>">
+			<?php
+			if ( 'request' === $log_type ) {
+				$this->render_request_logs_table( $paged, $rows_per_page );
+			} else {
+				$this->render_user_logs_table( $paged, $rows_per_page );
+			}
+			?>
 		</div>
 
 		<?php
@@ -471,7 +592,6 @@ class AdminSettings {
 	public function handle_pagination(): void {
 		// Verify the nonce for security.
 		check_ajax_referer( 'members_for_kofi_pagination', '_ajax_nonce' );
-		// Minimal debug: pagination requested.
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX pagination request' );
 
 		// Verify the current user has permission to view logs.
@@ -479,8 +599,9 @@ class AdminSettings {
 			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
 		}
 
-		$paged  = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$search = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		$paged    = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
+		$search   = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		$log_type = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
 
 		// Ensure the paged parameter is valid.
 		if ( $paged < 1 ) {
@@ -489,7 +610,11 @@ class AdminSettings {
 
 		// Render only the logs table for the requested page.
 		ob_start();
-		$this->render_logs_table( $paged, 10, $search );
+		if ( 'request' === $log_type ) {
+			$this->render_request_logs_table( $paged, 10, $search );
+		} else {
+			$this->render_user_logs_table( $paged, 10, $search );
+		}
 		$content = ob_get_clean();
 
 		wp_send_json_success( $content );
@@ -505,18 +630,36 @@ class AdminSettings {
 		check_ajax_referer( 'members_for_kofi_clear_logs', '_ajax_nonce' );
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX clear logs request' );
 
+		// Verify the current user has permission to clear logs.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
+		}
+
 		global $wpdb;
-		$table_name = $this->get_logs_table_name();
+		$log_type = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
+
+		// Determine which table to clear based on log type.
+		if ( 'request' === $log_type ) {
+			$table_name    = $wpdb->prefix . 'members_for_kofi_request_logs';
+			$transient_key = 'members_for_kofi_total_request_logs';
+		} else {
+			$table_name    = $this->get_logs_table_name();
+			$transient_key = 'members_for_kofi_total_logs';
+		}
 
 		// Check if the logs table exists and clear it.
 		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) ) {
 			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Truncating plugin-owned table.
 			$wpdb->query( 'DELETE FROM `' . esc_sql( $table_name ) . '`' );
-			delete_transient( 'members_for_kofi_total_logs' ); // Clear the cached total logs count.
+			delete_transient( $transient_key ); // Clear the cached total logs count.
 
 			// Render the updated logs table (which will now show "No logs available").
 			ob_start();
-			$this->render_logs_table();
+			if ( 'request' === $log_type ) {
+				$this->render_request_logs_table();
+			} else {
+				$this->render_user_logs_table();
+			}
 			$content = ob_get_clean();
 
 			wp_send_json_success( $content );
@@ -534,11 +677,21 @@ class AdminSettings {
 		check_ajax_referer( 'members_for_kofi_update_rows_per_page', '_ajax_nonce' );
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX rows per page update request' );
 
+		// Verify the current user has permission to update settings.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
+		}
+
 		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
 
 		ob_start();
-		$this->render_logs_table( null, $rows_per_page, $search );
+		if ( 'request' === $log_type ) {
+			$this->render_request_logs_table( null, $rows_per_page, $search );
+		} else {
+			$this->render_user_logs_table( null, $rows_per_page, $search );
+		}
 		$content = ob_get_clean();
 
 		wp_send_json_success( $content );
@@ -550,11 +703,17 @@ class AdminSettings {
 	public function handle_filter_logs(): void {
 		check_ajax_referer( 'members_for_kofi_filter_logs', '_ajax_nonce' );
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX filter logs request' );
+
+		// Verify the current user has permission to view logs.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
+		}
+
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
 		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
 		ob_start();
-		$this->render_logs_table( $paged, $rows_per_page, $search );
+		$this->render_user_logs_table( $paged, $rows_per_page, $search );
 		$content = ob_get_clean();
 		wp_send_json_success( $content );
 	}
@@ -565,33 +724,60 @@ class AdminSettings {
 	public function handle_refresh_logs(): void {
 		check_ajax_referer( 'members_for_kofi_refresh_logs', '_ajax_nonce' );
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX refresh logs request' );
+
+		// Verify the current user has permission to view logs.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
+		}
+
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
 		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		ob_start();
-		$this->render_logs_table( $paged, $rows_per_page, $search );
+		$this->render_user_logs_table( $paged, $rows_per_page, $search );
 		$content = ob_get_clean();
 		wp_send_json_success( $content );
 	}
 
 	/**
-	 * Renders the logs table for the user logs tab.
+	 * Handles AJAX log type switch (User vs Request logs).
+	 */
+	public function handle_switch_log_type(): void {
+		check_ajax_referer( 'members_for_kofi_switch_log_type', '_ajax_nonce' );
+		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX switch log type request' );
+
+		// Verify the current user has permission to view logs.
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
+		}
+
+		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
+		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
+		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
+		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
+
+		ob_start();
+		if ( 'request' === $log_type ) {
+			$this->render_request_logs_table( $paged, $rows_per_page, $search );
+		} else {
+			$this->render_user_logs_table( $paged, $rows_per_page, $search );
+		}
+		$content = ob_get_clean();
+		wp_send_json_success( $content );
+	}
+
+	/**
+	 * Renders the user logs table.
 	 *
 	 * This function outputs the HTML for displaying the user logs in a table,
 	 * including pagination links.
 	 *
 	 * @param int|null $paged         The current page number, or null to auto-determine.
 	 * @param int      $rows_per_page The number of rows to display per page.
+	 * @param string   $search        Search filter.
 	 * @return void
 	 */
-	/**
-	 * Render logs table.
-	 *
-	 * @param int|null $paged Page number.
-	 * @param int      $rows_per_page Rows per page.
-	 * @param string   $search Search filter.
-	 */
-	public function render_logs_table( int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
+	public function render_user_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
 		global $wpdb;
 
 		$table_name   = $this->get_logs_table_name();
@@ -734,6 +920,149 @@ class AdminSettings {
 				<?php endif; ?>
 			</div>
 		</div>
+		<?php
+	}
+
+	/**
+	 * Renders the request logs table.
+	 *
+	 * @param int|null $paged         The current page number.
+	 * @param int      $rows_per_page The number of rows to display per page.
+	 * @param string   $search        Search filter.
+	 * @return void
+	 */
+	public function render_request_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
+		global $wpdb;
+
+		$table_name   = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$current_page = $paged ?? 1;
+		$offset       = ( $current_page - 1 ) * $rows_per_page;
+
+		$use_cache  = ( '' === $search );
+		$total_logs = $use_cache ? get_transient( 'members_for_kofi_total_request_logs' ) : false;
+		$where_sql  = 'WHERE 1=1';
+		$params     = array();
+
+		if ( '' !== $search ) {
+			$like       = '%' . $wpdb->esc_like( $search ) . '%';
+			$where_sql .= ' AND (email LIKE %s OR tier_name LIKE %s OR CAST(status_code AS CHAR) LIKE %s OR error LIKE %s)';
+			$params     = array( $like, $like, $like, $like );
+		}
+
+		if ( false === $total_logs ) {
+			if ( empty( $params ) ) {
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
+				$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
+			} else {
+				$query      = 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '` ' . $where_sql;
+				$total_logs = (int) $wpdb->get_var( $wpdb->prepare( $query, $params ) );
+			}
+			if ( $use_cache ) {
+				set_transient( 'members_for_kofi_total_request_logs', $total_logs, MINUTE_IN_SECONDS );
+			}
+		}
+
+// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Plugin-owned table query.
+		if ( empty( $params ) ) {
+			$logs = $wpdb->get_results(
+				$wpdb->prepare(
+					'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ORDER BY `timestamp` DESC LIMIT %d OFFSET %d',
+					$rows_per_page,
+					$offset
+				),
+				ARRAY_A
+			);
+		} else {
+			$query = 'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ' . $where_sql . ' ORDER BY `timestamp` DESC LIMIT %d OFFSET %d';
+			$logs  = $wpdb->get_results(
+				$wpdb->prepare(
+					$query,
+					array_merge( $params, array( $rows_per_page, $offset ) )
+				),
+				ARRAY_A
+			);
+		}
+
+		$total_pages = ceil( $total_logs / $rows_per_page );
+
+		?>
+<table class="widefat fixed striped">
+<thead>
+<tr>
+<th><?php esc_html_e( 'Timestamp', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Email', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Tier Name', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Amount', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Subscription', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Status', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Success', 'members-for-kofi' ); ?></th>
+<th><?php esc_html_e( 'Error', 'members-for-kofi' ); ?></th>
+</tr>
+</thead>
+<tbody>
+		<?php if ( empty( $logs ) ) : ?>
+<tr>
+<td colspan="8"><?php esc_html_e( 'No logs available.', 'members-for-kofi' ); ?></td>
+</tr>
+<?php else : ?>
+	<?php foreach ( $logs as $log ) : ?>
+<tr>
+<td><?php echo esc_html( $log['timestamp'] ); ?></td>
+<td><?php echo esc_html( $log['email'] ); ?></td>
+<td><?php echo esc_html( $log['tier_name'] ); ?></td>
+<td><?php echo esc_html( $log['amount'] ? esc_html( $log['amount'] . ' ' . $log['currency'] ) : '-' ); ?></td>
+<td><?php echo $log['is_subscription'] ? esc_html__( 'Yes', 'members-for-kofi' ) : esc_html__( 'No', 'members-for-kofi' ); ?></td>
+<td><?php echo esc_html( $log['status_code'] ); ?></td>
+<td><?php echo $log['success'] ? '✓' : '✗'; ?></td>
+<td><?php echo esc_html( $log['error'] ); ?></td>
+</tr>
+<?php endforeach; ?>
+<?php endif; ?>
+</tbody>
+</table>
+
+<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px;">
+<input type="hidden" id="kofi-members-current-search" value="<?php echo esc_attr( $search ); ?>" />
+<!-- Clear Logs Button -->
+<form method="post" action="<?php echo esc_url( add_query_arg( 'tab', 'logs', admin_url( 'admin.php?page=members-for-kofi' ) ) ); ?>" style="margin-right: 15px;">
+		<?php wp_nonce_field( 'clear_request_logs_action', 'clear_request_logs_nonce' ); ?>
+<button type="button" name="clear_logs" class="button button-secondary">
+		<?php esc_html_e( 'Clear Logs', 'members-for-kofi' ); ?>
+</button>
+</form>
+
+<!-- Rows Per Page Dropdown -->
+<form method="get" style="margin-right: 15px;">
+<input type="hidden" name="page" value="members-for-kofi">
+<input type="hidden" name="tab" value="logs">
+<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
+<select name="rows_per_page" id="rows_per_page" style="width: auto;">
+		<?php foreach ( array( 10, 25, 50, 100 ) as $option ) : ?>
+<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
+			<?php echo esc_html( $option ); ?>
+</option>
+<?php endforeach; ?>
+</select>
+</form>
+<div class="pagination-links" style="display:flex; gap:4px; flex-wrap:wrap;">
+		<?php if ( $total_pages > 1 ) : ?>
+			<?php
+			$prev_page = max( 1, $current_page - 1 );
+			$next_page = min( $total_pages, $current_page + 1 );
+			if ( $current_page > 1 ) {
+				echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $prev_page ) . '">&laquo; ' . esc_html__( 'Previous', 'members-for-kofi' ) . '</button>';
+			}
+			for ( $p = 1; $p <= $total_pages; $p++ ) {
+				$cls = 'button members-for-kofi-page-btn' . ( $p === $current_page ? ' button-primary' : '' );
+				echo '<button type="button" class="' . esc_attr( $cls ) . '" data-page="' . esc_attr( $p ) . '">' . esc_html( (string) $p ) . '</button>';
+			}
+			if ( $current_page < $total_pages ) {
+				echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $next_page ) . '">' . esc_html__( 'Next', 'members-for-kofi' ) . ' &raquo;</button>';
+			}
+			?>
+<?php endif; ?>
+</div>
+</div>
 		<?php
 	}
 }

@@ -20,6 +20,8 @@
 
 namespace MembersForKofi\Cron;
 
+defined( 'ABSPATH' ) || exit;
+
 use MembersForKofi\Logging\UserLogger;
 
 /**
@@ -74,7 +76,7 @@ class RoleExpiryChecker {
 	 * expired roles and associated metadata.
 	 */
 	public static function remove_expired_roles(): void {
-		$options     = get_option( 'kofi_members_options', array() );
+		$options     = get_option( 'members_for_kofi_options', array() );
 		$expiry_days = absint( $options['role_expiry_days'] ?? 35 );
 		$cutoff      = time() - ( $expiry_days * DAY_IN_SECONDS );
 
@@ -108,7 +110,7 @@ class RoleExpiryChecker {
 		global $wpdb;
 
 		$expiration_meta_key = 'kofi_role_assigned_at';
-		$options             = get_option( 'kofi_members_options' );
+		$options             = get_option( 'members_for_kofi_options' );
 		$expiry_days         = $options['role_expiry_days'] ?? 35;
 
 		$users = get_users(

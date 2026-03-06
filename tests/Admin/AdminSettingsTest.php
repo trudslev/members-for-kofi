@@ -74,6 +74,8 @@ class AdminSettingsTest extends TestCase {
 			'default_role'       => 'subscriber',
 			'enable_expiry'      => true,
 			'role_expiry_days'   => '14',
+			'auto_clear_logs'    => true,
+			'log_retention_days' => '30',
 		);
 
 		$sanitized = $this->settings->sanitize_options( $input );
@@ -84,6 +86,8 @@ class AdminSettingsTest extends TestCase {
 		$this->assertSame( 'subscriber', $sanitized['default_role'] );
 		$this->assertTrue( $sanitized['enable_expiry'] );
 		$this->assertSame( 14, $sanitized['role_expiry_days'] );
+		$this->assertTrue( $sanitized['auto_clear_logs'] );
+		$this->assertSame( 30, $sanitized['log_retention_days'] );
 	}
 
 	/**
@@ -116,10 +120,91 @@ class AdminSettingsTest extends TestCase {
 	}
 
 	/**
-	 * Tests the renderLogLevelField method.
+	 * Tests sanitization of logging settings with defaults.
 	 *
-	 * Verifies that the renderLogLevelField method outputs the correct
-	 * HTML for the log level select field, including the selected option.
+	 * Verifies that auto_clear_logs defaults to true and log_retention_days
+	 * defaults to 30 when not provided.
 	 */
-	// Logging field tests removed since file logging feature was dropped.
+	public function test_sanitize_options_logging_defaults(): void {
+		$input = array(
+			'verification_token' => 'test123',
+			'only_subscriptions' => false,
+			'tier_role_map'      => array(),
+			'default_role'       => 'subscriber',
+			'enable_expiry'      => false,
+			'role_expiry_days'   => '35',
+		);
+
+		$sanitized = $this->settings->sanitize_options( $input );
+
+		$this->assertTrue( $sanitized['auto_clear_logs'], 'auto_clear_logs should default to true' );
+		$this->assertSame( 30, $sanitized['log_retention_days'], 'log_retention_days should default to 30' );
+	}
+
+	/**
+	 * Tests sanitization of logging settings with explicit false value.
+	 *
+	 * Verifies that auto_clear_logs can be disabled.
+	 */
+	public function test_sanitize_options_logging_disabled(): void {
+		$input = array(
+			'verification_token' => 'test123',
+			'only_subscriptions' => false,
+			'tier_role_map'      => array(),
+			'default_role'       => 'subscriber',
+			'enable_expiry'      => false,
+			'role_expiry_days'   => '35',
+			'auto_clear_logs'    => false,
+			'log_retention_days' => '60',
+		);
+
+		$sanitized = $this->settings->sanitize_options( $input );
+
+		$this->assertFalse( $sanitized['auto_clear_logs'], 'auto_clear_logs should be false when explicitly disabled' );
+		$this->assertSame( 60, $sanitized['log_retention_days'], 'log_retention_days should be 60' );
+	}
+
+	/**
+	 * Tests sanitization of invalid log retention days.
+	 *
+	 * Verifies that log_retention_days below 1 gets reset to default.
+	 */
+	public function test_sanitize_options_invalid_retention_days(): void {
+		$input = array(
+			'verification_token' => 'test123',
+			'only_subscriptions' => false,
+			'tier_role_map'      => array(),
+			'default_role'       => 'subscriber',
+			'enable_expiry'      => false,
+			'role_expiry_days'   => '35',
+			'auto_clear_logs'    => true,
+			'log_retention_days' => '0',
+		);
+
+		$sanitized = $this->settings->sanitize_options( $input );
+
+		$this->assertSame( 30, $sanitized['log_retention_days'], 'log_retention_days should reset to 30 when invalid' );
+	}
+
+	/**
+	 * Tests sanitization of large log retention days value.
+	 *
+	 * Verifies that large values are accepted (no max limit).
+	 */
+	public function test_sanitize_options_large_retention_days(): void {
+		$input = array(
+			'verification_token' => 'test123',
+			'only_subscriptions' => false,
+			'tier_role_map'      => array(),
+			'default_role'       => 'subscriber',
+			'enable_expiry'      => false,
+			'role_expiry_days'   => '35',
+			'auto_clear_logs'    => true,
+			'log_retention_days' => '9999',
+		);
+
+		$sanitized = $this->settings->sanitize_options( $input );
+
+		$this->assertSame( 9999, $sanitized['log_retention_days'], 'log_retention_days should accept large values' );
+	}
 }

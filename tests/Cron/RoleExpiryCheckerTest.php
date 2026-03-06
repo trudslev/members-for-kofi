@@ -39,7 +39,7 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 		parent::setUp();
 
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'role_expiry_days' => 30,
 			)
@@ -209,7 +209,7 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	 */
 	public function test_expires_immediately_when_role_expiry_days_zero(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'role_expiry_days' => 0,
 			)

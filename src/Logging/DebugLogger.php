@@ -7,6 +7,8 @@
 
 namespace MembersForKofi\Logging;
 
+defined( 'ABSPATH' ) || exit;
+
 /**
  * Simple static debug logger wrapping error_log, active only when WP_DEBUG is true.
  */

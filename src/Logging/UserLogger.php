@@ -20,6 +20,8 @@
 
 namespace MembersForKofi\Logging;
 
+defined( 'ABSPATH' ) || exit;
+
 use wpdb;
 
 /**
@@ -142,6 +144,7 @@ class UserLogger {
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
-		$wpdb->query( $wpdb->prepare( 'DROP TABLE IF EXISTS `%s`', $table_name ) );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Table drop is intentional during uninstall.
+		$wpdb->query( 'DROP TABLE IF EXISTS `' . esc_sql( $table_name ) . '`' );
 	}
 }

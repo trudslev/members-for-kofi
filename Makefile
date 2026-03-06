@@ -15,6 +15,12 @@ test-case: .build.stamp
 	docker compose run --rm phpunit --filter $(TEST) || true
 	docker compose down
 
+test-integration:
+	@echo "Running HTTP integration tests against development site..."
+	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Copy .env.example to .env and set KOFI_VERIFICATION_TOKEN and WP_TEST_SITE_URL"; exit 1; fi
+	@echo "Running tests directly on host (no Docker/WordPress setup needed for HTTP tests)"
+	./vendor/bin/phpunit --configuration phpunit-integration.xml
+
 .build.stamp: Dockerfile.test docker-compose.yml .env
 	@echo "Rebuilding due to updated dependency..."
 	docker compose build phpunit
