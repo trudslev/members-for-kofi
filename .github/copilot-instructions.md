@@ -201,7 +201,7 @@ Uses separate `docker-compose.site.yml` for manual QA testing.
 # Package plugin ZIP (excludes dev files via .releaseignore)
 make release
 
-# Create git tag v{VERSION} (requires clean main branch)
+# Create git tag {VERSION} (no v prefix, requires clean main branch)
 make git-tag
 
 # Full release: package + tag + GitHub release (requires gh CLI)
@@ -212,7 +212,33 @@ make deploy-svn
 make commit-svn WPORG_USER=username WPORG_PASS=password
 ```
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.0.1`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.1.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+
+### Ready To Commit Workflow
+
+When the user says `Ready to commit`, always do the following in order:
+
+1. Run tests and fix any failures before committing.
+2. Choose the next version number based on change type:
+   - Patch: bug fixes only (e.g., `1.1.0` -> `1.1.1`)
+   - Minor: new features, backward compatible (e.g., `1.1.0` -> `1.2.0`)
+   - Major: breaking changes (e.g., `1.1.0` -> `2.0.0`)
+3. Update `Tested up to:` in `readme.txt` to match the WordPress version of the target release environment.
+   - Local fallback command: `docker compose -f docker-compose.site.yml run --rm wpcli wp core version`
+   - If local and `dev.foodgeek.dk` differ, use `dev.foodgeek.dk` as the source of truth.
+4. Update project instructions if any section is outdated.
+5. Update `Release History` for users in clear, non-technical language:
+   - Add version entry to `README.md` with summary of changes
+   - Add changelog section to `readme.txt` with detailed changes
+   - Update `Stable tag` in `readme.txt` to match new version
+6. Update version number in `members-for-kofi.php` plugin header (`* Version: X.Y.Z`).
+7. Commit all relevant changes with a meaningful commit message.
+8. Create a git tag using the version number without a `v` prefix (example: `1.2.0`).
+9. Push commit(s) and tag(s) to `origin`.
+10. Ask the user if they want to deploy now.
+11. If the user confirms deployment, deploy to WordPress.org SVN using the Makefile workflow:
+   - `make deploy-svn`
+   - `make commit-svn WPORG_USER=username WPORG_PASS=password`
 
 ## Key Files & Patterns
 

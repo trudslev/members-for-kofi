@@ -1,3 +1,8 @@
+ifneq ("$(wildcard .env)","")
+include .env
+export
+endif
+
 build: .env
 	@echo "Building Docker test container..."
 	docker compose build phpunit
@@ -133,10 +138,14 @@ commit-svn:
 
 # --- Local WordPress test site (manual QA) ---
 
-site-up:
+site-pull:
+	docker compose -f docker-compose.site.yml pull wordpress wpcli
+
+site-up: site-pull
 	chmod +x bin/site-init.sh || true
 	docker compose -f docker-compose.site.yml up -d db wordpress
 	bash bin/site-init.sh
+	@echo "Note: if WordPress core version is persisted in volume, run 'make site-reset' to recreate with latest image files."
 
 site-shell:
 	docker compose -f docker-compose.site.yml run --rm wpcli bash
@@ -144,7 +153,7 @@ site-shell:
 site-down:
 	docker compose -f docker-compose.site.yml down
 
-site-reset: site-down
+site-reset: site-down site-pull
 	docker compose -f docker-compose.site.yml down -v
 	docker compose -f docker-compose.site.yml up -d db wordpress
 	bash bin/site-init.sh

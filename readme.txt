@@ -3,9 +3,9 @@ Contributors: trudslev
 Donate link: https://ko-fi.com/foodgeek
 Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
-Tested up to: 6.8
+Tested up to: 6.9.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -53,6 +53,13 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 
 == Changelog ==
 
+= 1.1.1 =
+* Security: Fixed critical vulnerabilities including file access protection, capability-based authorization, and SQL injection prevention.
+* Security: Added redaction of sensitive tokens in webhook request logs.
+* Security: Enhanced admin settings authentication to prevent unauthorized access.
+* Security: Strengthened protection against privilege escalation attacks.
+* Improvement: Updated automated test environment to match production WordPress version (6.9.1).
+
 = 1.1.0 =
 * Feature: Added automatic log cleanup with configurable retention period.
 * Feature: Reorganized admin settings page with separate sections for Ko-fi Settings, Role Assignment, and Logging.
@@ -74,6 +81,9 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.1.1 =
+Important security update. All users should update immediately to receive critical security improvements.
 
 = 1.1.0 =
 New features: Automatic log cleanup and improved admin UI. Settings have been reorganized for better clarity.

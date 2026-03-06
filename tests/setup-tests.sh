@@ -7,15 +7,18 @@ DB_NAME="${WORDPRESS_DB_NAME}"
 DB_USER="${WORDPRESS_DB_USER}"
 DB_PASS="${WORDPRESS_DB_PASSWORD}"
 DB_HOST="${WORDPRESS_DB_HOST}"
+WP_DEVELOP_REF="${WP_DEVELOP_REF:-6.9.1}"
 
 TESTS_DIR="/tmp/wordpress-tests-lib"
 PLUGIN_DIR="/var/www/html/wp-content/plugins/members-for-kofi"
 
-echo ">>> Cloning WordPress develop repo..."
-rm -rf "$TESTS_DIR"
+echo ">>> Cloning WordPress develop repo (ref: ${WP_DEVELOP_REF})..."
+rm -rf "$TESTS_DIR" /tmp/wordpress-develop
 mkdir -p "$TESTS_DIR"
-if [ ! -d "/tmp/wordpress-develop" ]; then
-    git clone --depth=1 https://github.com/WordPress/wordpress-develop.git /tmp/wordpress-develop
+if ! git clone --depth=1 --branch "$WP_DEVELOP_REF" https://github.com/WordPress/wordpress-develop.git /tmp/wordpress-develop; then
+    echo "ERROR: Could not clone wordpress-develop ref '$WP_DEVELOP_REF'." >&2
+    echo "Set WP_DEVELOP_REF in .env to a valid WordPress branch or tag (e.g., 6.9.1)." >&2
+    exit 1
 fi
 cp -r /tmp/wordpress-develop/tests/phpunit/includes "$TESTS_DIR"
 cp -r /tmp/wordpress-develop/tests/phpunit/data "$TESTS_DIR"
