@@ -35,3 +35,5 @@ Desktop.ini
 *.sublime-workspace
 release/*
 reports/
+# Claude Code local settings (agent permissions, session-specific)
+.claude/
