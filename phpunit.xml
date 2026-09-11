@@ -6,6 +6,8 @@
     <testsuites>
         <testsuite name="Kofi Members Test Suite">
             <directory>./tests</directory>
+            <!-- Integration tests drive the site over HTTP; see phpunit-integration.xml. -->
+            <exclude>./tests/Integration</exclude>
         </testsuite>
     </testsuites>
 
@@ -14,8 +16,4 @@
             <directory suffix=".php">./src</directory>
         </include>
     </coverage>
-
-    <php>
-        <env name="WP_TESTS_PHPUNIT_POLYFILLS_PATH" value="/var/www/html/wp-content/plugins/members-for-kofi/vendor/yoast/phpunit-polyfills"/>
-    </php>
 </phpunit>

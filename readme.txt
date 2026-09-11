@@ -3,7 +3,7 @@ Contributors: trudslev
 Donate link: https://ko-fi.com/foodgeek
 Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
-Tested up to: 6.9.1
+Tested up to: 7.1
 Requires PHP: 7.4
 Stable tag: 1.1.1
 License: GPLv3 or later

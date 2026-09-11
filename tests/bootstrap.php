@@ -1,60 +1,51 @@
 <?php
 /**
- * PHPUnit bootstrap file for Members for Ko-fi plugin.
+ * PHPUnit bootstrap: boots a real WordPress installation.
  *
- * This file is part of the Members for Ko-fi plugin.
- *
- * Members for Ko-fi is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ * Tests run inside the `wordpress:latest` container from
+ * docker-compose.test.yml, against a real install of the newest WordPress
+ * rather than the wordpress-develop test framework. That means the plugin is
+ * exercised against the same core code, schema and plugin lifecycle that
+ * production uses -- a test-only stand-in cannot drift from it.
  *
  * @package MembersForKofi
  * @subpackage Tests
- * @license https://www.gnu.org/licenses/gpl-3.0.html GPL-3.0-or-later
  */
 
-// Set up the WordPress test environment directory.
-$kofi_members_tests_dir = getenv( 'WP_TESTS_DIR' );
-if ( false === $kofi_members_tests_dir ) {
-	$kofi_members_tests_dir = rtrim( sys_get_temp_dir(), '/\\' ) . '/wordpress-tests-lib';
-}
+// WordPress expects these even when running under CLI.
+$_SERVER['HTTP_HOST']      = $_SERVER['HTTP_HOST'] ?? 'localhost';
+$_SERVER['SERVER_NAME']    = $_SERVER['SERVER_NAME'] ?? 'localhost';
+$_SERVER['REQUEST_URI']    = $_SERVER['REQUEST_URI'] ?? '/';
+$_SERVER['REQUEST_METHOD'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-// Handle PHPUnit Polyfills path if needed.
-$kofi_members_polyfills_path = getenv( 'WP_TESTS_PHPUNIT_POLYFILLS_PATH' );
-if ( false !== $kofi_members_polyfills_path ) {
-	define( 'KOFI_MEMBERS_PHPUNIT_POLYFILLS_PATH', $kofi_members_polyfills_path );
-}
+$members_for_kofi_wp_load = getenv( 'WP_LOAD_PATH' ) ?: '/var/www/html/wp-load.php';
 
-// Validate that test functions are available.
-if ( ! file_exists( "{$kofi_members_tests_dir}/includes/functions.php" ) ) {
-	echo "Could not find {$kofi_members_tests_dir}/includes/functions.php. Have you run bin/install-wp-tests.sh ?" . PHP_EOL; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+if ( ! file_exists( $members_for_kofi_wp_load ) ) {
+	fwrite(
+		STDERR,
+		"ERROR: Could not find WordPress at {$members_for_kofi_wp_load}.\n" .
+		"These tests run inside the test container. Use:\n\n" .
+		"    make test\n\n" .
+		"which boots the environment from docker-compose.test.yml.\n"
+	);
 	exit( 1 );
 }
 
-// Load WordPress test functions.
-require_once "{$kofi_members_tests_dir}/includes/functions.php";
+require_once $members_for_kofi_wp_load;
 
-/**
- * Load the plugin manually for tests.
- *
- * @return void
- */
-function kofi_members_manually_load_plugin() {
-	require dirname( __DIR__ ) . '/members-for-kofi.php';
+// Admin-side helpers the plugin uses (dbDelta, get_editable_roles, add_menu_page,
+// wp_delete_user) are not loaded on a front-end request.
+require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+require_once ABSPATH . 'wp-admin/includes/plugin.php';
+require_once ABSPATH . 'wp-admin/includes/template.php';
+require_once ABSPATH . 'wp-admin/includes/user.php';
+
+require_once dirname( __DIR__ ) . '/vendor/autoload.php';
+require_once __DIR__ . '/TestCase.php';
+
+if ( ! class_exists( \MembersForKofi\Plugin::class ) ) {
+	fwrite( STDERR, "ERROR: Plugin classes not autoloaded. Is the plugin activated in the test site?\n" );
+	exit( 1 );
 }
-tests_add_filter( 'muplugins_loaded', 'kofi_members_manually_load_plugin' );
 
-// Start up the WordPress testing environment.
-require "{$kofi_members_tests_dir}/includes/bootstrap.php";
-
-// Run activation hook to create tables after WordPress is loaded.
-\MembersForKofi\Plugin::activate();
+printf( "==> WordPress %s | PHP %s\n", get_bloginfo( 'version' ), PHP_VERSION );

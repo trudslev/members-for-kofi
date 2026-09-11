@@ -25,6 +25,10 @@
 // Load Composer autoloader.
 require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 
+// Shared base class for the HTTP integration tests. Required explicitly because
+// PHPUnit loads test files alphabetically and would otherwise hit a subclass first.
+require_once __DIR__ . '/Integration/IntegrationTestCase.php';
+
 // Load environment variables from .env file.
 if ( file_exists( dirname( __DIR__ ) . '/.env' ) ) {
 	$dotenv = Dotenv\Dotenv::createImmutable( dirname( __DIR__ ) );
@@ -55,5 +59,5 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 }
 
 echo "==> Integration tests bootstrap complete.\n";
-echo "==> Tests will make HTTP requests to: " . ( getenv( 'WP_TEST_SITE_URL' ) ? getenv( 'WP_TEST_SITE_URL' ) : 'https://dev.foodgeek.dk' ) . "\n";
-echo "==> Using verification token: " . ( getenv( 'KOFI_VERIFICATION_TOKEN' ) ? '****' . substr( getenv( 'KOFI_VERIFICATION_TOKEN' ), -6 ) : 'NOT SET' ) . "\n";
+echo '==> Target site: ' . ( getenv( 'WP_TEST_SITE_URL' ) ?: 'http://localhost:8101' ) . "\n";
+echo '==> Test token:  ' . ( getenv( 'KOFI_TEST_TOKEN' ) ?: 'test-verification-token' ) . "\n";

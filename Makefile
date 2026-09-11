@@ -3,37 +3,77 @@ include .env
 export
 endif
 
-build: .env
-	@echo "Building Docker test container..."
-	docker compose build phpunit
-	@touch .build.stamp
+TEST_COMPOSE:=docker compose -f docker-compose.test.yml
+WP_TEST_PORT?=8101
+PLUGIN_PATH_IN_CONTAINER:=/var/www/html/wp-content/plugins/members-for-kofi
 
-test: .build.stamp 
-	@echo "Running all tests..."
-	docker compose up -d db
-	docker compose run --rm phpunit || true
-	docker compose down
+# Boots a throwaway site running the newest WordPress and provisions it
+# (installs WP, activates the plugin, sets permalinks and the test token).
+.PHONY: test-env-pull
+test-env-pull:
+	@echo "Pulling newest WordPress image..."
+	$(TEST_COMPOSE) pull --quiet wordpress wpcli db
 
-test-case: .build.stamp
-	@echo "Running specific test case..."
-	docker compose up -d db
-	docker compose run --rm phpunit --filter $(TEST) || true
-	docker compose down
+.PHONY: test-env-up
+test-env-up: vendor test-env-pull
+	@echo "Starting WordPress test environment..."
+	$(TEST_COMPOSE) up -d db wordpress
+	bash bin/test-env-init.sh
 
-test-integration:
-	@echo "Running HTTP integration tests against development site..."
-	@if [ ! -f .env ]; then echo "ERROR: .env file not found. Copy .env.example to .env and set KOFI_VERIFICATION_TOKEN and WP_TEST_SITE_URL"; exit 1; fi
-	@echo "Running tests directly on host (no Docker/WordPress setup needed for HTTP tests)"
-	./vendor/bin/phpunit --configuration phpunit-integration.xml
+.PHONY: test-env-down
+test-env-down:
+	$(TEST_COMPOSE) down
 
-.build.stamp: Dockerfile.test docker-compose.yml .env
-	@echo "Rebuilding due to updated dependency..."
-	docker compose build phpunit
-	@touch .build.stamp
+# Full wipe: discards the WordPress install and database.
+.PHONY: test-env-reset
+test-env-reset:
+	$(TEST_COMPOSE) down -v
+	$(MAKE) test-env-up
 
-rebuild:
-	docker compose build --no-cache phpunit
-	@touch .build.stamp
+vendor:
+	@[ -d vendor ] || composer install
+
+.PHONY: test
+test: test-env-up
+	@echo "Running test suite inside the WordPress container..."
+	$(TEST_COMPOSE) exec -T -w $(PLUGIN_PATH_IN_CONTAINER) wordpress ./vendor/bin/phpunit
+
+.PHONY: test-case
+test-case: test-env-up
+	@echo "Running tests matching '$(TEST)'..."
+	$(TEST_COMPOSE) exec -T -w $(PLUGIN_PATH_IN_CONTAINER) wordpress ./vendor/bin/phpunit --filter '$(TEST)'
+
+# Drives the local site over real HTTP, exactly as Ko-fi would.
+.PHONY: test-integration
+test-integration: test-env-up
+	@echo "Running HTTP integration tests against http://localhost:$(WP_TEST_PORT)..."
+	WP_TEST_SITE_URL=http://localhost:$(WP_TEST_PORT) ./vendor/bin/phpunit --configuration phpunit-integration.xml
+
+.PHONY: test-all
+test-all: test test-integration
+
+.PHONY: test-shell
+test-shell:
+	$(TEST_COMPOSE) exec -w $(PLUGIN_PATH_IN_CONTAINER) wordpress bash
+
+# Reports the WordPress version the test environment is actually running.
+.PHONY: wp-version
+wp-version:
+	@$(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'
+	@echo
+
+# Syncs readme.txt's "Tested up to:" with the version we just tested against.
+.PHONY: tested-up-to
+tested-up-to: test-env-up
+	@version=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'); \
+	if [ -z "$$version" ]; then echo "ERROR: could not determine WordPress version from the test environment."; exit 1; fi; \
+	current=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
+	if [ "$$current" = "$$version" ]; then \
+		echo "readme.txt already says 'Tested up to: $$version'"; \
+	else \
+		sed -i -E "s/^Tested up to:.*/Tested up to: $$version/" readme.txt; \
+		echo "Updated readme.txt: 'Tested up to: $$current' -> '$$version'"; \
+	fi
 
 PLUGIN_SLUG:=members-for-kofi
 MAIN_FILE:=members-for-kofi.php
@@ -65,6 +105,12 @@ release: .releaseignore
 	# Ensure stable tag consistency
 	@if ! grep -q "Stable tag: $(VERSION)" readme.txt; then \
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \
+	fi
+	# Ensure "Tested up to" reflects the WordPress version we actually tested against
+	@tested=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'); \
+	declared=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
+	if [ -n "$$tested" ] && [ "$$tested" != "$$declared" ]; then \
+		echo "WARNING: readme.txt says 'Tested up to: $$declared' but the test environment runs $$tested. Run 'make tested-up-to'."; \
 	fi
 	cd $(STAGE_DIR) && zip -rq $(ZIP_FULL) $(PLUGIN_SLUG)
 	rm -rf $(STAGE_DIR)
