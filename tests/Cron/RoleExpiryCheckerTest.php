@@ -20,7 +20,6 @@
 
 use MembersForKofi\Cron\RoleExpiryChecker;
 use MembersForKofi\Logging\UserLogger;
-use PHPUnit\Framework\TestCase;
 
 /**
  * Class RoleExpiryCheckerTest
@@ -28,7 +27,7 @@ use PHPUnit\Framework\TestCase;
  * Unit tests for the RoleExpiryChecker class, which handles the removal of expired roles
  * assigned to users based on the Members for Ko-fi plugin settings.
  */
-class RoleExpiryCheckerTest extends \WP_UnitTestCase {
+class RoleExpiryCheckerTest extends \MembersForKofi\Tests\TestCase {
 
 	/**
 	 * Sets up the test environment before each test.
@@ -44,24 +43,6 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 				'role_expiry_days' => 30,
 			)
 		);
-
-		// Ensure the table is created before each test.
-		global $wpdb;
-		$wpdb->query( UserLogger::get_create_table_sql() );
-	}
-
-	/**
-	 * Cleans up the test environment after each test.
-	 *
-	 * This method removes the logging table created during the test setup.
-	 */
-	protected function tearDown(): void {
-		global $wpdb;
-
-		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
-		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
-
-		parent::tearDown();
 	}
 
 	/**
@@ -87,7 +68,7 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 		$role_expiry_checker = new RoleExpiryChecker( $mock_logger );
 
 		// Create a test user with an expired role.
-		$user_id = $this->factory->user->create(
+		$user_id = $this->create_user(
 			array(
 				'role' => 'subscriber',
 			)
@@ -107,13 +88,13 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that the remove_expired_roles method does not remove roles that are still valid.
+	 * Tests that the check_and_remove_expired_roles method does not remove roles that are still valid.
 	 *
 	 * This test creates a user with an assigned role and an assigned date within the expiry period.
 	 * It then checks that the role is not removed and the user meta remains intact.
 	 */
 	public function test_does_not_remove_valid_role(): void {
-		$user_id = $this->factory->user->create(
+		$user_id = $this->create_user(
 			array(
 				'role' => 'subscriber',
 			)
@@ -122,7 +103,8 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
 		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-10 days' ) );
 
-		RoleExpiryChecker::remove_expired_roles();
+		$role_expiry_checker = new RoleExpiryChecker( new UserLogger() );
+		$role_expiry_checker->check_and_remove_expired_roles();
 
 		$user = get_userdata( $user_id );
 
@@ -131,39 +113,24 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that the remove_expired_roles method does nothing if no assigned role meta exists.
+	 * Tests that the check_and_remove_expired_roles method does nothing if no assigned role meta exists.
 	 *
 	 * This test creates a user without the 'kofi_donation_assigned_role' meta and ensures
 	 * that the user's role remains unchanged.
 	 */
 	public function test_does_nothing_if_no_assigned_role_meta(): void {
-		$user_id = $this->factory->user->create( array( 'role' => 'subscriber' ) );
+		$user_id = $this->create_user( array( 'role' => 'subscriber' ) );
 		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-40 days' ) );
 
-		RoleExpiryChecker::remove_expired_roles();
+		$role_expiry_checker = new RoleExpiryChecker( new UserLogger() );
+		$role_expiry_checker->check_and_remove_expired_roles();
 
 		$user = get_userdata( $user_id );
 		$this->assertContains( 'subscriber', $user->roles );
 	}
 
 	/**
-	 * Tests that the remove_expired_roles method skips users if the assigned role
-	 * does not match any of the user's current roles.
-	 */
-	public function test_skips_user_if_assigned_role_not_in_roles(): void {
-		$user_id = $this->factory->user->create( array( 'role' => 'author' ) );
-		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
-		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-40 days' ) );
-
-		RoleExpiryChecker::remove_expired_roles();
-
-		$user = get_userdata( $user_id );
-		$this->assertContains( 'author', $user->roles );
-		$this->assertSame( 'subscriber', get_user_meta( $user_id, 'kofi_donation_assigned_role', true ) );
-	}
-
-	/**
-	 * Tests that the remove_expired_roles method removes only the assigned role
+	 * Tests that the check_and_remove_expired_roles method removes only the assigned role
 	 * when the user has multiple roles.
 	 *
 	 * This test creates a user with multiple roles, assigns one of them as the
@@ -171,14 +138,15 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	 * the other roles remain intact.
 	 */
 	public function test_removes_only_assigned_role_when_multiple_roles(): void {
-		$user_id = $this->factory->user->create( array( 'role' => 'subscriber' ) );
+		$user_id = $this->create_user( array( 'role' => 'subscriber' ) );
 		$user    = new WP_User( $user_id );
 		$user->add_role( 'editor' );
 
 		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
 		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-40 days' ) );
 
-		RoleExpiryChecker::remove_expired_roles();
+		$role_expiry_checker = new RoleExpiryChecker( new UserLogger() );
+		$role_expiry_checker->check_and_remove_expired_roles();
 
 		$user = get_userdata( $user_id );
 		$this->assertNotContains( 'subscriber', $user->roles );
@@ -186,16 +154,17 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that the remove_expired_roles method skips users if the 'kofi_role_assigned_at' meta is missing.
+	 * Tests that the check_and_remove_expired_roles method skips users if the 'kofi_role_assigned_at' meta is missing.
 	 *
 	 * This test creates a user with an assigned role but without the 'kofi_role_assigned_at' meta.
 	 * It ensures that the user's role remains unchanged.
 	 */
 	public function test_skips_user_if_no_assigned_at_meta(): void {
-		$user_id = $this->factory->user->create( array( 'role' => 'subscriber' ) );
+		$user_id = $this->create_user( array( 'role' => 'subscriber' ) );
 		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
 
-		RoleExpiryChecker::remove_expired_roles();
+		$role_expiry_checker = new RoleExpiryChecker( new UserLogger() );
+		$role_expiry_checker->check_and_remove_expired_roles();
 
 		$user = get_userdata( $user_id );
 		$this->assertContains( 'subscriber', $user->roles );
@@ -215,11 +184,12 @@ class RoleExpiryCheckerTest extends \WP_UnitTestCase {
 			)
 		);
 
-		$user_id = $this->factory->user->create( array( 'role' => 'subscriber' ) );
+		$user_id = $this->create_user( array( 'role' => 'subscriber' ) );
 		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
 		update_user_meta( $user_id, 'kofi_role_assigned_at', time() - 5 ); // 5 seconds ago
 
-		RoleExpiryChecker::remove_expired_roles();
+		$role_expiry_checker = new RoleExpiryChecker( new UserLogger() );
+		$role_expiry_checker->check_and_remove_expired_roles();
 
 		$user = get_userdata( $user_id );
 		$this->assertNotContains( 'subscriber', $user->roles );

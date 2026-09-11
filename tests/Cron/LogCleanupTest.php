@@ -9,12 +9,14 @@
 namespace MembersForKofi\Tests\Cron;
 
 use MembersForKofi\Cron\LogCleanup;
-use WP_UnitTestCase;
+use MembersForKofi\Logging\RequestLogger;
+use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Tests\TestCase;
 
 /**
  * Test case for LogCleanup cron job.
  */
-class LogCleanupTest extends WP_UnitTestCase {
+class LogCleanupTest extends TestCase {
 	/**
 	 * User logs table name.
 	 *
@@ -50,44 +52,23 @@ class LogCleanupTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Creates test tables if they don't exist.
+	 * Creates the log tables using the production schema.
+	 *
+	 * These must come from the plugin's own DDL rather than a hand-written
+	 * CREATE TABLE: a test-only schema that declared `timestamp` as INT
+	 * previously masked a production bug where cleanup silently deleted
+	 * nothing against the real DATETIME column.
 	 */
 	private function create_test_tables(): void {
 		global $wpdb;
 
-		// Create user logs table.
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$this->user_logs_table} (
-				id INT AUTO_INCREMENT PRIMARY KEY,
-				user_id BIGINT(20) NOT NULL,
-				email VARCHAR(100) NOT NULL,
-				action VARCHAR(50) NOT NULL,
-				role VARCHAR(50) NOT NULL,
-				amount VARCHAR(20) DEFAULT NULL,
-				currency VARCHAR(10) DEFAULT NULL,
-				timestamp INT NOT NULL
-			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
-		);
+		$wpdb->query( "DROP TABLE IF EXISTS {$this->user_logs_table}" );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
+		$wpdb->query( "DROP TABLE IF EXISTS {$this->request_logs_table}" );
 
-		// Create request logs table.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
-		$wpdb->query(
-			"CREATE TABLE IF NOT EXISTS {$this->request_logs_table} (
-				id INT AUTO_INCREMENT PRIMARY KEY,
-				email VARCHAR(100) NOT NULL,
-				tier_name VARCHAR(100) DEFAULT NULL,
-				amount VARCHAR(20) DEFAULT NULL,
-				currency VARCHAR(10) DEFAULT NULL,
-				is_subscription TINYINT(1) DEFAULT 0,
-				verification_token VARCHAR(255) DEFAULT NULL,
-				payload TEXT DEFAULT NULL,
-				status_code INT DEFAULT NULL,
-				success TINYINT(1) DEFAULT 0,
-				error TEXT DEFAULT NULL,
-				timestamp INT NOT NULL
-			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;"
-		);
+		UserLogger::create_table();
+		RequestLogger::create_table();
 	}
 
 	/**
@@ -285,8 +266,6 @@ class LogCleanupTest extends WP_UnitTestCase {
 	private function insert_user_log( int $days_ago ): void {
 		global $wpdb;
 
-		$timestamp = time() - ( $days_ago * DAY_IN_SECONDS );
-
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$wpdb->insert(
 			$this->user_logs_table,
@@ -297,10 +276,23 @@ class LogCleanupTest extends WP_UnitTestCase {
 				'role'      => 'subscriber',
 				'amount'    => '5.00',
 				'currency'  => 'USD',
-				'timestamp' => $timestamp,
+				'timestamp' => $this->datetime_days_ago( $days_ago ),
 			),
-			array( '%d', '%s', '%s', '%s', '%s', '%s', '%d' )
+			array( '%d', '%s', '%s', '%s', '%s', '%s', '%s' )
 		);
+	}
+
+	/**
+	 * Builds a local-time DATETIME string N days in the past.
+	 *
+	 * Mirrors current_time( 'mysql' ), which the plugin uses when writing logs.
+	 *
+	 * @param int $days_ago Number of days in the past.
+	 * @return string Timestamp in 'Y-m-d H:i:s'.
+	 */
+	private function datetime_days_ago( int $days_ago ): string {
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Must match current_time( 'mysql' ).
+		return gmdate( 'Y-m-d H:i:s', current_time( 'timestamp' ) - ( $days_ago * DAY_IN_SECONDS ) );
 	}
 
 	/**
@@ -310,8 +302,6 @@ class LogCleanupTest extends WP_UnitTestCase {
 	 */
 	private function insert_request_log( int $days_ago ): void {
 		global $wpdb;
-
-		$timestamp = time() - ( $days_ago * DAY_IN_SECONDS );
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery
 		$wpdb->insert(
@@ -327,9 +317,9 @@ class LogCleanupTest extends WP_UnitTestCase {
 				'status_code'        => 200,
 				'success'            => 1,
 				'error'              => null,
-				'timestamp'          => $timestamp,
+				'timestamp'          => $this->datetime_days_ago( $days_ago ),
 			),
-			array( '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%d' )
+			array( '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
 	}
 }

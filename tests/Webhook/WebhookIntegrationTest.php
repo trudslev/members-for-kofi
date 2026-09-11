@@ -18,7 +18,7 @@
  * @package MembersForKofi
  */
 
-use PHPUnit\Framework\TestCase;
+use MembersForKofi\Tests\TestCase;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
@@ -43,6 +43,8 @@ class WebhookIntegrationTest extends TestCase {
 	 * Sets up the test environment before each test.
 	 */
 	protected function setUp(): void {
+		parent::setUp();
+
 		// Load environment variables.
 		if ( file_exists( __DIR__ . '/../../.env' ) ) {
 			$dotenv = Dotenv::createImmutable( __DIR__ . '/../../' );
@@ -67,44 +69,13 @@ class WebhookIntegrationTest extends TestCase {
 			)
 		);
 
-		// Create database tables.
-		global $wpdb;
-		$wpdb->query( UserLogger::get_create_table_sql() );
-		$wpdb->query( RequestLogger::get_create_table_sql() );
 	}
 
 	/**
 	 * Cleans up the test environment after each test.
 	 */
 	protected function tearDown(): void {
-		delete_option( 'members_for_kofi_options' );
-
-		// Drop tables.
-		global $wpdb;
-		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}members_for_kofi_user_logs" );
-		$wpdb->query( "DROP TABLE IF EXISTS {$wpdb->prefix}members_for_kofi_request_logs" );
-
-		// Clean up test users.
-		$test_emails = array(
-			'valid@example.com',
-			'injection@example.com',
-			'malformed@example.com',
-			'missing@example.com',
-			'empty@example.com',
-			'special+chars@example.com',
-			'unicode@example.com',
-			'subscription@example.com',
-			'onetime@example.com',
-			'tier-gold@example.com',
-			'tier-unmapped@example.com',
-		);
-
-		foreach ( $test_emails as $email ) {
-			$user = get_user_by( 'email', $email );
-			if ( $user ) {
-				wp_delete_user( $user->ID );
-			}
-		}
+		parent::tearDown();
 	}
 
 	// ==================== VALID INPUT TESTS ====================

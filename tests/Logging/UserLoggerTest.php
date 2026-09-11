@@ -29,7 +29,7 @@ use MembersForKofi\Logging\UserLogger;
  *
  * @package MembersForKofi\Tests\Logging
  */
-class UserLoggerTest extends \WP_UnitTestCase {
+class UserLoggerTest extends \MembersForKofi\Tests\TestCase {
 	/**
 	 * Sets up the environment for each test.
 	 *
@@ -38,9 +38,7 @@ class UserLoggerTest extends \WP_UnitTestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
-		// Ensure the table is created before each test.
 		global $wpdb;
-		$wpdb->query( UserLogger::get_create_table_sql() );
 	}
 
 	/**

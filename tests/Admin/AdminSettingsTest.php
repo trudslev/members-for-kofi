@@ -20,7 +20,7 @@
 
 namespace MembersForKofi\Tests\Admin;
 
-use PHPUnit\Framework\TestCase;
+use MembersForKofi\Tests\TestCase;
 use MembersForKofi\Admin\AdminSettings;
 
 /**

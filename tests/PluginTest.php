@@ -21,14 +21,13 @@
 namespace MembersForKofi\Tests;
 
 use MembersForKofi\Plugin;
-use WP_UnitTestCase;
 
 /**
  * Class PluginTest
  *
  * This class contains unit tests for the Members for Ko-fi plugin.
  */
-class PluginTest extends WP_UnitTestCase {
+class PluginTest extends TestCase {
 
 	/**
 	 * Instance of the Plugin class.
@@ -90,26 +89,61 @@ class PluginTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that the logger initializes without errors.
+	 * Tests that initializing the logger actually emits its debug line.
+	 *
+	 * Previously this called the method and asserted nothing, so it could only
+	 * ever have caught a fatal error.
 	 */
 	public function test_logger_initializes(): void {
-		$this->expectNotToPerformAssertions();
-		$this->plugin->initialize_logger();
+		$log_file = tempnam( sys_get_temp_dir(), 'kofi-plugin-log-' );
+		// phpcs:ignore WordPress.PHP.IniSet.Risky -- Redirecting error_log is the only way to capture logger output.
+		$original = ini_set( 'error_log', $log_file );
+
+		try {
+			$this->plugin->initialize_logger();
+		} finally {
+			// phpcs:ignore WordPress.PHP.IniSet.Risky -- Restoring the original value.
+			ini_set( 'error_log', false === $original ? '' : $original );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a local temp file, not a URL.
+		$contents = (string) file_get_contents( $log_file );
+		wp_delete_file( $log_file );
+
+		$this->assertStringContainsString( 'Plugin initialized', $contents );
 	}
 
 	/**
-	 * Tests that the cron schedules initialize without errors.
+	 * Tests that initializing cron schedules the expected daily events.
 	 */
-	public function test_cron_schedules_without_error(): void {
-		$this->expectNotToPerformAssertions();
+	public function test_cron_schedules_expected_events(): void {
 		$this->plugin->initialize_cron();
+
+		$this->assertNotFalse(
+			wp_next_scheduled( 'kofi_members_check_expired_roles' ),
+			'Expected kofi_members_check_expired_roles to be scheduled'
+		);
+		$this->assertNotFalse(
+			wp_next_scheduled( 'kofi_members_cleanup_logs' ),
+			'Expected kofi_members_cleanup_logs to be scheduled'
+		);
 	}
 
 	/**
-	 * Tests that rewrite rules are flushed upon plugin deactivation.
+	 * Tests that deactivation flushes rewrite rules and unschedules both cron events.
 	 */
-	public function test_deactivate_flushes_rewrite_rules(): void {
-		$this->expectNotToPerformAssertions();
+	public function test_deactivate_flushes_rewrite_rules_and_unschedules_cron(): void {
+		$this->plugin->initialize_cron();
+
 		Plugin::deactivate();
+
+		$this->assertFalse(
+			wp_next_scheduled( 'kofi_members_check_expired_roles' ),
+			'Expected kofi_members_check_expired_roles to be unscheduled after deactivation'
+		);
+		$this->assertFalse(
+			wp_next_scheduled( 'kofi_members_cleanup_logs' ),
+			'Expected kofi_members_cleanup_logs to be unscheduled after deactivation'
+		);
 	}
 }

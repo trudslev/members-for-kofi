@@ -18,7 +18,7 @@
  * @package MembersForKofi
  */
 
-use PHPUnit\Framework\TestCase;
+use MembersForKofi\Tests\TestCase;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Logging\UserLogger;
 // Logging to files removed.
@@ -41,6 +41,8 @@ class WebhookTest extends TestCase {
 	 * and the logger instance required for the tests.
 	 */
 	protected function setUp(): void {
+		parent::setUp();
+
 		// Load environment variables (if needed).
 		if ( file_exists( __DIR__ . '/../../.env' ) ) {
 			$dotenv = Dotenv::createImmutable( __DIR__ . '/../../' );
@@ -57,11 +59,6 @@ class WebhookTest extends TestCase {
 			)
 		);
 
-		// File logging removed; nothing to set up.
-
-		// Ensure the table is created before each test.
-		global $wpdb;
-		$wpdb->query( UserLogger::get_create_table_sql() );
 	}
 
 	/**
@@ -71,15 +68,7 @@ class WebhookTest extends TestCase {
 	 * to ensure a clean state for subsequent tests.
 	 */
 	protected function tearDown(): void {
-		// Clean up the options after tests.
-		delete_option( 'members_for_kofi_options' );
-
-		// No logger reset required.
-
-		// Drop the user logs table after tests.
-		global $wpdb;
-		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
-		$wpdb->query( "DROP TABLE IF EXISTS $table_name" );
+		parent::tearDown();
 	}
 
 	/**

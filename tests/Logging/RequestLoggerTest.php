@@ -19,14 +19,14 @@
  */
 
 use MembersForKofi\Logging\RequestLogger;
-use WP_UnitTestCase;
+use MembersForKofi\Tests\TestCase;
 
 /**
  * Class RequestLoggerTest
  *
  * Unit tests for the RequestLogger class in the Members for Ko-fi plugin.
  */
-class RequestLoggerTest extends WP_UnitTestCase {
+class RequestLoggerTest extends TestCase {
 
 	/**
 	 * Sets up the test environment before each test.

@@ -18,8 +18,7 @@
  * @package MembersForKofi
  */
 
-use PHPUnit\Framework\TestCase;
-use Dotenv\Dotenv;
+namespace MembersForKofi\Tests\Integration;
 
 /**
  * HTTP Integration tests for the Webhook endpoint.
@@ -30,14 +29,7 @@ use Dotenv\Dotenv;
  * @group integration
  * @group external-http
  */
-class WebhookHttpTest extends TestCase {
-
-	/**
-	 * The base URL for the test site.
-	 *
-	 * @var string
-	 */
-	private string $base_url;
+class WebhookHttpTest extends IntegrationTestCase {
 
 	/**
 	 * The webhook endpoint URL.
@@ -59,19 +51,8 @@ class WebhookHttpTest extends TestCase {
 	protected function setUp(): void {
 		parent::setUp();
 
-		// Load environment variables.
-		if ( file_exists( __DIR__ . '/../../.env' ) ) {
-			$dotenv = Dotenv::createImmutable( __DIR__ . '/../../' );
-			$dotenv->load();
-		}
-
-		$this->base_url = getenv( 'WP_TEST_SITE_URL' ) ? getenv( 'WP_TEST_SITE_URL' ) : 'https://dev.foodgeek.dk';
-		$this->webhook_url  = $this->base_url . '/webhook-kofi';
-		$this->valid_token  = getenv( 'KOFI_VERIFICATION_TOKEN' ) ?: '';
-
-		if ( empty( $this->valid_token ) ) {
-			$this->markTestSkipped( 'KOFI_VERIFICATION_TOKEN not set in .env file' );
-		}
+		$this->webhook_url = $this->base_url . '/webhook-kofi';
+		$this->valid_token = $this->token;
 	}
 
 	/**
@@ -128,7 +109,7 @@ class WebhookHttpTest extends TestCase {
 	public function test_valid_webhook_returns_200(): void {
 		$payload = array(
 			'verification_token'      => $this->valid_token,
-			'email'                   => 'http-test-' . time() . '@example.com',
+			'email'                   => $this->donor_email( 'http-test' ),
 			'tier_name'               => 'Gold',
 			'amount'                  => 10.00,
 			'currency'                => 'USD',
@@ -150,7 +131,7 @@ class WebhookHttpTest extends TestCase {
 	 * Test that a subscription payment is processed correctly.
 	 */
 	public function test_subscription_payment_processed(): void {
-		$email = 'http-subscription-' . time() . '@example.com';
+		$email = $this->donor_email( 'http-subscription' );
 
 		$payload = array(
 			'verification_token'      => $this->valid_token,
@@ -247,7 +228,7 @@ class WebhookHttpTest extends TestCase {
 	public function test_minimal_valid_payload(): void {
 		$payload = array(
 			'verification_token' => $this->valid_token,
-			'email'              => 'http-minimal-' . time() . '@example.com',
+			'email'              => $this->donor_email( 'http-minimal' ),
 		);
 
 		$response = $this->send_webhook_request( $payload );
@@ -261,7 +242,7 @@ class WebhookHttpTest extends TestCase {
 	public function test_special_characters_in_email(): void {
 		$payload = array(
 			'verification_token' => $this->valid_token,
-			'email'              => 'test+special.' . time() . '@example.com',
+			'email'              => $this->donor_email( 'special-chars' ),
 			'tier_name'          => 'Gold',
 		);
 
@@ -303,7 +284,7 @@ class WebhookHttpTest extends TestCase {
 	public function test_xss_sanitization(): void {
 		$payload = array(
 			'verification_token' => $this->valid_token,
-			'email'              => 'xss-test-' . time() . '@example.com',
+			'email'              => $this->donor_email( 'xss-test' ),
 			'tier_name'          => '<script>alert("XSS")</script>',
 			'message'            => '<img src=x onerror=alert(1)>',
 		);
@@ -321,7 +302,7 @@ class WebhookHttpTest extends TestCase {
 	public function test_long_string_handling(): void {
 		$payload = array(
 			'verification_token' => $this->valid_token,
-			'email'              => 'long-test-' . time() . '@example.com',
+			'email'              => $this->donor_email( 'long-test' ),
 			'tier_name'          => str_repeat( 'A', 1000 ),
 			'message'            => str_repeat( 'B', 5000 ),
 		);

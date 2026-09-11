@@ -21,7 +21,7 @@
 namespace MembersForKofi\Tests\Admin;
 
 use MembersForKofi\Admin\AdminSettings;
-use PHPUnit\Framework\TestCase;
+use MembersForKofi\Tests\TestCase;
 
 /**
  * Unit tests for the AdminSettings class render methods.
@@ -90,7 +90,16 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_only_subscriptions_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
+
 		$this->assertStringContainsString( 'name="members_for_kofi_options[only_subscriptions]"', $output );
+		$this->assertStringContainsString( 'checked', $output, 'The stored "true" value should render as checked.' );
+
+		$options                       = (array) get_option( 'members_for_kofi_options', array() );
+		$options['only_subscriptions'] = false;
+		update_option( 'members_for_kofi_options', $options );
+
+		$output = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
+		$this->assertStringNotContainsString( 'checked', $output, 'A stored "false" value must not render as checked.' );
 	}
 
 	/**
@@ -101,7 +110,14 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_tier_role_map_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_tier_role_map_field' ) );
+
 		$this->assertStringContainsString( '<table', $output );
+		$this->assertStringContainsString( 'value="Gold"', $output, 'The stored tier name should be rendered.' );
+		$this->assertMatchesRegularExpression(
+			'/<option value="editor"[^>]*selected/',
+			$output,
+			'The role mapped to the stored tier should be pre-selected.'
+		);
 	}
 
 	/**
@@ -112,7 +128,13 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_default_role_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_default_role_field' ) );
+
 		$this->assertStringContainsString( 'name="members_for_kofi_options[default_role]"', $output );
+		$this->assertMatchesRegularExpression(
+			'/<option value="subscriber"[^>]*selected/',
+			$output,
+			'The stored default role should be pre-selected.'
+		);
 	}
 
 	/**
@@ -123,7 +145,9 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_expiry_toggle_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
+
 		$this->assertStringContainsString( 'name="members_for_kofi_options[enable_expiry]"', $output );
+		$this->assertStringContainsString( 'checked', $output, 'The stored "true" value should render as checked.' );
 	}
 
 	/**
@@ -134,7 +158,9 @@ class AdminSettingsRenderTest extends TestCase {
 	 */
 	public function test_render_role_expiry_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_role_expiry_field' ) );
+
 		$this->assertMatchesRegularExpression( '/<input[^>]*name="members_for_kofi_options\[role_expiry_days\]"/', $output );
+		$this->assertStringContainsString( 'value="42"', $output, 'The stored expiry period should be rendered.' );
 	}
 
 	/**
@@ -144,4 +170,31 @@ class AdminSettingsRenderTest extends TestCase {
 	 * for the log enabled option with the correct name attribute.
 	 */
 	// Logging fields removed; corresponding render tests dropped.
+
+	/**
+	 * The token field must escape the stored value, not echo it raw.
+	 *
+	 * Whatever is stored is printed straight back into an HTML attribute, so a
+	 * value containing a quote would otherwise break out of it. Asserting only
+	 * that the field has the right `name` (as the other render tests do) leaves
+	 * this entirely uncovered.
+	 */
+	public function test_render_verification_token_field_escapes_the_value(): void {
+		$options                       = (array) get_option( 'members_for_kofi_options', array() );
+		$options['verification_token'] = 'tok"><script>alert(1)</script>';
+		update_option( 'members_for_kofi_options', $options );
+
+		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
+
+		$this->assertStringNotContainsString(
+			'tok"><script>',
+			$output,
+			'The stored token must never reach the attribute unescaped.'
+		);
+		$this->assertStringContainsString(
+			'tok&quot;&gt;&lt;script&gt;',
+			$output,
+			'The value should be present in escaped form.'
+		);
+	}
 }

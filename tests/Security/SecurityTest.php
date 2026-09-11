@@ -22,7 +22,7 @@ namespace MembersForKofi\Tests\Security;
 
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Admin\AdminSettings;
-use WP_UnitTestCase;
+use MembersForKofi\Tests\TestCase;
 
 /**
  * Security-focused tests for the Members for Ko-fi plugin.
@@ -32,7 +32,7 @@ use WP_UnitTestCase;
  *
  * @package MembersForKofi
  */
-class SecurityTest extends WP_UnitTestCase {
+class SecurityTest extends TestCase {
 
 	/**
 	 * Sets up the test environment before each test.
@@ -63,7 +63,6 @@ class SecurityTest extends WP_UnitTestCase {
 	 */
 	protected function tearDown(): void {
 		parent::tearDown();
-		delete_option( 'members_for_kofi_options' );
 	}
 
 	/**
@@ -325,30 +324,85 @@ class SecurityTest extends WP_UnitTestCase {
 	}
 
 	/**
-	 * Tests that XSS attempts in tier names are sanitized.
+	 * The log viewer must escape whatever is sitting in the log table.
 	 *
-	 * Security test ensuring script tags and HTML are properly escaped.
+	 * Replaces an earlier test of the same intent that asserted only a 200 and
+	 * the existence of a user -- its own comment conceded it could not check
+	 * sanitisation, so it proved nothing beyond "did not crash".
+	 *
+	 * The row is written directly rather than through the webhook on purpose:
+	 * the point is that rendering is safe for whatever the table holds, not that
+	 * one particular write path happens to clean its input first.
 	 */
-	public function test_webhook_sanitizes_xss_attempts_in_tier_name(): void {
-		$webhook = new Webhook();
+	public function test_log_viewer_escapes_stored_markup(): void {
+		global $wpdb;
 
-		$payload = array(
-			'verification_token' => 'test-token-123',
-			'email'              => 'xss-test@example.com',
-			'tier_name'          => '<script>alert("XSS")</script>',
+		$table = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$wpdb->insert(
+			$table,
+			array(
+				'email'       => 'stored-xss@example.com',
+				'tier_name'   => '<script>alert(1)</script>',
+				'payload'     => '{}',
+				'status_code' => 200,
+				'success'     => 1,
+				'error'       => '<img src=x onerror=alert(2)>',
+				'timestamp'   => current_time( 'mysql' ),
+			),
+			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
 
-		$response = $webhook->handle( null, $payload );
+		delete_transient( 'members_for_kofi_total_request_logs' );
 
-		// Process should succeed (sanitization, not rejection).
-		$this->assertEquals( 200, $response->get_status() );
+		ob_start();
+		( new AdminSettings() )->render_request_logs_table();
+		$output = (string) ob_get_clean();
 
-		// Verify user was created.
-		$user = get_user_by( 'email', 'xss-test@example.com' );
-		$this->assertInstanceOf( 'WP_User', $user );
+		$this->assertStringContainsString( 'stored-xss@example.com', $output, 'The row should be rendered.' );
+		$this->assertStringNotContainsString( '<script>alert(1)</script>', $output, 'Stored markup must not be emitted raw.' );
+		$this->assertStringNotContainsString( '<img src=x', $output, 'Stored markup must not be emitted raw.' );
+		$this->assertStringContainsString( '&lt;script&gt;', $output, 'It should appear HTML-escaped instead.' );
+	}
 
-		// The tier name should be sanitized (script tags removed/escaped).
-		// We can't directly check this without inspecting logs, but the fact
-		// that processing succeeded without error indicates sanitization worked.
+	/**
+	 * Tests that the verification token never reaches the PHP error log.
+	 *
+	 * The webhook handler logs the whole payload as debug context, so the
+	 * shared secret must be redacted before it is written out.
+	 */
+	public function test_verification_token_is_not_written_to_error_log(): void {
+		$log_file = tempnam( sys_get_temp_dir(), 'kofi-log-' );
+		// phpcs:ignore WordPress.PHP.IniSet.Risky -- Redirecting error_log is the only way to capture logger output.
+		$original = ini_set( 'error_log', $log_file );
+
+		try {
+			$webhook = new Webhook();
+			$webhook->handle(
+				null,
+				array(
+					'verification_token' => 'test-token-123',
+					'email'              => 'log-redaction@example.com',
+				)
+			);
+		} finally {
+			// phpcs:ignore WordPress.PHP.IniSet.Risky -- Restoring the original value.
+			ini_set( 'error_log', false === $original ? '' : $original );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a local temp file, not a URL.
+		$contents = (string) file_get_contents( $log_file );
+		wp_delete_file( $log_file );
+
+		$this->assertNotSame( '', $contents, 'Expected the webhook to emit debug output to capture.' );
+		$this->assertStringNotContainsString(
+			'test-token-123',
+			$contents,
+			'Verification token must never appear in the error log.'
+		);
+		$this->assertStringContainsString(
+			'[REDACTED]',
+			$contents,
+			'Expected the verification token to be redacted in logged context.'
+		);
 	}
 }
