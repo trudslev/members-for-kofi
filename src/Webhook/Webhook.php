@@ -87,9 +87,11 @@ class Webhook {
 					$request_logger->log_request( $payload_data, 400, false, 'Invalid payload' );
 					return $response;
 				}
-				// Sanitize the raw JSON string before decoding.
-				$raw_json = wp_unslash( $payload['data'] );
-				$raw_json = wp_check_invalid_utf8( $raw_json );
+				// No wp_unslash() here: WordPress only adds slashes to the
+				// superglobals, never to php://input. Stripping them would eat the
+				// escapes in the JSON itself -- \" breaks the parse outright, while
+				// \\ and \uXXXX decode to silently corrupted text.
+				$raw_json = wp_check_invalid_utf8( $payload['data'] );
 				// Basic trim to avoid leading/trailing junk.
 				$raw_json = trim( $raw_json );
 				$data     = json_decode( $raw_json, true );
@@ -190,6 +192,16 @@ class Webhook {
 
 			$role = $this->resolve_role_from_tier( $tier_name, $options );
 			if ( $role ) {
+				// Only one Ko-fi role is tracked per user. Drop the previous one
+				// first, or a tier change would leave it attached forever: it stops
+				// being tracked, so expiry can never remove it and the donor keeps
+				// privileges from a tier they no longer pay for.
+				$previous_role = get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
+				if ( $previous_role && $previous_role !== $role && in_array( $previous_role, $user->roles, true ) ) {
+					$user->remove_role( $previous_role );
+					$user_logger->log_role_removal( $user->ID, $email, $previous_role );
+				}
+
 				$user->add_role( $role );
 				update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
 				update_user_meta( $user->ID, 'kofi_role_assigned_at', time() );

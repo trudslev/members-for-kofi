@@ -55,14 +55,13 @@ class LogCleanup {
 	public function delete_old_user_logs( int $retention_days ): int {
 		global $wpdb;
 
-		$table_name       = $wpdb->prefix . 'members_for_kofi_user_logs';
-		$cutoff_timestamp = time() - ( $retention_days * DAY_IN_SECONDS );
+		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$deleted = $wpdb->query(
 			$wpdb->prepare(
-				"DELETE FROM {$table_name} WHERE timestamp < %d",
-				$cutoff_timestamp
+				"DELETE FROM {$table_name} WHERE timestamp < %s",
+				self::get_cutoff_datetime( $retention_days )
 			)
 		);
 
@@ -78,17 +77,35 @@ class LogCleanup {
 	public function delete_old_request_logs( int $retention_days ): int {
 		global $wpdb;
 
-		$table_name       = $wpdb->prefix . 'members_for_kofi_request_logs';
-		$cutoff_timestamp = time() - ( $retention_days * DAY_IN_SECONDS );
+		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
 
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 		$deleted = $wpdb->query(
 			$wpdb->prepare(
-				"DELETE FROM {$table_name} WHERE timestamp < %d",
-				$cutoff_timestamp
+				"DELETE FROM {$table_name} WHERE timestamp < %s",
+				self::get_cutoff_datetime( $retention_days )
 			)
 		);
 
 		return (int) $deleted;
+	}
+
+	/**
+	 * Builds the retention cutoff as a MySQL DATETIME string.
+	 *
+	 * The `timestamp` columns are DATETIME and rows are written with
+	 * current_time( 'mysql' ), so the cutoff must be a local-time DATETIME
+	 * string. Comparing those columns against a Unix integer makes MySQL
+	 * coerce the column to a YYYYMMDDHHMMSS number, which is always larger
+	 * than a Unix timestamp -- the predicate would never match.
+	 *
+	 * @param int $retention_days Number of days to keep logs.
+	 * @return string Cutoff in 'Y-m-d H:i:s' local time.
+	 */
+	private static function get_cutoff_datetime( int $retention_days ): string {
+		// phpcs:ignore WordPress.DateTime.CurrentTimeTimestamp.Requested -- Must match current_time( 'mysql' ) used on write.
+		$local_now = current_time( 'timestamp' );
+
+		return gmdate( 'Y-m-d H:i:s', $local_now - ( $retention_days * DAY_IN_SECONDS ) );
 	}
 }

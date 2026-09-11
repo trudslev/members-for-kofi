@@ -123,10 +123,16 @@ class Plugin {
 		// Clear rewrite rules if necessary.
 		flush_rewrite_rules();
 
-		// Unschedule the cron job if it exists.
-		$timestamp = wp_next_scheduled( 'kofi_members_check_role_expiry' );
+		// Unschedule the role expiry cron job if it exists.
+		$timestamp = wp_next_scheduled( 'kofi_members_check_expired_roles' );
 		if ( false !== $timestamp ) {
-			wp_unschedule_event( $timestamp, 'kofi_members_check_role_expiry' );
+			wp_unschedule_event( $timestamp, 'kofi_members_check_expired_roles' );
+		}
+
+		// Unschedule the log cleanup cron job if it exists.
+		$timestamp = wp_next_scheduled( 'kofi_members_cleanup_logs' );
+		if ( false !== $timestamp ) {
+			wp_unschedule_event( $timestamp, 'kofi_members_cleanup_logs' );
 		}
 	}
 

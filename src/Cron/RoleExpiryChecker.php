@@ -49,61 +49,6 @@ class RoleExpiryChecker {
 	}
 
 	/**
-	 * Schedules the daily role expiry check event.
-	 *
-	 * This function ensures that the 'kofi_members_check_role_expiry' event
-	 * is scheduled to run daily. If the event is not already scheduled, it
-	 * will be added to the WordPress cron system.
-	 */
-	public static function schedule(): void {
-		add_action(
-			'init',
-			function () {
-				if ( ! wp_next_scheduled( 'kofi_members_check_role_expiry' ) ) {
-					wp_schedule_event( time(), 'daily', 'kofi_members_check_role_expiry' );
-				}
-			}
-		);
-
-		add_action( 'kofi_members_check_role_expiry', array( self::class, 'remove_expired_roles' ) );
-	}
-
-	/**
-	 * Removes expired roles from users.
-	 *
-	 * This function checks all users for roles assigned via Ko-fi donations
-	 * that have expired based on the configured expiry days. It removes the
-	 * expired roles and associated metadata.
-	 */
-	public static function remove_expired_roles(): void {
-		$options     = get_option( 'members_for_kofi_options', array() );
-		$expiry_days = absint( $options['role_expiry_days'] ?? 35 );
-		$cutoff      = time() - ( $expiry_days * DAY_IN_SECONDS );
-
-		$users = get_users(
-			array(
-				'meta_key'     => 'kofi_role_assigned_at',
-				'meta_compare' => '<',
-				'meta_value'   => $cutoff,
-				'number'       => -1,
-				'fields'       => array( 'ID' ),
-			)
-		);
-
-		foreach ( $users as $user_obj ) {
-			$user          = new \WP_User( $user_obj->ID );
-			$assigned_role = get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
-
-			if ( $assigned_role && in_array( $assigned_role, $user->roles ) ) {
-				$user->remove_role( $assigned_role );
-				delete_user_meta( $user->ID, 'kofi_donation_assigned_role' );
-				delete_user_meta( $user->ID, 'kofi_donation_amount' );
-				delete_user_meta( $user->ID, 'kofi_role_assigned_at' );
-			}
-		}
-	}
-
-	/**
 	 * Checks for expired roles and removes them.
 	 */
 	public function check_and_remove_expired_roles(): void {

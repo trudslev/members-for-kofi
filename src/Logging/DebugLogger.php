@@ -14,6 +14,13 @@ defined( 'ABSPATH' ) || exit;
  */
 class DebugLogger {
 	/**
+	 * Context keys whose values must never reach the log.
+	 *
+	 * @var array<string>
+	 */
+	private const REDACTED_KEYS = array( 'verification_token' );
+
+	/**
 	 * Logs a message with optional context when WP_DEBUG is true.
 	 *
 	 * @param string $level   Log level string (info, warning, error, debug...).
@@ -27,11 +34,32 @@ class DebugLogger {
 			$prefix = '[Members for Ko-fi][' . strtoupper( $level ) . '] ';
 			$line   = $prefix . $message;
 			if ( ! empty( $context ) ) {
-				$line .= ' ' . wp_json_encode( $context );
+				$line .= ' ' . wp_json_encode( self::redact( $context ) );
 			}
 			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_error_log
 			error_log( $line );
 		}
+	}
+
+	/**
+	 * Replaces sensitive values with a placeholder, at any nesting depth.
+	 *
+	 * Callers routinely pass whole webhook payloads as context; redacting here
+	 * rather than at each call site means a new caller cannot reintroduce the leak.
+	 *
+	 * @param array $context Context to redact.
+	 * @return array Context with sensitive values replaced.
+	 */
+	private static function redact( array $context ): array {
+		foreach ( $context as $key => $value ) {
+			if ( is_array( $value ) ) {
+				$context[ $key ] = self::redact( $value );
+			} elseif ( in_array( strtolower( (string) $key ), self::REDACTED_KEYS, true ) ) {
+				$context[ $key ] = '[REDACTED]';
+			}
+		}
+
+		return $context;
 	}
 
 	/**
