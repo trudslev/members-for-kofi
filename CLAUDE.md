@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.1.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.1.1) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -23,7 +23,8 @@ This is a WordPress plugin (v1.1.0) that integrates with Ko-fi webhooks to autom
 2. `Webhook::handle()` validates verification token from `members_for_kofi_options['verification_token']`
 3. Payload parsed, user created/updated, role assigned based on `tier_role_map` or `default_role`
 4. User metadata `kofi_role_assigned_at` timestamp stored for expiry tracking
-5. Daily cron (`kofi_members_check_role_expiry`) removes roles past `role_expiry_days` threshold
+5. Daily cron (`kofi_members_check_expired_roles`) removes roles past `role_expiry_days` threshold
+6. Separate daily cron (`kofi_members_cleanup_logs`) deletes logs older than `log_retention_days` when `auto_clear_logs` is enabled
 
 ## Security Standards
 
@@ -33,16 +34,16 @@ This is a WordPress plugin (v1.1.0) that integrates with Ko-fi webhooks to autom
 
 This plugin follows these security standards and guidelines:
 
-1. **WordPress Plugin Handbook - Security Best Practices**  
+1. **WordPress Plugin Handbook - Security Best Practices**
    https://developer.wordpress.org/plugins/security/
-   
-2. **WordPress Coding Standards (WPCS)**  
+
+2. **WordPress Coding Standards (WPCS)**
    Enforced via PHPCS with the `WordPress` ruleset
-   
-3. **OWASP Top 10 Web Application Security Risks**  
+
+3. **OWASP Top 10 Web Application Security Risks**
    Special attention to: Injection, Broken Authentication, Security Misconfiguration, and Insecure Deserialization
-   
-4. **WordPress VIP Code Review Standards**  
+
+4. **WordPress VIP Code Review Standards**
    Industry-leading security and performance practices
 
 ### Mandatory Security Practices
@@ -51,7 +52,10 @@ This plugin follows these security standards and guidelines:
 
 - **ALL external input MUST be sanitized**: Use `sanitize_text_field()`, `sanitize_email()`, `absint()`, `sanitize_key()`, etc.
 - **Webhook payloads**: Sanitize recursively with `array_walk_recursive()` before processing
-- **Always use `wp_unslash()`** when reading from `$_POST`, `$_GET`, or `file_get_contents('php://input')`
+- **Always use `wp_unslash()`** when reading from `$_POST`, `$_GET`, `$_REQUEST` or `$_COOKIE`
+- **Never use `wp_unslash()` on `php://input`**: WordPress only adds slashes to the superglobals, never
+  to the raw request body. Unslashing it strips the escapes out of the payload itself — `\"` breaks the
+  JSON parse outright, while `\\` and `\uXXXX` decode to silently corrupted text
 - **Type validation**: Verify data types match expectations (string, int, array, etc.)
 - **Whitelist validation**: For known values (roles, tiers), only allow expected values
 
@@ -142,28 +146,56 @@ Before merging any code, verify:
 
 ### Testing Patterns
 
-- **WordPress tests**: Extend `WP_UnitTestCase` (e.g., `tests/Cron/RoleExpiryCheckerTest.php`)
-- **Unit tests**: Extend `PHPUnit\Framework\TestCase` (e.g., `tests/Webhook/WebHookTest.php`)
-- **Mocking**: Use `$this->createMock()` for WordPress-independent classes
-- **Setup**: `tests/bootstrap.php` loads WordPress test framework and plugin via `tests_add_filter('muplugins_loaded', 'kofi_members_manually_load_plugin')`
-- **Environment**: Tests use `.env` file loaded via `vlucas/phpdotenv` for `KOFI_VERIFICATION_TOKEN` and DB credentials
+Tests run against a **real install of the newest WordPress**, never against a remote site. The
+`wordpress:latest` image is pulled on every `make test-env-up`, so the suite tracks core releases
+automatically. Nothing is pinned to `dev.foodgeek.dk`.
+
+- **Environment**: `docker-compose.test.yml` (WordPress + MySQL + WP-CLI), provisioned by
+  `bin/test-env-init.sh`, which installs WordPress, activates the plugin, flushes permalinks and
+  configures the plugin options including the test verification token
+- **Base class**: tests extend `MembersForKofi\Tests\TestCase` (`tests/TestCase.php`), which recreates
+  and empties the plugin tables, clears the plugin option, and deletes users a test created. Use
+  `$this->create_user()` in place of WP_UnitTestCase's user factory
+- **Bootstrap**: `tests/bootstrap.php` boots real WordPress via `wp-load.php` inside the container
+- **Integration tests**: `tests/Integration/` drives the site over real HTTP as Ko-fi does
+  (`data=<json>` form-encoded). These are the only tests that exercise `php://input` parsing, so
+  anything touching raw body handling **must** be covered here — a unit test that passes an array to
+  `Webhook::handle()` skips that path entirely and cannot catch such bugs
+- **Never hand-write a `CREATE TABLE` in a test.** Use `UserLogger::create_table()` /
+  `RequestLogger::create_table()`. A test-only schema that drifts from production hides real bugs
+
+```bash
+make test              # unit/WP tests inside the container
+make test-integration  # real HTTP donation requests against the local site
+make test-all          # both
+make test-env-reset    # wipe the site and database
+make wp-version        # WordPress version currently under test
+```
 
 ## Development Workflows
 
 ### Running Tests
 
 ```bash
-# Run all tests in Docker container
+# Boot/refresh the disposable test site (pulls newest WordPress)
+make test-env-up
+
+# Run all WordPress-loaded tests inside the container
 make test
 
-# Run specific test class
+# Run a specific test class
 make test-case TEST=WebhookTest
 
-# Rebuild test container
-make rebuild
+# Real HTTP donation requests against the local site
+make test-integration
+
+# Tear down / wipe
+make test-env-down
+make test-env-reset
 ```
 
-Tests run in Docker container with isolated WordPress test environment and MySQL database.
+`make test` runs inside the WordPress container with core loaded. `make test-integration` runs on the
+host and drives the site over HTTP at `http://localhost:8101`. Both boot the environment first.
 
 ### Code Quality
 
@@ -223,9 +255,10 @@ When the user says `Ready to commit`, always do the following in order:
    - Patch: bug fixes only (e.g., `1.1.0` -> `1.1.1`)
    - Minor: new features, backward compatible (e.g., `1.1.0` -> `1.2.0`)
    - Major: breaking changes (e.g., `1.1.0` -> `2.0.0`)
-3. Update `Tested up to:` in `readme.txt` to match the WordPress version of the target release environment.
-   - Local fallback command: `docker compose -f docker-compose.site.yml run --rm wpcli wp core version`
-   - If local and `dev.foodgeek.dk` differ, use `dev.foodgeek.dk` as the source of truth.
+3. Update `Tested up to:` in `readme.txt` by running `make tested-up-to`.
+   - This reads the WordPress version from the test environment (the `wordpress:latest` image
+     the suite actually ran against) and rewrites the header — never hand-edit it.
+   - `make release` warns if the two have drifted apart.
 4. Update project instructions if any section is outdated.
 5. Update `Release History` for users in clear, non-technical language:
    - Add version entry to `README.md` with summary of changes
@@ -237,8 +270,8 @@ When the user says `Ready to commit`, always do the following in order:
 9. Push commit(s) and tag(s) to `origin`.
 10. Ask the user if they want to deploy now.
 11. If the user confirms deployment, deploy to WordPress.org SVN using the Makefile workflow:
-   - `make deploy-svn`
-   - `make commit-svn WPORG_USER=username WPORG_PASS=password`
+    - `make deploy-svn`
+    - `make commit-svn WPORG_USER=username WPORG_PASS=password`
 
 ## Key Files & Patterns
 
