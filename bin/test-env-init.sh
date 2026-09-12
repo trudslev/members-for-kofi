@@ -81,6 +81,13 @@ $WP_CLI option update members_for_kofi_options --format=json <<JSON
 }
 JSON
 
+# WP-Cron fires loopback HTTP requests whenever a scheduled event is due. Those
+# are full WordPress requests, so they run the plugin's schema upgrade check at
+# unpredictable moments and can repair a broken schema behind a test's back.
+# Cron behaviour is tested by invoking the hooks directly, so nothing is lost.
+echo ">>> Disabling WP-Cron loopbacks (keeps tests deterministic)..."
+$WP_CLI config set DISABLE_WP_CRON true --raw --type=constant >/dev/null
+
 echo ">>> Setting permalinks (required for the /webhook-kofi endpoint)..."
 $WP_CLI rewrite structure '/%postname%/' --hard >/dev/null
 $WP_CLI rewrite flush --hard >/dev/null

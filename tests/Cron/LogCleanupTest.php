@@ -307,19 +307,18 @@ class LogCleanupTest extends TestCase {
 		$wpdb->insert(
 			$this->request_logs_table,
 			array(
-				'email'              => 'test@example.com',
-				'tier_name'          => 'Gold',
-				'amount'             => '5.00',
-				'currency'           => 'USD',
-				'is_subscription'    => 1,
-				'verification_token' => 'test_token',
-				'payload'            => '{}',
-				'status_code'        => 200,
-				'success'            => 1,
-				'error'              => null,
-				'timestamp'          => $this->datetime_days_ago( $days_ago ),
+				'email'           => 'test@example.com',
+				'tier_name'       => 'Gold',
+				'amount'          => '5.00',
+				'currency'        => 'USD',
+				'is_subscription' => 1,
+				'payload'         => '{}',
+				'status_code'     => 200,
+				'success'         => 1,
+				'error'           => null,
+				'timestamp'       => $this->datetime_days_ago( $days_ago ),
 			),
-			array( '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%d', '%d', '%s', '%s' )
+			array( '%s', '%s', '%s', '%s', '%d', '%s', '%d', '%d', '%s', '%s' )
 		);
 	}
 }

@@ -42,6 +42,24 @@ use MembersForKofi\Logging\RequestLogger;
  * as well as admin menu, settings, logger, cron, and webhook integration.
  */
 class Plugin {
+
+	/**
+	 * Current database schema version.
+	 *
+	 * Bump this whenever a table is added or its columns change, so existing
+	 * installs pick the change up on their next request.
+	 *
+	 * @var string
+	 */
+	public const DB_VERSION = '3';
+
+	/**
+	 * Option key holding the schema version currently installed on this site.
+	 *
+	 * @var string
+	 */
+	public const DB_VERSION_OPTION = 'members_for_kofi_db_version';
+
 	/**
 	 * Constructor to initialize the plugin.
 	 *
@@ -49,6 +67,7 @@ class Plugin {
 	 * cron job scheduling, rewrite rules, and query variable initialization.
 	 */
 	public function __construct() {
+		add_action( 'init', array( self::class, 'maybe_upgrade' ), 5 );
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'init', array( $this, 'initialize_logger' ) );
@@ -107,10 +126,54 @@ class Plugin {
 		self::add_rewrite_rules();
 		flush_rewrite_rules();
 
-		// Create the user logs table.
-		UserLogger::create_table();
+		self::install_tables();
+		RequestLogger::drop_verification_token_column();
 
-		// Create the request logs table.
+		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
+	}
+
+	/**
+	 * Brings the database schema up to date when the plugin has been updated.
+	 *
+	 * WordPress fires the activation hook only when a plugin is activated, never
+	 * when one is updated in place. Without this, a site that installed an older
+	 * release and then updated would never get tables added since that install --
+	 * which is exactly how sites updating from 1.0.x ended up with no request
+	 * log table.
+	 *
+	 * @return void
+	 */
+	public static function maybe_upgrade(): void {
+		$installed = get_option( self::DB_VERSION_OPTION );
+
+		if ( self::DB_VERSION === $installed ) {
+			return;
+		}
+
+		self::install_tables();
+		RequestLogger::drop_verification_token_column();
+
+		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
+
+		DebugLogger::info(
+			'Database schema updated',
+			array(
+				'from' => false === $installed ? 'none' : $installed,
+				'to'   => self::DB_VERSION,
+			)
+		);
+	}
+
+	/**
+	 * Creates the plugin's tables.
+	 *
+	 * WordPress's dbDelta() creates missing tables and adds missing columns to
+	 * existing ones, so this is safe to call repeatedly.
+	 *
+	 * @return void
+	 */
+	private static function install_tables(): void {
+		UserLogger::create_table();
 		RequestLogger::create_table();
 	}
 
@@ -144,6 +207,7 @@ class Plugin {
 	public static function uninstall(): void {
 		// Remove options.
 		delete_option( 'members_for_kofi_options' );
+		delete_option( self::DB_VERSION_OPTION );
 
 		// Remove rewrite rules added by this plugin.
 		global $wp_rewrite;
