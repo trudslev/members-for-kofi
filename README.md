@@ -22,10 +22,10 @@
 1. Clone the repository or download it as a ZIP file.
 2. Upload the plugin to your WordPress installation under `wp-content/plugins/members-for-kofi`.
 3. Activate the plugin in the WordPress admin panel.
-4. Configure your settings via the Members for Ko-fi admin page.
+4. Open **Members for Ko-fi** in the main admin menu — the plugin adds its own top-level entry rather than sitting under Settings.
 5. Go to `https://ko-fi.com/manage/webhooks?src=sidemenu`.
 6. Set your Ko-fi webhook to `https://your-site.com/webhook-kofi`.
-6. Copy the Verification Token (under Advanced) to the settings.
+7. Copy the Verification Token (under Advanced) into the plugin settings.
 
 ## Configuration
 
@@ -42,7 +42,7 @@
 The plugin records user-related events (donations, role assignments) and webhook requests in dedicated custom database tables for auditability. Logs can be viewed and managed through the admin interface:
 
 - **User Logs**: Track donations, role assignments, and user activities
-- **Request Logs**: Monitor all incoming webhook requests with success/failure status
+- **Request Logs**: Every webhook request that reaches the plugin, with its status and any error. Requests that are not POST, and floods of failures from one address, are refused before this point and deliberately leave no row
 - **Automatic Cleanup**: Configure automatic deletion of old logs (default: 30 days retention)
 
 For development or troubleshooting, if `WP_DEBUG` is enabled, a minimal debug logger writes contextual messages to the PHP error log.
@@ -96,7 +96,7 @@ This plugin follows WordPress security best practices and implements multiple la
 - **Output Escaping:** All data displayed in the admin interface is properly escaped to prevent XSS attacks.
 - **Nonce Verification:** All admin forms and AJAX requests verify WordPress nonces.
 - **Capability Checks:** Administrative functions require the `manage_options` capability.
-- **Database Security:** All database queries use prepared statements to prevent SQL injection.
+- **Database Security:** Every query carrying a variable uses `$wpdb->prepare()` with placeholders, and search terms go through `$wpdb->esc_like()`. Table names come from `$wpdb->prefix`, never from a request.
 - **Direct File Access Protection:** All PHP files check for WordPress context (ABSPATH) before executing.
 - **Sensitive Data Protection:** Verification tokens are redacted from database logs to prevent exposure.
 
@@ -118,6 +118,41 @@ so there is time to ship a fix before the details are public. See
 [SECURITY.md](SECURITY.md) for how, what is in scope, and what happens next.
 
 ## Development
+
+### Requirements
+
+- **Docker** and the Compose plugin — the test suites run against a real
+  WordPress install, so there is no way to run them without it
+- **PHP 7.4+** and **Composer** on the host
+- `make`
+
+### Layout
+
+```
+src/
+  Plugin.php              bootstrapping, hooks, rewrite rule, cron, schema upgrades
+  Webhook/Webhook.php     receives and validates the Ko-fi payload, assigns roles
+  Admin/AdminSettings.php settings screens, the log viewer and its AJAX handlers
+  Cron/                   role expiry and log cleanup, one daily job each
+  Logging/                the two database log tables, plus a debug logger
+tests/
+  Integration/            drives a running site over real HTTP, as Ko-fi does
+  ...                     everything else boots WordPress in-process
+```
+
+Classes are PSR-4 autoloaded under the `MembersForKofi\` namespace.
+
+### Changing the database schema
+
+Tables are created on activation, and **WordPress does not run the activation
+hook when a plugin is updated**. Anything that only happens in `activate()` will
+never reach an existing site. If you add a table or change a column: bump
+`Plugin::DB_VERSION`, make the change through `dbDelta()`, and cover it with
+both a unit test that calls `Plugin::maybe_upgrade()` and an integration test
+that proves a real HTTP request reaches the upgrade. There is prior art in
+`tests/UpgradeTest.php` and `tests/Integration/SchemaUpgradeTest.php`.
+
+### Running the tests
 
 Tests run against a real install of the newest WordPress in Docker, not against
 a mocked WordPress, so `make` does the setup for you. Run `make help` for the

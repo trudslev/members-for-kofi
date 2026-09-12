@@ -19,7 +19,7 @@ Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage Wor
 - Automatically assign roles to users based on Ko-fi donations or memberships.
 - Log user actions, such as donations and role changes, in a dedicated database table (no file logging).
 - Lightweight debug logging to the PHP error log when WP_DEBUG is enabled.
-- Fully compatible with GDPR and WordPress privacy tools.
+- Stores only what it needs, and removes it all when you uninstall.
 
 **Use Cases:**
 - Reward your Ko-fi supporters with exclusive access to content or features.
@@ -30,15 +30,15 @@ Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage Wor
 
 1. Upload the plugin files to the `/wp-content/plugins/members-for-kofi` directory, or install the plugin through the WordPress plugins screen directly.
 2. Activate the plugin through the 'Plugins' screen in WordPress.
-3. Configure the plugin settings under **Settings > Members for Ko-fi**.
+3. Configure the plugin under **Members for Ko-fi** in the main admin menu (it has its own entry, with a heart icon).
 4. Set up your Ko-fi webhook to point to your WordPress site.
 
 == Frequently Asked Questions ==
 
 = How do I set up the Ko-fi webhook? =
-1. Log in to your Ko-fi account.
-2. Go to **Settings > Webhooks**.
-3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/webhook-kofi`).
+1. Log in to your Ko-fi account and open the webhooks page: https://ko-fi.com/manage/webhooks
+2. Set the webhook URL to your site followed by `/webhook-kofi`, for example `https://your-site.com/webhook-kofi`.
+3. Copy the Verification Token (under Advanced) into **Members for Ko-fi > Settings** in WordPress.
 
 = How do I test my setup without waiting for a real payment? =
 
@@ -69,11 +69,44 @@ If the Request log is completely empty after a test, the request never reached W
 
 The verification token in **Members for Ko-fi > Settings** must match the one on Ko-fi's webhook page exactly. If you have ever regenerated it on Ko-fi, paste the new value into the plugin as well - Ko-fi will not warn you that the two no longer match, and real payments will be rejected the same way the test was.
 
+= What happens when a supporter's role expires? =
+
+Each time a payment arrives, the plugin records the date. If that date falls
+further in the past than the number of days you configure, a daily job removes
+the role it assigned and stops tracking it. Their WordPress account stays, and
+so does any other role they have - only the role this plugin gave them is taken
+away.
+
+Set the number of days **longer than your Ko-fi billing cycle**, not equal to
+it. Ko-fi sends a webhook once when a payment happens and never retries, so if
+one delivery is lost - a brief outage, a network problem - the next one is a
+whole month away. With a 30-day setting, a single lost delivery costs that
+supporter their access. Something around two billing cycles absorbs it: the
+next successful payment refreshes the date before anything is removed.
+
+= Why does a supporter have two roles? =
+
+The plugin adds its role to whatever the supporter already has, rather than
+replacing it. New accounts get whatever WordPress assigns new users (usually
+Subscriber), and the plugin's role is added on top. When the role expires, only
+the plugin's role is removed, which leaves the account intact.
+
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.
 
-= Is this plugin GDPR compliant? =
-Yes, the plugin integrates with WordPress's privacy tools to allow exporting and erasing user data.
+= What personal data does this plugin store? =
+
+Two tables of its own:
+
+* **User log** - the WordPress user ID, email address, what happened (user created, role assigned, role removed, donation received), the role, and the amount and currency.
+* **Request log** - the email address, tier name, amount, currency, the HTTP status, and the request Ko-fi sent. The verification token is never stored.
+
+Both are removed when you uninstall the plugin, along with its settings. Deactivating keeps them.
+
+The plugin does **not** currently register handlers for WordPress's privacy
+export and erase tools, so a data request under GDPR or similar will not pick
+these tables up automatically. If you need to remove a supporter's data, delete
+their WordPress user and clear the logs from the Logs tab.
 
 == Screenshots ==
 
