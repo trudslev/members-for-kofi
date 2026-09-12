@@ -22,6 +22,7 @@ namespace MembersForKofi\Cron;
 
 defined( 'ABSPATH' ) || exit;
 
+use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 
 /**
@@ -57,6 +58,19 @@ class RoleExpiryChecker {
 		$expiration_meta_key = 'kofi_role_assigned_at';
 		$options             = get_option( 'members_for_kofi_options' );
 		$expiry_days         = $options['role_expiry_days'] ?? 35;
+
+		// The settings screen offers an "Enable Expiry" toggle, and until now
+		// nothing read it: turning expiry off still removed roles after the
+		// configured number of days.
+		//
+		// A missing key means an install from before the toggle existed, where
+		// expiry has always run -- so absent keeps meaning enabled, and only an
+		// explicit opt-out disables it. Returning here also skips the user query
+		// entirely rather than looping and removing nothing.
+		if ( empty( $options['enable_expiry'] ?? true ) ) {
+			DebugLogger::info( 'Role expiry is disabled; nothing to do' );
+			return;
+		}
 
 		$users = get_users(
 			array(

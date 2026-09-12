@@ -194,4 +194,91 @@ class RoleExpiryCheckerTest extends \MembersForKofi\Tests\TestCase {
 		$user = get_userdata( $user_id );
 		$this->assertNotContains( 'subscriber', $user->roles );
 	}
+
+	/**
+	 * Turning "Enable Expiry" off actually stops roles being removed.
+	 *
+	 * The setting was rendered, saved and documented, but nothing ever read it:
+	 * a site that deliberately disabled expiry still had its supporters' roles
+	 * taken away after role_expiry_days.
+	 */
+	public function test_does_not_remove_role_when_expiry_is_disabled(): void {
+		update_option(
+			'members_for_kofi_options',
+			array(
+				'enable_expiry'    => false,
+				'role_expiry_days' => 30,
+			)
+		);
+
+		$user_id = $this->create_user();
+		$user    = get_user_by( 'ID', $user_id );
+		$user->add_role( 'editor' );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'editor' );
+		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-400 days' ) );
+
+		$checker = new RoleExpiryChecker( new UserLogger() );
+		$checker->check_and_remove_expired_roles();
+
+		$user = get_user_by( 'ID', $user_id );
+		$this->assertContains(
+			'editor',
+			$user->roles,
+			'With expiry disabled the role must survive, however old the assignment is'
+		);
+		$this->assertNotEmpty(
+			get_user_meta( $user_id, 'kofi_role_assigned_at', true ),
+			'The tracking meta must be left alone too, or a later re-enable has nothing to work from'
+		);
+	}
+
+	/**
+	 * With the setting explicitly on, expiry behaves as before.
+	 */
+	public function test_removes_role_when_expiry_is_enabled(): void {
+		update_option(
+			'members_for_kofi_options',
+			array(
+				'enable_expiry'    => true,
+				'role_expiry_days' => 30,
+			)
+		);
+
+		$user_id = $this->create_user();
+		$user    = get_user_by( 'ID', $user_id );
+		$user->add_role( 'editor' );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'editor' );
+		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-400 days' ) );
+
+		$checker = new RoleExpiryChecker( new UserLogger() );
+		$checker->check_and_remove_expired_roles();
+
+		$user = get_user_by( 'ID', $user_id );
+		$this->assertNotContains( 'editor', $user->roles );
+	}
+
+	/**
+	 * An install predating the toggle keeps expiring, rather than silently
+	 * stopping the moment it updates.
+	 */
+	public function test_expiry_still_runs_when_the_setting_is_absent(): void {
+		update_option(
+			'members_for_kofi_options',
+			array(
+				'role_expiry_days' => 30,
+			)
+		);
+
+		$user_id = $this->create_user();
+		$user    = get_user_by( 'ID', $user_id );
+		$user->add_role( 'editor' );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'editor' );
+		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-400 days' ) );
+
+		$checker = new RoleExpiryChecker( new UserLogger() );
+		$checker->check_and_remove_expired_roles();
+
+		$user = get_user_by( 'ID', $user_id );
+		$this->assertNotContains( 'editor', $user->roles );
+	}
 }
