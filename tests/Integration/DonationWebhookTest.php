@@ -527,4 +527,176 @@ class DonationWebhookTest extends IntegrationTestCase {
 			)
 		);
 	}
+
+	/**
+	 * A verbatim Ko-fi subscription payload, captured from production.
+	 *
+	 * Taken from the request log after Ko-fi's own "first monthly" test button,
+	 * so the field set, the types and the nulls are Ko-fi's rather than ours.
+	 * Every other fixture in this suite is hand-written and tidier than
+	 * reality: they all send `tier_name` as a non-empty string, where Ko-fi
+	 * sends null, and none carry the Discord or transaction fields at all.
+	 *
+	 * @param array $overrides Fields to replace.
+	 * @return array
+	 */
+	private function real_kofi_payload( array $overrides = array() ): array {
+		return array_merge(
+			array(
+				'verification_token'            => $this->token,
+				'message_id'                    => 'dd25a0b5-0aaf-4096-b1ca-214399627547',
+				'timestamp'                     => '2026-09-12T01:52:32Z',
+				'type'                          => 'Subscription',
+				'is_public'                     => true,
+				'from_name'                     => 'Jo Example',
+				'message'                       => 'Good luck with the integration!',
+				'amount'                        => '3.00',
+				'url'                           => 'https://ko-fi.com/Home/CoffeeShop?txid=00000000-1111-2222-3333-444444444444',
+				'email'                         => 'replaced-by-caller@example.com',
+				'currency'                      => 'USD',
+				'is_subscription_payment'       => true,
+				'is_first_subscription_payment' => true,
+				'kofi_transaction_id'           => '00000000-1111-2222-3333-444444444444',
+				'shop_items'                    => null,
+				'tier_name'                     => null,
+				'shipping'                      => null,
+				'discord_username'              => 'Jo#4105',
+				'discord_userid'                => '012345678901234567',
+			),
+			$overrides
+		);
+	}
+
+	/**
+	 * Reads the expiry timestamp the plugin stored for a donor.
+	 *
+	 * @param string $email Donor address.
+	 * @return string
+	 */
+	private function assigned_at_for( string $email ): string {
+		return self::wp(
+			'eval ' . escapeshellarg(
+				'$u = get_user_by( "email", ' . var_export( $email, true ) . ' );'
+				. ' echo $u ? get_user_meta( $u->ID, "kofi_role_assigned_at", true ) : "";'
+			)
+		);
+	}
+
+	/**
+	 * Ko-fi's real payload is accepted, nulls and all.
+	 *
+	 * `tier_name` arrives as null rather than a missing key or an empty string.
+	 * The code survives that on `?? ''`, but nothing pinned it: passing the
+	 * value straight into resolve_role_from_tier( string $tier ) would be a
+	 * TypeError on every real donation while this suite stayed green.
+	 */
+	public function test_a_real_kofi_payload_is_accepted(): void {
+		$email = $this->donor_email( 'real-payload' );
+
+		$response = $this->post_donation( $this->real_kofi_payload( array( 'email' => $email ) ) );
+
+		$this->assertSame( 200, $response['status'], 'Ko-fi\'s own payload must be accepted' );
+		$this->assertTrue( (bool) ( $response['json']['success'] ?? false ) );
+	}
+
+	/**
+	 * A null tier falls back to the default role rather than assigning nothing.
+	 */
+	public function test_a_real_kofi_payload_assigns_the_default_role(): void {
+		$email = $this->donor_email( 'real-payload-role' );
+
+		$this->post_donation( $this->real_kofi_payload( array( 'email' => $email ) ) );
+
+		$this->assertContains(
+			'subscriber',
+			$this->roles_for( $email ),
+			'A null tier_name should fall through to the configured default role'
+		);
+	}
+
+	/**
+	 * The donor message survives Ko-fi's real payload shape intact.
+	 */
+	public function test_a_real_kofi_payload_stores_the_message(): void {
+		$email = $this->donor_email( 'real-payload-message' );
+
+		$this->post_donation( $this->real_kofi_payload( array( 'email' => $email ) ) );
+
+		$this->assertSame(
+			'Good luck with the integration!',
+			$this->recorded_message_for( $email )
+		);
+	}
+
+	/**
+	 * A renewal for an existing supporter keeps their role and refreshes expiry.
+	 *
+	 * Ko-fi's test buttons only ever send a *first* subscription payment, so
+	 * this branch -- by far the most common one in real life, and the one every
+	 * month after the first -- is never exercised against the live site.
+	 */
+	public function test_a_recurring_payment_keeps_the_role_and_refreshes_expiry(): void {
+		$email = $this->donor_email( 'renewal' );
+
+		$this->post_donation( $this->real_kofi_payload( array( 'email' => $email ) ) );
+
+		$first = $this->assigned_at_for( $email );
+		$this->assertNotSame( '', $first, 'Expected the first payment to record an expiry timestamp' );
+
+		// The renewal Ko-fi sends a month later: same shape, not the first one.
+		$response = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'                         => $email,
+					'is_first_subscription_payment' => false,
+					'message_id'                    => 'a1b2c3d4-0000-1111-2222-333344445555',
+					'message'                       => null,
+				)
+			)
+		);
+
+		$this->assertSame( 200, $response['status'], 'A renewal must be accepted' );
+		$this->assertContains(
+			'subscriber',
+			$this->roles_for( $email ),
+			'A renewal must not cost the supporter their role'
+		);
+		$this->assertNotSame(
+			'',
+			$this->assigned_at_for( $email ),
+			'A renewal must refresh the expiry timestamp, or access lapses a month later'
+		);
+	}
+
+	/**
+	 * Ko-fi's real membership-tier payload resolves through the tier map.
+	 *
+	 * Captured from production after Ko-fi's "membership tier test" button.
+	 * Two things make it worth keeping verbatim: tier_name is a genuine Ko-fi
+	 * tier string rather than one we invented, and it arrives with
+	 * is_first_subscription_payment = false -- a renewal, which is what every
+	 * payment after the first one looks like and what the "first monthly"
+	 * button never produces.
+	 */
+	public function test_a_real_membership_tier_payload_resolves_the_mapped_role(): void {
+		$email = $this->donor_email( 'real-tier' );
+
+		$response = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'                         => $email,
+					'tier_name'                     => 'Bronze',
+					'amount'                        => '5.00',
+					'is_first_subscription_payment' => false,
+				)
+			)
+		);
+
+		$this->assertSame( 200, $response['status'], 'A renewal carrying a tier must be accepted' );
+		$this->assertContains(
+			'contributor',
+			$this->roles_for( $email ),
+			'Bronze is mapped to contributor in the test environment'
+		);
+	}
 }
