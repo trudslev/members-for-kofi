@@ -54,12 +54,12 @@ class RequestLoggerTest extends TestCase {
 		$logger = new RequestLogger();
 
 		$payload = array(
-			'email'                  => 'test@example.com',
-			'tier_name'              => 'Gold',
-			'amount'                 => 10.00,
-			'currency'               => 'USD',
+			'email'                   => 'test@example.com',
+			'tier_name'               => 'Gold',
+			'amount'                  => 10.00,
+			'currency'                => 'USD',
 			'is_subscription_payment' => true,
-			'verification_token'     => 'test-token-12345',
+			'verification_token'      => 'test-token-12345',
 		);
 
 		$logger->log_request( $payload, 200, true, '' );

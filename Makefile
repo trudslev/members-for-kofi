@@ -102,6 +102,21 @@ release: .releaseignore
 	rm -rf $(STAGE_DIR) $(ZIP_FULL) $(ZIP_NAME) $(PLUGIN_SLUG).zip
 	mkdir -p $(STAGE_DIR)
 	rsync -a --exclude-from='.releaseignore' ./ $(STAGE_DIR)/$(PLUGIN_SLUG)/
+	# Build a production-only vendor/ in the staging dir. The working tree's
+	# vendor/ holds PHPUnit, PHPCS and friends and is excluded from the copy --
+	# shipping it bloated the package and put the test toolchain in every
+	# release artifact.
+	@if [ -f composer.json ]; then \
+	  cp composer.json $(STAGE_DIR)/$(PLUGIN_SLUG)/; \
+	  [ -f composer.lock ] && cp composer.lock $(STAGE_DIR)/$(PLUGIN_SLUG)/ || true; \
+	  cd $(STAGE_DIR)/$(PLUGIN_SLUG) && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
+	  rm -f $(STAGE_DIR)/$(PLUGIN_SLUG)/composer.json $(STAGE_DIR)/$(PLUGIN_SLUG)/composer.lock; \
+	else \
+	  echo "ERROR: composer.json missing - cannot build a production vendor/"; exit 1; \
+	fi
+	@if [ ! -f $(STAGE_DIR)/$(PLUGIN_SLUG)/vendor/autoload.php ]; then \
+	  echo "ERROR: vendor/autoload.php missing from the package"; exit 1; \
+	fi
 	# Ensure stable tag consistency
 	@if ! grep -q "Stable tag: $(VERSION)" readme.txt; then \
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \

@@ -58,17 +58,6 @@ class WebhookTest extends TestCase {
 				'only_subscriptions' => false,
 			)
 		);
-
-	}
-
-	/**
-	 * Cleans up the test environment after each test.
-	 *
-	 * This method deletes plugin options, resets the logger, and drops the user logs table
-	 * to ensure a clean state for subsequent tests.
-	 */
-	protected function tearDown(): void {
-		parent::tearDown();
 	}
 
 	/**

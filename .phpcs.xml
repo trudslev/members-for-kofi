@@ -2,15 +2,17 @@
 <ruleset name="FoodGeek WordPress Plugin Ruleset">
   <description>Custom ruleset for WordPress plugin development, based on the WordPress Coding Standards.</description>
 
-  <!-- Base standard -->
-  <rule ref="WordPress" />
-
-  <!-- Exclude rules not applicable to WP plugin development -->
-  <exclude name="PSR1.Classes.ClassDeclaration.MissingNamespace" />
-  <exclude name="Generic.Files.LineLength.TooLong" />
-  <exclude name="PEAR.Files.IncludingFile.BracketsNotRequired" />
-  <exclude name="Generic.Commenting.Todo.CommentFound" />
-  <exclude name="WordPress.Files.FileName" />
+  <!-- Base standard.
+       NB: exclusions must be nested inside the rule they apply to. Left as
+       siblings of <rule> they are silently ignored, which is how this ruleset
+       spent a long time reporting violations it was meant to suppress. -->
+  <rule ref="WordPress">
+    <exclude name="PSR1.Classes.ClassDeclaration.MissingNamespace" />
+    <exclude name="Generic.Files.LineLength.TooLong" />
+    <exclude name="PEAR.Files.IncludingFile.BracketsNotRequired" />
+    <exclude name="Generic.Commenting.Todo.CommentFound" />
+    <exclude name="WordPress.Files.FileName" />
+  </rule>
 
 
   <!-- Scan all PHP files -->
@@ -20,6 +22,49 @@
   <exclude-pattern>*/vendor/*</exclude-pattern>
   <exclude-pattern>*/node_modules/*</exclude-pattern>
   <exclude-pattern>*/tests/_output/*</exclude-pattern>
+
+  <!-- Test code is not WordPress runtime code. Tests query the plugin's own
+       tables directly to assert on what was written, drive the site over real
+       HTTP with cURL, read fixture files, and build superglobals on purpose.
+       Relaxing these sniffs for tests/ only keeps src/ strictly checked. -->
+  <rule ref="WordPress.DB.DirectDatabaseQuery">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.DB.PreparedSQL">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.DB.PreparedSQLPlaceholders">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.WP.AlternativeFunctions">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.PHP.DiscouragedPHPFunctions">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.PHP.DevelopmentFunctions">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.PHP.IniSet">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.Security.EscapeOutput">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.Security.ValidatedSanitizedInput">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="WordPress.Security.NonceVerification">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+  <rule ref="Squiz.Commenting.FileComment">
+    <exclude-pattern>tests/*</exclude-pattern>
+  </rule>
+
+  <!-- PHP only. WPCS 3.0 removed its JavaScript and CSS sniffs, so scanning
+       assets/ just applies PHP style rules to JS and reports hundreds of
+       meaningless violations. Lint JS with a JS tool if it needs linting. -->
+  <arg name="extensions" value="php"/>
 
   <!-- Report settings -->
   <arg name="colors"/>

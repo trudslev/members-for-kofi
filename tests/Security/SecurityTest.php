@@ -59,13 +59,6 @@ class SecurityTest extends TestCase {
 	}
 
 	/**
-	 * Cleans up the test environment after each test.
-	 */
-	protected function tearDown(): void {
-		parent::tearDown();
-	}
-
-	/**
 	 * Tests that administrator role is present in DISALLOWED_ROLES constant.
 	 *
 	 * This is a critical security test ensuring the administrator role

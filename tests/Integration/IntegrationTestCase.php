@@ -63,7 +63,7 @@ abstract class IntegrationTestCase extends TestCase {
 		parent::setUp();
 
 		$site_url = getenv( 'WP_TEST_SITE_URL' );
-		$token     = getenv( 'KOFI_TEST_TOKEN' );
+		$token    = getenv( 'KOFI_TEST_TOKEN' );
 
 		$this->base_url = rtrim( false === $site_url || '' === $site_url ? 'http://localhost:8101' : $site_url, '/' );
 		$this->token    = false === $token || '' === $token ? 'test-verification-token' : $token;

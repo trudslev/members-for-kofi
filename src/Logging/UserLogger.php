@@ -43,6 +43,7 @@ class UserLogger {
 
 		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery -- Writing to the plugin's own table; core offers no API for custom tables.
 		$wpdb->insert(
 			$table_name,
 			array(
@@ -144,7 +145,7 @@ class UserLogger {
 		global $wpdb;
 
 		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Table drop is intentional during uninstall.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Dropping the plugin's own table during uninstall.
 		$wpdb->query( 'DROP TABLE IF EXISTS `' . esc_sql( $table_name ) . '`' );
 	}
 }

@@ -57,13 +57,14 @@ class LogCleanup {
 
 		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from $wpdb->prefix, which prepare() cannot parameterise; the cutoff value is a placeholder.
 		$deleted = $wpdb->query(
 			$wpdb->prepare(
 				"DELETE FROM {$table_name} WHERE timestamp < %s",
 				self::get_cutoff_datetime( $retention_days )
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return (int) $deleted;
 	}
@@ -79,13 +80,14 @@ class LogCleanup {
 
 		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
 
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from $wpdb->prefix, which prepare() cannot parameterise; the cutoff value is a placeholder.
 		$deleted = $wpdb->query(
 			$wpdb->prepare(
 				"DELETE FROM {$table_name} WHERE timestamp < %s",
 				self::get_cutoff_datetime( $retention_days )
 			)
 		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
 		return (int) $deleted;
 	}

@@ -18,7 +18,10 @@ $_SERVER['SERVER_NAME']    = $_SERVER['SERVER_NAME'] ?? 'localhost';
 $_SERVER['REQUEST_URI']    = $_SERVER['REQUEST_URI'] ?? '/';
 $_SERVER['REQUEST_METHOD'] = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
-$members_for_kofi_wp_load = getenv( 'WP_LOAD_PATH' ) ?: '/var/www/html/wp-load.php';
+$members_for_kofi_wp_load_env = getenv( 'WP_LOAD_PATH' );
+$members_for_kofi_wp_load     = ( false === $members_for_kofi_wp_load_env || '' === $members_for_kofi_wp_load_env )
+	? '/var/www/html/wp-load.php'
+	: $members_for_kofi_wp_load_env;
 
 if ( ! file_exists( $members_for_kofi_wp_load ) ) {
 	fwrite(

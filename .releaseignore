@@ -3,7 +3,7 @@ tests
 Makefile
 Dockerfile*
 docker-compose.*yml
-phpunit.xml
+phpunit*.xml
 composer.*
 package-lock.json
 *.log
@@ -11,3 +11,7 @@ package-lock.json
 README.md
 release
 bin
+reports
+CLAUDE.md
+phpcs.xml
+vendor

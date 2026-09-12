@@ -64,7 +64,7 @@ class WebhookHttpTest extends IntegrationTestCase {
 	private function send_webhook_request( array $payload ): array {
 		$ch = curl_init( $this->webhook_url );
 
-		// Ko-fi sends data as application/x-www-form-urlencoded with data=<json_string>
+		// Ko-fi sends data as application/x-www-form-urlencoded with data=<json_string>.
 		$post_data = 'data=' . rawurlencode( wp_json_encode( $payload ) );
 
 		curl_setopt_array(
@@ -88,7 +88,7 @@ class WebhookHttpTest extends IntegrationTestCase {
 		$status_code = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 		$error       = curl_error( $ch );
 
-		curl_close( $ch );
+		unset( $ch );
 
 		if ( $error ) {
 			$this->fail( "cURL error: {$error}" );
@@ -269,7 +269,7 @@ class WebhookHttpTest extends IntegrationTestCase {
 
 		curl_exec( $ch );
 		$status_code = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-		curl_close( $ch );
+		unset( $ch );
 
 		// The endpoint should respond (even if it returns an error without POST data).
 		$this->assertNotEquals( 0, $status_code, 'Endpoint should be accessible' );

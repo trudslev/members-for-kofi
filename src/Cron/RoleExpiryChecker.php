@@ -60,6 +60,7 @@ class RoleExpiryChecker {
 
 		$users = get_users(
 			array(
+				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_key -- Runs once a day in cron, never on a page load.
 				'meta_key'     => $expiration_meta_key,
 				'meta_compare' => 'EXISTS',
 			)
