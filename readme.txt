@@ -110,8 +110,8 @@ their WordPress user and clear the logs from the Logs tab.
 
 == Screenshots ==
 
-1. **Settings Page**: Configure plugin options, including role mapping.
-2. **User Logs**: View logs of user actions, such as donations and role changes.
+1. **Settings**: the Ko-fi connection, role assignment and log retention on a single page. Your webhook URL is shown ready to copy into Ko-fi, and the verification token is masked.
+2. **Logs**: user activity with the action taken for each donation. The Log Type selector switches to the webhook request log, and the list can be searched, paged and cleared.
 
 == Changelog ==
 

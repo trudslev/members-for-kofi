@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   # The test environment always pulls the newest WordPress, so a weekly run
   # reports a core release that breaks the plugin before a user does.
