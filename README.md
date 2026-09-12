@@ -110,14 +110,34 @@ For detailed security documentation, see [`SECURITY_AUDIT_REPORT.md`](SECURITY_A
 
 ## Development
 
-This plugin uses:
-- PHPUnit for testing
-
-To run tests:
+Tests run against a real install of the newest WordPress in Docker, not against
+a mocked WordPress, so `make` does the setup for you. Run `make help` for the
+full list.
 
 ```bash
-make test
+make test              # WordPress-loaded suite, inside the container
+make test-integration  # drives the site over real HTTP, exactly as Ko-fi does
+make test-all          # both
+
+make test-case TEST=WebhookTest   # a single class
+make test-env-reset               # wipe the site and database and start over
+make wp-version                   # the WordPress version currently under test
 ```
+
+The integration suite is the only one that exercises raw request body parsing,
+so anything touching that path needs a test there — a unit test that hands
+`Webhook::handle()` a ready-made array skips the parsing entirely.
+
+Coding standards are enforced with PHPCS against the WordPress ruleset:
+
+```bash
+./vendor/bin/phpcs     # check
+./vendor/bin/phpcbf    # auto-fix
+```
+
+Publishing targets (git tagging, GitHub releases, WordPress.org SVN) need push
+rights or credentials and live in an untracked `Makefile.local`, so they are not
+part of the repository. Everything above works without it.
 
 ## Release History
 

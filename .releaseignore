@@ -1,6 +1,6 @@
 .*
 tests
-Makefile
+Makefile*
 Dockerfile*
 docker-compose.*yml
 phpunit*.xml

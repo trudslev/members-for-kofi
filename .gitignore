@@ -40,3 +40,6 @@ reports/
 
 # Personal working preferences (not shared with contributors)
 CLAUDE.local.md
+
+# Publishing targets (credentials / push rights, not shared)
+Makefile.local

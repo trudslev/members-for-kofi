@@ -1,3 +1,9 @@
+# Members for Ko-fi
+#
+# Targets here are the ones anyone working on the plugin can run. Publishing
+# targets need credentials or push rights, so they live in an untracked
+# Makefile.local -- see the bottom of this file.
+
 ifneq ("$(wildcard .env)","")
 include .env
 export
@@ -75,19 +81,20 @@ tested-up-to: test-env-up
 		echo "Updated readme.txt: 'Tested up to: $$current' -> '$$version'"; \
 	fi
 
+# --- Packaging -------------------------------------------------------------
+
 PLUGIN_SLUG:=members-for-kofi
 MAIN_FILE:=members-for-kofi.php
 VERSION:=$(shell grep -E '^ \* Version:' $(MAIN_FILE) | awk '{print $$3}')
-SVN_URL:=https://plugins.svn.wordpress.org/$(PLUGIN_SLUG)
-SVN_DIR:=/tmp/$(PLUGIN_SLUG)-svn
 ZIP_NAME:=$(PLUGIN_SLUG)-$(VERSION).zip
 GIT_BRANCH:=$(shell git rev-parse --abbrev-ref HEAD 2>/dev/null)
-WPORG_USER?=
-WPORG_PASS?=
-SVN_COMMIT_NON_INTERACTIVE?=0
 OUT_DIR?=/tmp
 STAGE_DIR:=$(OUT_DIR)/$(PLUGIN_SLUG)-stage
 ZIP_FULL:=$(OUT_DIR)/$(ZIP_NAME)
+
+.PHONY: version
+version:
+	@echo "$(VERSION)"
 
 .PHONY: ensure-main
 ensure-main:
@@ -131,72 +138,6 @@ release: .releaseignore
 	rm -rf $(STAGE_DIR)
 	@echo "Created artifact: $(ZIP_FULL)"
 
-# Create and push git tag (v<version>) – only on main
-.PHONY: git-tag
-git-tag: ensure-main
-	@if git rev-parse -q --verify refs/tags/v$(VERSION) >/dev/null; then echo "Tag v$(VERSION) already exists"; exit 1; fi
-	@if ! grep -q "Stable tag: $(VERSION)" readme.txt; then echo "Stable tag mismatch in readme.txt (expected $(VERSION))"; exit 1; fi
-	git tag -a v$(VERSION) -m "Release $(VERSION)"
-	git push origin v$(VERSION)
-	@echo "Created and pushed tag v$(VERSION)"
-
-# Full release pipeline: package + git tag (main only)
-.PHONY: full-release
-full-release: release git-tag
-	@echo "Full release (package + tag) complete for $(VERSION)"
-
-# Optional GitHub release (requires gh CLI & authenticated). Uses zip built by release.
-.PHONY: github-release
-github-release: release git-tag
-	@if ! command -v gh >/dev/null; then echo 'gh CLI not installed – skipping GitHub release.'; exit 0; fi
-	@if gh release view v$(VERSION) >/dev/null 2>&1; then echo 'GitHub release already exists for v$(VERSION)'; exit 0; fi
-	@echo "Creating GitHub release v$(VERSION)"
-	gh release create v$(VERSION) $(ZIP_FULL) --title "v$(VERSION)" --notes "Release $(VERSION)"
-	@echo "GitHub release v$(VERSION) published."
-
-.PHONY: deploy-svn
-deploy-svn: release
-	@echo "Deploying $(PLUGIN_SLUG) $(VERSION) to WordPress.org SVN (production vendor only)"
-	@if [ -z "$(shell command -v svn)" ]; then echo 'svn not found'; exit 1; fi
-	rm -rf $(SVN_DIR)
-	svn checkout $(SVN_URL) $(SVN_DIR)
-	# Prepare clean trunk source (without local vendor or dev files)
-	rsync -a --delete --exclude-from='.releaseignore' ./ $(SVN_DIR)/trunk/
-	# Build production autoloader inside trunk
-	@if [ -f composer.json ]; then \
-	  cp composer.json $(SVN_DIR)/trunk/; \
-	  [ -f composer.lock ] && cp composer.lock $(SVN_DIR)/trunk/ || true; \
-	  cd $(SVN_DIR)/trunk && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
-	  rm -f $(SVN_DIR)/trunk/composer.json $(SVN_DIR)/trunk/composer.lock; \
-	fi
-	# Copy WordPress.org assets to /assets (not inside trunk)
-	@if [ -d .wordpress-org/assets ]; then \
-		mkdir -p $(SVN_DIR)/assets; \
-		rsync -a .wordpress-org/assets/ $(SVN_DIR)/assets/; \
-	fi
-	# SVN adds
-	cd $(SVN_DIR) && svn update && svn add --force trunk/* > /dev/null 2>&1 || true
-	cd $(SVN_DIR) && if [ -d assets ]; then svn add --force assets/* > /dev/null 2>&1 || true; fi
-	# Recreate tag from trunk
-	cd $(SVN_DIR) && svn rm tags/$(VERSION) > /dev/null 2>&1 || true
-	cd $(SVN_DIR) && svn copy trunk tags/$(VERSION)
-	cd $(SVN_DIR) && svn add --force tags/$(VERSION) > /dev/null 2>&1 || true
-	cd $(SVN_DIR) && svn stat
-	@echo "Review svn status. If correct: make commit-svn"
-
-.PHONY: commit-svn
-commit-svn:
-	@echo "Committing to WordPress.org SVN..."
-	@if [ ! -d $(SVN_DIR) ]; then echo 'Run make deploy-svn first'; exit 1; fi
-	cd $(SVN_DIR) && \
-	USER_ARG="" && PASS_ARG="" && NI_ARGS="" && \
-	if [ -n "$(WPORG_USER)" ]; then USER_ARG="--username $(WPORG_USER)"; fi; \
-	if [ -n "$(WPORG_PASS)" ]; then PASS_ARG="--password $(WPORG_PASS) --no-auth-cache"; fi; \
-	if [ "$(SVN_COMMIT_NON_INTERACTIVE)" = "1" ]; then NI_ARGS="--non-interactive"; fi; \
-	echo "svn commit using $$USER_ARG $$NI_ARGS"; \
-	svn commit $$USER_ARG $$PASS_ARG $$NI_ARGS -m "Release $(VERSION)" || true
-	@echo "Done."
-
 # --- Local WordPress test site (manual QA) ---
 
 site-pull:
@@ -219,156 +160,46 @@ site-reset: site-down site-pull
 	docker compose -f docker-compose.site.yml up -d db wordpress
 	bash bin/site-init.sh
 
-# ---------------- Release / Distribution Extras ----------------
+# --- Help ------------------------------------------------------------------
 
-# Infer plugin version from main plugin header unless explicitly passed: make release VERSION=1.2.3
-PLUGIN_MAIN ?= members-for-kofi.php
-VERSION ?= $(shell grep -E '^ \* Version:' $(PLUGIN_MAIN) | awk '{print $$3}')
-SLUG ?= members-for-kofi
-WP_SVN_URL ?= https://plugins.svn.wordpress.org/$(SLUG)
-TMP_SVN_DIR ?= /tmp/$(SLUG)-svn
+.DEFAULT_GOAL := help
 
-.PHONY: version tag dist svn-checkout svn-stage svn-tag svn-deploy help
-
-version:
-	@echo "Detected version: $(VERSION)"
-
-tag: version
-	@git rev-parse --is-inside-work-tree >/dev/null 2>&1 || (echo "Not a git repo" && exit 1)
-	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then echo "Tag v$(VERSION) already exists"; else \
-	  echo "Creating git tag v$(VERSION)"; \
-	  git tag -a v$(VERSION) -m "Release v$(VERSION)"; \
-	  git push origin v$(VERSION); \
-	fi
-
-# Create an unpacked production-ready directory in ./dist (not zipped)
-dist: .releaseignore
-	@echo "Building dist directory (production files)..."
-	rm -rf dist
-	mkdir dist
-	rsync -av --exclude-from='.releaseignore' ./ dist/
-	cp composer.json dist/ 2>/dev/null || true
-	@[ -f composer.lock ] && cp composer.lock dist/ || true
-	cd dist && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
-	rm -f dist/composer.json dist/composer.lock
-	@echo "Dist directory ready at ./dist"
-
-svn-checkout:
-	@echo "Checking out (or updating) SVN working copy at $(TMP_SVN_DIR)"
-	@if [ -d "$(TMP_SVN_DIR)/.svn" ]; then \
-	  svn update $(TMP_SVN_DIR); \
-	else \
-	  rm -rf $(TMP_SVN_DIR); \
-	  svn checkout --depth immediates $(WP_SVN_URL) $(TMP_SVN_DIR); \
-	  svn update $(TMP_SVN_DIR)/trunk $(TMP_SVN_DIR)/tags; \
-	fi
-
-# Stage new trunk contents (does not commit). Depends on dist.
-svn-stage: dist svn-checkout
-	@echo "Staging dist contents into SVN trunk"
-	rm -rf $(TMP_SVN_DIR)/trunk/*
-	cp -R dist/* $(TMP_SVN_DIR)/trunk/
-	cd $(TMP_SVN_DIR) && svn add --force trunk/* >/dev/null 2>&1 || true
-	cd $(TMP_SVN_DIR) && svn status
-	@echo "Run 'make svn-tag' to copy trunk to tags/$(VERSION) then 'make svn-deploy' to commit."
-
-svn-tag: svn-stage
-	@echo "Copying trunk to tag directory $(VERSION)"
-	cd $(TMP_SVN_DIR) && \
-	  if [ -d tags/$(VERSION) ]; then echo "Tag $(VERSION) already exists in SVN"; else svn copy trunk tags/$(VERSION); fi
-	cd $(TMP_SVN_DIR) && svn status
-
-svn-deploy:
-	@echo "Committing trunk (and tag if present) to WordPress.org SVN"
-	cd $(TMP_SVN_DIR) && svn commit -m "Release $(VERSION)" || true
-	@echo "If authentication failed, rerun 'make svn-deploy' after caching credentials."
-
+.PHONY: help
 help:
-	@echo "Available targets:"
-	@echo "  build / test / test-case               - CI & testing"
-	@echo "  release                                - Create production zip (no composer.json)"
-	@echo "  dist                                   - Create production directory for SVN"
-	@echo "  version                                - Show inferred version"
-	@echo "  tag                                    - Create & push git tag v$(VERSION)"
-	@echo "  svn-checkout                           - Checkout/update WP.org SVN working copy"
-	@echo "  svn-stage                              - Copy dist into SVN trunk"
-	@echo "  svn-tag                                - Copy trunk to tags/$(VERSION)"
-	@echo "  svn-deploy                             - Commit staged changes to SVN"
-	@echo "Variables (override with VAR=value): VERSION ($(VERSION)), SLUG ($(SLUG)), WP_SVN_URL ($(WP_SVN_URL))"
-
-# ---------------- Release / Distribution Extras ----------------
-
-# Infer plugin version from main plugin header unless explicitly passed: make release VERSION=1.2.3
-PLUGIN_MAIN ?= members-for-kofi.php
-VERSION ?= $(shell grep -E '^ \* Version:' $(PLUGIN_MAIN) | awk '{print $$3}')
-SLUG ?= members-for-kofi
-WP_SVN_URL ?= https://plugins.svn.wordpress.org/$(SLUG)
-TMP_SVN_DIR ?= /tmp/$(SLUG)-svn
-
-.PHONY: version tag dist svn-checkout svn-stage svn-tag svn-deploy help
-
-version:
-	@echo "Detected version: $(VERSION)"
-
-tag: version
-	@git rev-parse --is-inside-work-tree >/dev/null 2>&1 || (echo "Not a git repo" && exit 1)
-	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then echo "Tag v$(VERSION) already exists"; else \
-	  echo "Creating git tag v$(VERSION)"; \
-	  git tag -a v$(VERSION) -m "Release v$(VERSION)"; \
-	  git push origin v$(VERSION); \
-	fi
-
-# Create an unpacked production-ready directory in ./dist (not zipped)
-dist: .releaseignore
-	@echo "Building dist directory (production files)..."
-	rm -rf dist
-	mkdir dist
-	rsync -av --exclude-from='.releaseignore' ./ dist/
-	cp composer.json dist/ 2>/dev/null || true
-	@[ -f composer.lock ] && cp composer.lock dist/ || true
-	cd dist && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader
-	rm -f dist/composer.json dist/composer.lock
-	@echo "Dist directory ready at ./dist"
-
-svn-checkout:
-	@echo "Checking out (or updating) SVN working copy at $(TMP_SVN_DIR)"
-	@if [ -d "$(TMP_SVN_DIR)/.svn" ]; then \
-	  svn update $(TMP_SVN_DIR); \
+	@echo "Members for Ko-fi $(VERSION)"
+	@echo ""
+	@echo "Testing"
+	@echo "  test                 Run the WordPress-loaded suite inside the container"
+	@echo "  test-case TEST=Name  Run tests matching a filter"
+	@echo "  test-integration     Drive the site over real HTTP, as Ko-fi does"
+	@echo "  test-all             Both suites"
+	@echo "  test-shell           Shell inside the WordPress container"
+	@echo ""
+	@echo "Test environment (newest WordPress, disposable)"
+	@echo "  test-env-up          Boot and provision the test site"
+	@echo "  test-env-down        Stop it"
+	@echo "  test-env-reset       Wipe the site and database, then rebuild"
+	@echo "  wp-version           WordPress version currently under test"
+	@echo "  tested-up-to         Sync readme.txt 'Tested up to' with that version"
+	@echo ""
+	@echo "Local QA site (separate from the test environment)"
+	@echo "  site-up / site-down / site-shell / site-reset"
+	@echo ""
+	@echo "Packaging"
+	@echo "  version              Print the version from the plugin header"
+	@echo "  release              Build a production zip (dev files and dev vendor excluded)"
+	@echo "                       Override the output directory with OUT_DIR=/some/path"
+	@echo ""
+	@if [ -f Makefile.local ]; then \
+	  echo "Publishing (from Makefile.local)"; \
+	  echo "  git-tag              Tag v$(VERSION) and push it (clean main only)"; \
+	  echo "  github-release       Package, tag and publish a GitHub release"; \
+	  echo "  deploy-svn           Stage a WordPress.org SVN release for review"; \
+	  echo "  commit-svn           Commit the staged SVN release"; \
 	else \
-	  rm -rf $(TMP_SVN_DIR); \
-	  svn checkout --depth immediates $(WP_SVN_URL) $(TMP_SVN_DIR); \
-	  svn update $(TMP_SVN_DIR)/trunk $(TMP_SVN_DIR)/tags; \
+	  echo "Publishing targets are not loaded (no Makefile.local present)."; \
 	fi
 
-# Stage new trunk contents (does not commit). Depends on dist.
-svn-stage: dist svn-checkout
-	@echo "Staging dist contents into SVN trunk"
-	rm -rf $(TMP_SVN_DIR)/trunk/*
-	cp -R dist/* $(TMP_SVN_DIR)/trunk/
-	cd $(TMP_SVN_DIR) && svn add --force trunk/* >/dev/null 2>&1 || true
-	cd $(TMP_SVN_DIR) && svn status
-	@echo "Run 'make svn-tag' to copy trunk to tags/$(VERSION) then 'make svn-deploy' to commit."
-
-svn-tag: svn-stage
-	@echo "Copying trunk to tag directory $(VERSION)"
-	cd $(TMP_SVN_DIR) && \
-	  if [ -d tags/$(VERSION) ]; then echo "Tag $(VERSION) already exists in SVN"; else svn copy trunk tags/$(VERSION); fi
-	cd $(TMP_SVN_DIR) && svn status
-
-svn-deploy:
-	@echo "Committing trunk (and tag if present) to WordPress.org SVN"
-	cd $(TMP_SVN_DIR) && svn commit -m "Release $(VERSION)" || true
-	@echo "If authentication failed, rerun 'make svn-deploy' after caching credentials."
-
-help:
-	@echo "Available targets:"
-	@echo "  build / test / test-case               - CI & testing"
-	@echo "  release                                - Create production zip (no composer.json)"
-	@echo "  dist                                   - Create production directory for SVN"
-	@echo "  version                                - Show inferred version"
-	@echo "  tag                                    - Create & push git tag v$(VERSION)"
-	@echo "  svn-checkout                           - Checkout/update WP.org SVN working copy"
-	@echo "  svn-stage                              - Copy dist into SVN trunk"
-	@echo "  svn-tag                                - Copy trunk to tags/$(VERSION)"
-	@echo "  svn-deploy                             - Commit staged changes to SVN"
-	@echo "Variables (override with VAR=value): VERSION ($(VERSION)), SLUG ($(SLUG)), WP_SVN_URL ($(WP_SVN_URL))"
+# Publishing targets need push rights or WordPress.org credentials, so they are
+# kept out of the repository. Optional: make works without this file.
+-include Makefile.local

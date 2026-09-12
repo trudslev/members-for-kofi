@@ -241,6 +241,10 @@ Uses separate `docker-compose.site.yml` for manual QA testing.
 # Package plugin ZIP (excludes dev files via .releaseignore)
 make release
 
+# The targets below live in Makefile.local, which is untracked because they
+# need push rights or WordPress.org credentials. `make help` says whether they
+# are loaded. Without that file the repository still builds and tests normally.
+
 # Create git tag v{VERSION} (requires clean main branch), then push it
 make git-tag
 
@@ -251,6 +255,9 @@ make github-release
 make deploy-svn
 make commit-svn WPORG_USER=username WPORG_PASS=password
 ```
+
+`make release` builds `vendor/` fresh with `--no-dev` into a staging directory
+rather than copying the working tree's, which carries the whole test toolchain.
 
 Version extracted from `members-for-kofi.php` header (`* Version: 1.1.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
