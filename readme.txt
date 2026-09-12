@@ -131,6 +131,7 @@ their WordPress user and clear the logs from the Logs tab.
 * Fix: The log viewer no longer errors when an unexpected "rows per page" value is used.
 * Fix: A role that no longer exists on the site is no longer assigned to a supporter.
 * Fix: The "Enable Expiry" setting is now respected. Turning it off previously had no effect, and roles were still removed after the configured number of days.
+* Fix: Searching the Request log now searches the request log. It previously returned results from the User log instead, whichever tab you were on.
 * Security: The Ko-fi verification token is never stored in the request log, and is removed from the stored request details.
 * Security: The verification token is no longer written to PHP error logs.
 * Security: The webhook address now accepts only the request type Ko-fi actually sends, and ignores an address that keeps failing, so it cannot be used to fill your database. Genuine donations are never affected.

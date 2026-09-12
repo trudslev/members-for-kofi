@@ -212,6 +212,7 @@ function membersForKofiInit() {
                     action: 'members_for_kofi_filter_logs',
                     search: (searchInput?.value || '').trim(),
                     paged: 1,
+                    log_type: document.querySelector('#log-type-selector')?.value || 'user',
                     rows_per_page: document.getElementById('rows_per_page')?.value || 10,
                     _ajax_nonce: kofiMembers.filterNonce,
                 });
@@ -226,6 +227,7 @@ function membersForKofiInit() {
                     action: 'members_for_kofi_filter_logs',
                     search: '',
                     paged: 1,
+                    log_type: document.querySelector('#log-type-selector')?.value || 'user',
                     rows_per_page: document.getElementById('rows_per_page')?.value || 10,
                     _ajax_nonce: kofiMembers.filterNonce,
                 });

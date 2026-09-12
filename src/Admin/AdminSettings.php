@@ -755,11 +755,19 @@ class AdminSettings {
 
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
+		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
 		$rows_per_page = $this->sanitize_rows_per_page(
 			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
 		);
+
 		ob_start();
-		$this->render_user_logs_table( $paged, $rows_per_page, $search );
+		// Every other log handler honours log_type; this one always rendered the
+		// user log, so searching from the Request tab answered with user rows.
+		if ( 'request' === $log_type ) {
+			$this->render_request_logs_table( $paged, $rows_per_page, $search );
+		} else {
+			$this->render_user_logs_table( $paged, $rows_per_page, $search );
+		}
 		$content = ob_get_clean();
 		wp_send_json_success( $content );
 	}

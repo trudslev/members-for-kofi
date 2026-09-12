@@ -470,4 +470,250 @@ class AdminAjaxTest extends IntegrationTestCase {
 		$this->assertTrue( $response['json']['success'] ?? false, 'Administrator should be able to clear logs.' );
 		$this->assertSame( 0, $this->request_log_count(), 'Clearing logs must actually empty the table.' );
 	}
+
+	// ------------------------------------------------------------------
+	// What the log viewer actually returns, not merely that it responds
+	// ------------------------------------------------------------------
+
+	/**
+	 * Seeds one row into each log table, keyed to a unique address.
+	 *
+	 * @param string $marker Label to make the rows findable.
+	 * @return string The email used.
+	 */
+	private function seed_both_logs( string $marker ): string {
+		$email = $this->donor_email( $marker );
+
+		$php = 'global $wpdb;'
+			. ' $wpdb->insert( $wpdb->prefix . "members_for_kofi_user_logs", array('
+			. ' "user_id" => 0, "email" => ' . var_export( $email, true ) . ','
+			. ' "action" => "Donation received", "role" => "subscriber",'
+			. ' "timestamp" => current_time( "mysql" ) ) );'
+			. ' $wpdb->insert( $wpdb->prefix . "members_for_kofi_request_logs", array('
+			. ' "email" => ' . var_export( $email, true ) . ', "tier_name" => "Gold",'
+			. ' "payload" => "{}", "status_code" => 200, "success" => 1,'
+			. ' "timestamp" => current_time( "mysql" ) ) );'
+			. ' echo "ok";';
+
+		self::wp( 'eval ' . escapeshellarg( $php ) );
+
+		return $email;
+	}
+
+	/**
+	 * The HTML returned by the log viewer, for one AJAX action.
+	 *
+	 * @param array  $fields Request fields.
+	 * @param string $jar    Cookie jar.
+	 * @return string
+	 */
+	private function rendered_table( array $fields, string $jar ): string {
+		$response = $this->ajax( $fields, $jar );
+
+		$this->assertSame( 200, $response['status'] );
+		$this->assertTrue( $response['json']['success'] ?? false, 'Expected the action to succeed.' );
+
+		return (string) ( $response['json']['data'] ?? '' );
+	}
+
+	/**
+	 * Searching narrows the result to the matching row.
+	 *
+	 * Asserting only on a 200 would pass just as well if search were ignored
+	 * and the full table came back every time.
+	 */
+	public function test_search_actually_filters_the_log(): void {
+		$wanted   = $this->seed_both_logs( 'ajax-search-hit' );
+		$unwanted = $this->seed_both_logs( 'ajax-search-miss' );
+
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$html = $this->rendered_table(
+			array(
+				'action'        => 'members_for_kofi_filter_logs',
+				'search'        => $wanted,
+				'paged'         => 1,
+				'log_type'      => 'user',
+				'rows_per_page' => 25,
+				'_ajax_nonce'   => $nonces['filterNonce'],
+			),
+			$jar
+		);
+
+		$this->assertStringContainsString( $wanted, $html, 'The matching row should be shown' );
+		$this->assertStringNotContainsString( $unwanted, $html, 'A non-matching row must be filtered out' );
+	}
+
+	/**
+	 * Searching from the Request tab returns request rows, not user rows.
+	 *
+	 * The handler ignored log_type entirely and always rendered the user log,
+	 * so a search performed on the Request tab answered with the wrong
+	 * table. Every other log action honoured log_type, which is what made it
+	 * hard to notice.
+	 */
+	public function test_search_respects_the_selected_log_type(): void {
+		$email = $this->seed_both_logs( 'ajax-search-type' );
+
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$html = $this->rendered_table(
+			array(
+				'action'        => 'members_for_kofi_filter_logs',
+				'search'        => $email,
+				'paged'         => 1,
+				'log_type'      => 'request',
+				'rows_per_page' => 25,
+				'_ajax_nonce'   => $nonces['filterNonce'],
+			),
+			$jar
+		);
+
+		// "Tier Name" is a request-log column; "User ID" is a user-log column.
+		$this->assertStringContainsString( 'Tier Name', $html, 'Expected the request log table' );
+		$this->assertStringNotContainsString( 'User ID', $html, 'Got the user log table instead' );
+	}
+
+	/**
+	 * Switching log type returns the other table.
+	 */
+	public function test_switching_log_type_returns_the_other_table(): void {
+		$this->seed_both_logs( 'ajax-switch' );
+
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$request_html = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_switch_log_type',
+				'log_type'    => 'request',
+				'_ajax_nonce' => $nonces['switchLogTypeNonce'],
+			),
+			$jar
+		);
+
+		$user_html = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_switch_log_type',
+				'log_type'    => 'user',
+				'_ajax_nonce' => $nonces['switchLogTypeNonce'],
+			),
+			$jar
+		);
+
+		$this->assertStringContainsString( 'Tier Name', $request_html );
+		$this->assertStringNotContainsString( 'User ID', $request_html );
+
+		$this->assertStringContainsString( 'User ID', $user_html );
+		$this->assertStringNotContainsString( 'Tier Name', $user_html );
+	}
+
+	/**
+	 * The page size asked for is the page size returned.
+	 */
+	public function test_rows_per_page_changes_how_many_rows_come_back(): void {
+		for ( $i = 0; $i < 12; $i++ ) {
+			$this->seed_both_logs( "ajax-rows-{$i}" );
+		}
+
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$ten = $this->rendered_table(
+			array(
+				'action'        => 'members_for_kofi_update_rows_per_page',
+				'log_type'      => 'user',
+				'rows_per_page' => 10,
+				'_ajax_nonce'   => $nonces['rowsPerPageNonce'],
+			),
+			$jar
+		);
+
+		$twenty_five = $this->rendered_table(
+			array(
+				'action'        => 'members_for_kofi_update_rows_per_page',
+				'log_type'      => 'user',
+				'rows_per_page' => 25,
+				'_ajax_nonce'   => $nonces['rowsPerPageNonce'],
+			),
+			$jar
+		);
+
+		$this->assertSame( 10, substr_count( $ten, '<tr' ) - 1, 'Expected ten data rows plus the header row' );
+		$this->assertGreaterThan(
+			substr_count( $ten, '<tr' ),
+			substr_count( $twenty_five, '<tr' ),
+			'Asking for 25 rows should return more rows than asking for 10'
+		);
+	}
+
+	/**
+	 * Page two is not page one.
+	 *
+	 * The existing pagination test asserts only that the request succeeds, which
+	 * it would even if every page returned identical rows.
+	 */
+	public function test_pagination_returns_a_different_page(): void {
+		for ( $i = 0; $i < 12; $i++ ) {
+			$this->seed_both_logs( "ajax-page-{$i}" );
+		}
+
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$page_one = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_pagination',
+				'log_type'    => 'user',
+				'paged'       => 1,
+				'_ajax_nonce' => $nonces['paginationNonce'],
+			),
+			$jar
+		);
+
+		$page_two = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_pagination',
+				'log_type'    => 'user',
+				'paged'       => 2,
+				'_ajax_nonce' => $nonces['paginationNonce'],
+			),
+			$jar
+		);
+
+		$this->assertNotSame( $page_one, $page_two, 'Page two must not repeat page one' );
+	}
+
+	/**
+	 * Refreshing shows a row written after the page was first rendered.
+	 */
+	public function test_refresh_returns_current_data(): void {
+		$jar    = $this->login( 'admin', 'admin' );
+		$nonces = $this->admin_nonces( $jar );
+
+		$before = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_refresh_logs',
+				'log_type'    => 'user',
+				'_ajax_nonce' => $nonces['refreshNonce'],
+			),
+			$jar
+		);
+
+		$email = $this->seed_both_logs( 'ajax-refresh' );
+
+		$after = $this->rendered_table(
+			array(
+				'action'      => 'members_for_kofi_refresh_logs',
+				'log_type'    => 'user',
+				'_ajax_nonce' => $nonces['refreshNonce'],
+			),
+			$jar
+		);
+
+		$this->assertStringNotContainsString( $email, $before );
+		$this->assertStringContainsString( $email, $after, 'A refresh must pick up rows written since the last render' );
+	}
 }
