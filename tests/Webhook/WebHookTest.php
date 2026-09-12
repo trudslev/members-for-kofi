@@ -53,7 +53,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ? sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) : 'fallback-token',
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(),
 				'only_subscriptions' => false,
 			)
@@ -86,7 +86,7 @@ class WebhookTest extends TestCase {
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token' => isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ? sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) : 'fallback-token',
+				'verification_token' => 'fallback-token',
 			)
 		);
 
@@ -102,7 +102,7 @@ class WebhookTest extends TestCase {
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ? sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ) : 'fallback-token',
+				'verification_token'      => 'fallback-token',
 				'email'                   => 'user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -126,7 +126,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_accepts_valid_token(): void {
 		$webhook  = new Webhook();
-		$token    = sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' );
+		$token    = 'fallback-token';
 		$response = $webhook->handle( null, array( 'verification_token' => $token ) );
 		$this->assertNotEquals( 403, $response->get_status() );
 	}
@@ -136,7 +136,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_rejects_missing_payload(): void {
 		$webhook  = new Webhook();
-		$token    = sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' );
+		$token    = 'fallback-token';
 		$response = $webhook->handle( null, array( 'verification_token' => $token ) );
 		$this->assertSame( 400, $response->get_status() );
 	}
@@ -154,7 +154,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(),
 				'only_subscriptions' => true,
 			)
@@ -164,7 +164,7 @@ class WebhookTest extends TestCase {
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'email'                   => 'user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => false,
@@ -196,7 +196,7 @@ class WebhookTest extends TestCase {
 		$response = $mock_webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'email'                   => 'fail-user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -213,7 +213,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array( 'Gold' => 'subscriber' ),
 				'only_subscriptions' => false,
 			)
@@ -223,7 +223,7 @@ class WebhookTest extends TestCase {
 		$response = $webhook->handle(
 			null,
 			array(
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'email'                   => 'tier-user@example.com',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
@@ -246,7 +246,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(), // No mapping.
 				'only_subscriptions' => false,
 			)
@@ -260,7 +260,7 @@ class WebhookTest extends TestCase {
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'tier_name'               => 'NoSuchTier',
 				'is_subscription_payment' => true,
 			)
@@ -280,7 +280,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(), // No matching tier.
 				'default_role'       => 'contributor',
 				'only_subscriptions' => false,
@@ -295,7 +295,7 @@ class WebhookTest extends TestCase {
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'tier_name'               => 'NonExistentTier',
 				'is_subscription_payment' => true,
 			)
@@ -317,7 +317,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
@@ -333,7 +333,7 @@ class WebhookTest extends TestCase {
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
 			)
@@ -360,7 +360,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold', 'Silver' ),
 					'role' => array( 'editor', 'author' ),
@@ -376,7 +376,7 @@ class WebhookTest extends TestCase {
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'tier_name'               => 'Gold',
 				'is_subscription_payment' => true,
 			)
@@ -398,7 +398,7 @@ class WebhookTest extends TestCase {
 		update_option(
 			'kofi_members_options',
 			array(
-				'verification_token' => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
@@ -415,7 +415,7 @@ class WebhookTest extends TestCase {
 			null,
 			array(
 				'email'                   => $email,
-				'verification_token'      => sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'fallback-token' ),
+				'verification_token'      => 'fallback-token',
 				'tier_name'               => 'Platinum',
 				'is_subscription_payment' => true,
 			)

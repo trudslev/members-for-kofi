@@ -35,9 +35,6 @@ if ( file_exists( dirname( __DIR__ ) . '/.env' ) ) {
 	$dotenv->load();
 
 	// Also set as putenv for getenv() compatibility.
-	if ( isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ) {
-		putenv( 'KOFI_VERIFICATION_TOKEN=' . $_ENV['KOFI_VERIFICATION_TOKEN'] );
-	}
 	if ( isset( $_ENV['WP_TEST_SITE_URL'] ) ) {
 		putenv( 'WP_TEST_SITE_URL=' . $_ENV['WP_TEST_SITE_URL'] );
 	}
@@ -79,6 +76,31 @@ $members_for_kofi_site_url = ( false === $members_for_kofi_site_url || '' === $m
 $members_for_kofi_token    = ( false === $members_for_kofi_token || '' === $members_for_kofi_token )
 	? 'test-verification-token'
 	: $members_for_kofi_token;
+
+// This suite posts real donations and creates real users. Pointed at a live
+// site it would write to it, so anything that is not obviously a local test
+// site has to be asked for explicitly.
+//
+// The guard exists because it already nearly happened: .env carried a
+// WP_TEST_SITE_URL left over from when the suite did run against a remote site,
+// and `make test-integration` was the only thing standing between that value
+// and a live target. Running PHPUnit directly would have used it.
+// parse_url(), not wp_parse_url(): this bootstrap runs on the host, outside
+// WordPress, so the wrapper is not loaded.
+$members_for_kofi_host = (string) parse_url( $members_for_kofi_site_url, PHP_URL_HOST );
+
+if ( ! in_array( $members_for_kofi_host, array( 'localhost', '127.0.0.1', '::1', 'host.docker.internal' ), true )
+	&& '1' !== getenv( 'KOFI_ALLOW_REMOTE_TESTS' ) ) {
+	fwrite(
+		STDERR,
+		"\nRefusing to run the integration suite against '{$members_for_kofi_site_url}'.\n\n"
+		. "These tests post real Ko-fi donations and create real WordPress users,\n"
+		. "so they are only safe against a disposable local site. Use\n"
+		. "`make test-integration`, which targets the local Docker environment.\n\n"
+		. "If you genuinely mean to target that host, set KOFI_ALLOW_REMOTE_TESTS=1.\n\n"
+	);
+	exit( 1 );
+}
 
 echo '==> Target site: ' . $members_for_kofi_site_url . "\n";
 echo '==> Test token:  ' . $members_for_kofi_token . "\n";

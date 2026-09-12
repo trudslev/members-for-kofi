@@ -51,7 +51,7 @@ class WebhookIntegrationTest extends TestCase {
 			$dotenv->load();
 		}
 
-		$this->valid_token = sanitize_text_field( $_ENV['KOFI_VERIFICATION_TOKEN'] ?? 'test-token-12345' );
+		$this->valid_token = 'test-token-12345';
 
 		// Set up default plugin options.
 		update_option(
