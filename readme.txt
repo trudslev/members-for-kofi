@@ -40,6 +40,35 @@ Members for Ko-fi is a WordPress plugin that integrates with Ko-fi to manage Wor
 2. Go to **Settings > Webhooks**.
 3. Add your WordPress site's webhook URL (e.g., `https://your-site.com/webhook-kofi`).
 
+= How do I test my setup without waiting for a real payment? =
+
+Ko-fi's webhook page has test buttons that send a real request to your site. Use them, then open **Members for Ko-fi > Logs** and check both the Request log and the User log.
+
+The buttons all use the same fake supporter, **Jo Example** (`jo.example@example.com`), so a successful test creates a real WordPress user with that address. Delete it when you are done.
+
+What each button sends:
+
+* **Send single tip test** - a one-off tip of 3.00 USD, with no tier.
+* **Send first monthly test** - a first subscription payment of 3.00 USD, with no tier.
+* **Send membership tier test** - a renewal subscription payment of 5.00 USD for the tier named **Bronze**.
+
+= I ran a test and nothing happened. Why? =
+
+Three settings decide whether a test does anything, and all three are working as intended when a test appears to be ignored:
+
+* **"Only process subscription payments" is enabled.** The *single tip* test is not a subscription payment, so it is ignored on purpose. Use the *first monthly* or *membership tier* test instead. The Request log will still show the request arriving with a 200, and the User log will say "Ignored non-subscription payment".
+* **You use tier mappings but have no matching tier.** Only the *membership tier* test sends a tier name, and the name it sends is **Bronze**. If you want that test to assign a role, add a mapping for a tier called `Bronze`. Without it, the plugin falls back to your default role.
+* **You have no default role set.** The *single tip* and *first monthly* tests send no tier at all, so they can only ever use the default role. If that is empty and you rely purely on tier mappings, the supporter is still created as a WordPress user and the donation is still logged - only the role is skipped. The User log will show "User created" and "Donation received" but no "Role assigned".
+
+If the Request log is completely empty after a test, the request never reached WordPress. Check that the webhook URL in Ko-fi matches your site exactly, then open that URL in a browser:
+
+* `{"error":"Method not allowed"}` is the **correct** response. The endpoint only accepts the POST requests Ko-fi sends, and refuses anything else so that crawlers cannot fill your logs. Seeing this means the address is working.
+* A "Not Found" or 404 page means the endpoint is not registered. Re-save your permalinks under **Settings > Permalinks** to rebuild the rule, then try again.
+
+= A test says "Unauthorized" or "Missing verification token". What now? =
+
+The verification token in **Members for Ko-fi > Settings** must match the one on Ko-fi's webhook page exactly. If you have ever regenerated it on Ko-fi, paste the new value into the plugin as well - Ko-fi will not warn you that the two no longer match, and real payments will be rejected the same way the test was.
+
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.
 
