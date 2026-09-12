@@ -45,6 +45,36 @@ The plugin records user-related events (donations, role assignments) and webhook
 
 For development or troubleshooting, if `WP_DEBUG` is enabled, a minimal debug logger writes contextual messages to the PHP error log.
 
+## Testing Your Setup
+
+Ko-fi's webhook page has test buttons that send a real request to your site. Use them, then open **Members for Ko-fi → Logs** and check both the Request log and the User log.
+
+All three buttons use the same fake supporter, **Jo Example** (`jo.example@example.com`), so a successful test creates a real WordPress user with that address. Delete it when you are done.
+
+| Button | Subscription? | Tier sent | Amount |
+| --- | --- | --- | --- |
+| Send single tip test | No | *none* | 3.00 USD |
+| Send first monthly test | Yes (first payment) | *none* | 3.00 USD |
+| Send membership tier test | Yes (renewal) | `Bronze` | 5.00 USD |
+
+**If you use tier-to-role mappings, `Bronze` is the only tier name any test button sends.** Add a mapping for a tier called `Bronze` if you want the tier test to assign a role. The other two buttons send no tier at all, so they can only ever reach your default role.
+
+### A test ran but nothing seemed to happen
+
+Usually the plugin is behaving correctly:
+
+- **"Only Subscriptions" is enabled.** The single tip test is not a subscription payment, so it is ignored on purpose. The Request log still shows a `200`, and the User log says `Ignored non-subscription payment`. Use one of the subscription tests instead.
+- **No matching tier, and no default role.** The supporter is still created and the donation still logged — only the role is skipped. Look for `User created` and `Donation received` without a following `Role assigned`.
+
+### Checking the endpoint itself
+
+If the Request log is empty after a test, the request never reached WordPress. Open your webhook URL in a browser:
+
+- `{"error":"Method not allowed"}` is **correct**. The endpoint accepts only the POST requests Ko-fi sends and refuses everything else, so crawlers cannot fill your logs.
+- A **404** means the endpoint is not registered. Re-save permalinks under **Settings → Permalinks** to rebuild the rewrite rule.
+
+If a test returns `Unauthorized` or `Missing verification token`, the token in the plugin settings no longer matches the one on Ko-fi's webhook page. Regenerating it on Ko-fi does not update WordPress, and real payments are rejected exactly the same way.
+
 ## Security
 
 This plugin follows WordPress security best practices and implements multiple layers of protection:
