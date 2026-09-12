@@ -100,13 +100,19 @@ This plugin follows WordPress security best practices and implements multiple la
 
 ### Security Audits
 
-This plugin has undergone security auditing against:
+This plugin is audited against:
 - WordPress Plugin Handbook - Security Best Practices
 - WordPress Coding Standards (WPCS)
 - OWASP Top 10 Web Application Security Risks
 - WordPress VIP Code Review Standards
 
-For detailed security documentation, see [`SECURITY_AUDIT_REPORT.md`](SECURITY_AUDIT_REPORT.md).
+Findings are fixed before release and described in the changelog in plain terms.
+The audit write-ups themselves are not published: they describe how to exploit
+the versions the findings applied to, and those versions stay in use on sites
+that have not updated yet.
+
+Found something? Please report it privately rather than opening a public issue,
+so there is time to ship a fix before the details are public.
 
 ## Development
 
