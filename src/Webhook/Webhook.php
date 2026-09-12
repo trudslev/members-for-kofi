@@ -58,6 +58,23 @@ class Webhook {
 	public const DISALLOWED_ROLES = array( 'administrator' );
 
 	/**
+	 * Failed attempts from one IP before the endpoint starts shedding them.
+	 *
+	 * Only failures count, and an authenticated request is never throttled,
+	 * so a real donation cannot be rejected no matter what else is going on.
+	 *
+	 * @var int
+	 */
+	public const FAILURE_LIMIT = 30;
+
+	/**
+	 * How long failures are remembered, in seconds.
+	 *
+	 * @var int
+	 */
+	public const FAILURE_WINDOW = 300;
+
+	/**
 	 * Constructor for the Webhook class.
 	 */
 	public function __construct() {}
@@ -77,15 +94,24 @@ class Webhook {
 		$request_logger = new RequestLogger();
 		$payload_data   = array();
 
+		// Only a real HTTP hit on the endpoint has a method to check; a caller
+		// handing us $data, or the REST route, has already been vouched for.
+		$from_http_body = ( null === $data && ! $request instanceof \WP_REST_Request );
+
+		// Ko-fi always POSTs. A crawler following the URL, or someone opening it
+		// in a browser, used to reach the logger and write a row -- which is how
+		// an unauthenticated GET could grow the table unboundedly.
+		if ( $from_http_body && ! $this->is_post_request() ) {
+			return new \WP_REST_Response( array( 'error' => 'Method not allowed' ), 405 );
+		}
+
 		if ( null === $data ) {
 			if ( $request instanceof \WP_REST_Request ) {
 				$data = $request->get_json_params();
 			} else {
 				parse_str( file_get_contents( 'php://input' ), $payload );
 				if ( ! is_array( $payload ) || ! array_key_exists( 'data', $payload ) ) {
-					$response = new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
-					$request_logger->log_request( $payload_data, 400, false, 'Invalid payload' );
-					return $response;
+					return $this->reject( $request_logger, 400, 'Invalid payload' );
 				}
 				// No wp_unslash() here: WordPress only adds slashes to the
 				// superglobals, never to php://input. Stripping them would eat the
@@ -96,9 +122,7 @@ class Webhook {
 				$raw_json = trim( $raw_json );
 				$data     = json_decode( $raw_json, true );
 				if ( JSON_ERROR_NONE !== json_last_error() || ! is_array( $data ) ) {
-					$response = new \WP_REST_Response( array( 'error' => 'Malformed JSON payload' ), 400 );
-					$request_logger->log_request( $payload_data, 400, false, 'Malformed JSON payload' );
-					return $response;
+					return $this->reject( $request_logger, 400, 'Malformed JSON payload' );
 				}
 				// Recursively sanitize text fields (shallow sanitize for scalar values).
 				array_walk_recursive(
@@ -113,13 +137,26 @@ class Webhook {
 		}
 
 		if ( ! is_array( $data ) ) {
-			$response = new \WP_REST_Response( array( 'error' => 'Invalid payload' ), 400 );
-			$request_logger->log_request( $payload_data, 400, false, 'Invalid payload' );
-			return $response;
+			return $this->reject( $request_logger, 400, 'Invalid payload' );
 		}
 
 		// Store payload for logging.
 		$payload_data = $data;
+
+		// A request that has not authenticated must not be able to put content
+		// of its choosing into the database: the payload column is TEXT, so the
+		// old code let anyone push ~64 KB per request into the log table for as
+		// long as they liked. Failures are recorded without their payload, and
+		// shed entirely once the same IP has produced too many.
+		if ( ! $this->is_authenticated( $data ) ) {
+			$rejection = $this->process( $data );
+
+			return $this->reject(
+				$request_logger,
+				$rejection->get_status(),
+				$rejection->get_data()['error'] ?? 'Unauthorized'
+			);
+		}
 
 		// Process the request and log the result.
 		$response = $this->process( $data );
@@ -132,6 +169,139 @@ class Webhook {
 		$request_logger->log_request( $payload_data, $status_code, $success, $error );
 
 		return $response;
+	}
+
+	/**
+	 * Reports whether the request carries the configured verification token.
+	 *
+	 * Constant-time by design: hash_equals() compares every byte, where !==
+	 * short-circuits at the first
+	 * difference, which leaks the length of a correct prefix through timing.
+	 * The is_string() guard is not cosmetic -- hash_equals() raises a TypeError
+	 * on anything else, and casting an array warns, so a payload sending a
+	 * non-string token would otherwise break a public endpoint.
+	 *
+	 * @param array $body The decoded webhook payload.
+	 * @return bool
+	 */
+	private function is_authenticated( array $body ): bool {
+		$options  = get_option( 'members_for_kofi_options' );
+		$expected = $options['verification_token'] ?? '';
+
+		if ( empty( $expected ) || empty( $body['verification_token'] ) || ! is_string( $body['verification_token'] ) ) {
+			return false;
+		}
+
+		return hash_equals( $expected, $body['verification_token'] );
+	}
+
+	/**
+	 * Reports whether the current HTTP request used POST.
+	 *
+	 * @return bool
+	 */
+	private function is_post_request(): bool {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading the HTTP method, not form input.
+		$method = isset( $_SERVER['REQUEST_METHOD'] )
+			? strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) )
+			: '';
+
+		return 'POST' === $method;
+	}
+
+	/**
+	 * Records and answers a request that did not authenticate.
+	 *
+	 * The payload is deliberately not passed to the logger: this request is
+	 * unauthenticated, so nothing it sent should be persisted. Once an IP is
+	 * over the failure limit nothing is written at all and the request is shed
+	 * with a 429.
+	 *
+	 * @param RequestLogger $logger Logger to record the attempt with.
+	 * @param int           $status HTTP status the request earned.
+	 * @param string        $error  Error message to return and log.
+	 * @return \WP_REST_Response
+	 */
+	private function reject( RequestLogger $logger, int $status, string $error ): \WP_REST_Response {
+		if ( $this->too_many_recent_failures() ) {
+			return new \WP_REST_Response( array( 'error' => 'Too many requests' ), 429 );
+		}
+
+		$this->record_failure();
+
+		$logger->log_request( array(), $status, false, $error );
+
+		return new \WP_REST_Response( array( 'error' => $error ), $status );
+	}
+
+	/**
+	 * Transient key holding the recent failure count for an address.
+	 *
+	 * @param string $ip Client address.
+	 * @return string
+	 */
+	public static function failure_transient_key( string $ip ): string {
+		return 'members_for_kofi_wh_fail_' . md5( $ip );
+	}
+
+	/**
+	 * Clears the recorded failures for an address.
+	 *
+	 * @param string $ip Client address. Defaults to the current caller.
+	 * @return void
+	 */
+	public static function reset_failure_count( string $ip = '' ): void {
+		delete_transient( self::failure_transient_key( $ip ) );
+	}
+
+	/**
+	 * The address the current request came from.
+	 *
+	 * @return string
+	 */
+	private function client_ip(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading the connecting address, not form input.
+		return isset( $_SERVER['REMOTE_ADDR'] )
+			? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
+			: '';
+	}
+
+	/**
+	 * The number of failures tolerated before shedding requests.
+	 *
+	 * Filterable so a site behind a proxy that collapses client addresses, or
+	 * one that wants the endpoint wide open, can tune it. Zero disables it.
+	 *
+	 * @return int
+	 */
+	private function failure_limit(): int {
+		return (int) apply_filters( 'members_for_kofi_webhook_failure_limit', self::FAILURE_LIMIT );
+	}
+
+	/**
+	 * Reports whether this address has failed too often recently.
+	 *
+	 * @return bool
+	 */
+	private function too_many_recent_failures(): bool {
+		$limit = $this->failure_limit();
+
+		if ( $limit <= 0 ) {
+			return false;
+		}
+
+		return (int) get_transient( self::failure_transient_key( $this->client_ip() ) ) >= $limit;
+	}
+
+	/**
+	 * Counts one failure against the calling address.
+	 *
+	 * @return void
+	 */
+	private function record_failure(): void {
+		$key = self::failure_transient_key( $this->client_ip() );
+
+		set_transient( $key, (int) get_transient( $key ) + 1, self::FAILURE_WINDOW );
 	}
 
 	/**
@@ -148,8 +318,7 @@ class Webhook {
 			return new \WP_REST_Response( array( 'error' => 'Missing verification token' ), 400 );
 		}
 
-		$verification_token = $options['verification_token'] ?? '';
-		if ( empty( $verification_token ) || $body['verification_token'] !== $verification_token ) {
+		if ( ! $this->is_authenticated( $body ) ) {
 			DebugLogger::warning( 'Invalid verification token' );
 			return new \WP_REST_Response( array( 'error' => 'Unauthorized' ), 401 );
 		}
@@ -309,6 +478,18 @@ class Webhook {
 		if ( in_array( $role, self::DISALLOWED_ROLES, true ) ) {
 			DebugLogger::error(
 				'Security: Blocked attempt to assign disallowed role via webhook',
+				array( 'role' => $role )
+			);
+			return null;
+		}
+
+		// A mapping can outlive the role it points at, through a typo or a role
+		// deleted later. add_role() would write the unknown slug into the user's
+		// capability meta: harmless today, but it starts granting capabilities
+		// the moment anything creates a role with that slug.
+		if ( ! wp_roles()->is_role( $role ) ) {
+			DebugLogger::warning(
+				'Refused to assign a role that does not exist',
 				array( 'role' => $role )
 			);
 			return null;

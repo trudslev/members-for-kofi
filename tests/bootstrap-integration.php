@@ -33,7 +33,7 @@ require_once __DIR__ . '/Integration/IntegrationTestCase.php';
 if ( file_exists( dirname( __DIR__ ) . '/.env' ) ) {
 	$dotenv = Dotenv\Dotenv::createImmutable( dirname( __DIR__ ) );
 	$dotenv->load();
-	
+
 	// Also set as putenv for getenv() compatibility.
 	if ( isset( $_ENV['KOFI_VERIFICATION_TOKEN'] ) ) {
 		putenv( 'KOFI_VERIFICATION_TOKEN=' . $_ENV['KOFI_VERIFICATION_TOKEN'] );
@@ -58,6 +58,27 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 	}
 }
 
+// Clear any webhook failure counters left over from an earlier run: the
+// endpoint sheds requests from an address that keeps failing, and two suites
+// inside the same five-minute window would otherwise collide.
+$members_for_kofi_compose = dirname( __DIR__ ) . '/docker-compose.test.yml';
+shell_exec(
+	sprintf(
+		'docker compose -f %s run --rm -T wpcli wp eval %s 2>/dev/null',
+		escapeshellarg( $members_for_kofi_compose ),
+		escapeshellarg( 'global $wpdb; $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%_transient_%members_for_kofi_wh_fail_%\'" );' )
+	)
+);
+
 echo "==> Integration tests bootstrap complete.\n";
-echo '==> Target site: ' . ( getenv( 'WP_TEST_SITE_URL' ) ?: 'http://localhost:8101' ) . "\n";
-echo '==> Test token:  ' . ( getenv( 'KOFI_TEST_TOKEN' ) ?: 'test-verification-token' ) . "\n";
+$members_for_kofi_site_url = getenv( 'WP_TEST_SITE_URL' );
+$members_for_kofi_token    = getenv( 'KOFI_TEST_TOKEN' );
+$members_for_kofi_site_url = ( false === $members_for_kofi_site_url || '' === $members_for_kofi_site_url )
+	? 'http://localhost:8101'
+	: $members_for_kofi_site_url;
+$members_for_kofi_token    = ( false === $members_for_kofi_token || '' === $members_for_kofi_token )
+	? 'test-verification-token'
+	: $members_for_kofi_token;
+
+echo '==> Target site: ' . $members_for_kofi_site_url . "\n";
+echo '==> Test token:  ' . $members_for_kofi_token . "\n";

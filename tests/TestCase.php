@@ -10,6 +10,7 @@ namespace MembersForKofi\Tests;
 
 use MembersForKofi\Logging\RequestLogger;
 use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Webhook\Webhook;
 use PHPUnit\Framework\TestCase as PHPUnitTestCase;
 
 /**
@@ -50,6 +51,12 @@ abstract class TestCase extends PHPUnitTestCase {
 		delete_option( 'members_for_kofi_options' );
 
 		$this->user_id_watermark = $this->max_user_id();
+
+		// The webhook sheds requests from an address that keeps failing. Tests
+		// deliberately send bad tokens, so without this the failures accumulate
+		// across the suite and later tests start seeing 429s depending on the
+		// order they happen to run in.
+		Webhook::reset_failure_count();
 	}
 
 	/**

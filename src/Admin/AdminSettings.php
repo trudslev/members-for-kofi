@@ -39,6 +39,20 @@ use function get_editable_roles;
  * @package MembersForKofi
  */
 class AdminSettings {
+
+	/**
+	 * Page sizes the log viewer offers.
+	 *
+	 * @var array<int>
+	 */
+	public const ROWS_PER_PAGE_OPTIONS = array( 10, 25, 50, 100 );
+
+	/**
+	 * Page size used when none is given, or when an invalid one is.
+	 *
+	 * @var int
+	 */
+	public const DEFAULT_ROWS_PER_PAGE = 10;
 	/**
 	 * Resolve the current logs table name, handling legacy name mismatch.
 	 *
@@ -363,9 +377,9 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_default_role_field(): void {
-		$options  = get_option( 'members_for_kofi_options', array() );
-		$roles    = get_editable_roles();
-		$selected = $options['default_role'] ?? array();
+		$options          = get_option( 'members_for_kofi_options', array() );
+		$roles            = get_editable_roles();
+		$selected         = $options['default_role'] ?? array();
 		$disallowed_roles = Webhook::DISALLOWED_ROLES;
 
 		echo '<select name="members_for_kofi_options[default_role]">';
@@ -508,6 +522,7 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_logs_tab( ?int $paged = null, int $rows_per_page = 10, string $log_type = 'user' ): void {
+		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
 		global $wpdb;
 
 		// Determine which table to query based on log type.
@@ -648,8 +663,9 @@ class AdminSettings {
 		}
 
 		// Check if the logs table exists and clear it.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Checking for the plugin's own table; a cached answer could be wrong.
 		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Truncating plugin-owned table.
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Clearing the plugin's own log table on admin request; the cached count is deleted below.
 			$wpdb->query( 'DELETE FROM `' . esc_sql( $table_name ) . '`' );
 			delete_transient( $transient_key ); // Clear the cached total logs count.
 
@@ -673,6 +689,32 @@ class AdminSettings {
 	 *
 	 * @return void
 	 */
+	/**
+	 * Clamps a requested page size to one the log viewer actually offers.
+	 *
+	 * Anything the picker cannot produce is rejected rather than squeezed
+	 * into range: 0 reached `ceil( $total_logs / 0 )` and killed the page
+	 * with a DivisionByZeroError, and a huge value went straight into LIMIT
+	 * and loaded the entire table into memory.
+	 *
+	 * @param mixed $raw Untrusted page size, typically straight from $_POST.
+	 * @return int One of ROWS_PER_PAGE_OPTIONS.
+	 */
+	public function sanitize_rows_per_page( $raw ): int {
+		$value = absint( $raw );
+
+		if ( ! in_array( $value, self::ROWS_PER_PAGE_OPTIONS, true ) ) {
+			return self::DEFAULT_ROWS_PER_PAGE;
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Handles the AJAX request that changes the log table's page size.
+	 *
+	 * @return void
+	 */
 	public function handle_update_rows_per_page(): void {
 		check_ajax_referer( 'members_for_kofi_update_rows_per_page', '_ajax_nonce' );
 		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX rows per page update request' );
@@ -682,7 +724,9 @@ class AdminSettings {
 			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
 		}
 
-		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
+		$rows_per_page = $this->sanitize_rows_per_page(
+			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
+		);
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
 
@@ -711,7 +755,9 @@ class AdminSettings {
 
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
+		$rows_per_page = $this->sanitize_rows_per_page(
+			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
+		);
 		ob_start();
 		$this->render_user_logs_table( $paged, $rows_per_page, $search );
 		$content = ob_get_clean();
@@ -731,7 +777,9 @@ class AdminSettings {
 		}
 
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
+		$rows_per_page = $this->sanitize_rows_per_page(
+			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
+		);
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		ob_start();
 		$this->render_user_logs_table( $paged, $rows_per_page, $search );
@@ -754,7 +802,9 @@ class AdminSettings {
 		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
 		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
 		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$rows_per_page = isset( $_POST['rows_per_page'] ) ? absint( $_POST['rows_per_page'] ) : 10;
+		$rows_per_page = $this->sanitize_rows_per_page(
+			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
+		);
 
 		ob_start();
 		if ( 'request' === $log_type ) {
@@ -778,6 +828,7 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_user_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
+		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
 		global $wpdb;
 
 		$table_name   = $this->get_logs_table_name();
@@ -800,8 +851,10 @@ class AdminSettings {
 				// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
 				$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
 			} else {
+				// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
 				$query      = 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '` ' . $where_sql;
 				$total_logs = (int) $wpdb->get_var( $wpdb->prepare( $query, $params ) );
+				// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 			}
 			if ( ! empty( $wpdb->last_error ) ) {
 				\MembersForKofi\Logging\DebugLogger::error(
@@ -831,7 +884,7 @@ class AdminSettings {
 			);
 			// Debug removed (noise).
 		} else {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Filtered query.
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
 			$query = 'SELECT `timestamp`, `user_id`, `email`, `action`, `role` FROM `' . esc_sql( $table_name ) . '` ' . $where_sql . ' ORDER BY `timestamp` DESC LIMIT %d OFFSET %d';
 			$logs  = $wpdb->get_results(
 				$wpdb->prepare(
@@ -840,6 +893,7 @@ class AdminSettings {
 				),
 				ARRAY_A
 			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 			// Debug removed (noise).
 		}
 		if ( empty( $logs ) && (int) $total_logs > 0 ) {
@@ -894,7 +948,7 @@ class AdminSettings {
 				<input type="hidden" name="tab" value="user_logs">
 				<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
 				<select name="rows_per_page" id="rows_per_page" style="width: auto;">
-					<?php foreach ( array( 10, 25, 50, 100 ) as $option ) : ?>
+					<?php foreach ( self::ROWS_PER_PAGE_OPTIONS as $option ) : ?>
 						<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
 							<?php echo esc_html( $option ); ?>
 						</option>
@@ -932,6 +986,7 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_request_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
+		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
 		global $wpdb;
 
 		$table_name   = $wpdb->prefix . 'members_for_kofi_request_logs';
@@ -951,19 +1006,21 @@ class AdminSettings {
 
 		if ( false === $total_logs ) {
 			if ( empty( $params ) ) {
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
 				$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
 			} else {
+				// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
 				$query      = 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '` ' . $where_sql;
 				$total_logs = (int) $wpdb->get_var( $wpdb->prepare( $query, $params ) );
+				// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 			}
 			if ( $use_cache ) {
 				set_transient( 'members_for_kofi_total_request_logs', $total_logs, MINUTE_IN_SECONDS );
 			}
 		}
 
-// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Plugin-owned table query.
 		if ( empty( $params ) ) {
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Unfiltered query on a plugin-owned table.
 			$logs = $wpdb->get_results(
 				$wpdb->prepare(
 					'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ORDER BY `timestamp` DESC LIMIT %d OFFSET %d',
@@ -973,6 +1030,7 @@ class AdminSettings {
 				ARRAY_A
 			);
 		} else {
+			// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
 			$query = 'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ' . $where_sql . ' ORDER BY `timestamp` DESC LIMIT %d OFFSET %d';
 			$logs  = $wpdb->get_results(
 				$wpdb->prepare(
@@ -981,6 +1039,7 @@ class AdminSettings {
 				),
 				ARRAY_A
 			);
+			// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
 		}
 
 		$total_pages = ceil( $total_logs / $rows_per_page );
@@ -1037,7 +1096,7 @@ class AdminSettings {
 <input type="hidden" name="tab" value="logs">
 <label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
 <select name="rows_per_page" id="rows_per_page" style="width: auto;">
-		<?php foreach ( array( 10, 25, 50, 100 ) as $option ) : ?>
+		<?php foreach ( self::ROWS_PER_PAGE_OPTIONS as $option ) : ?>
 <option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
 			<?php echo esc_html( $option ); ?>
 </option>

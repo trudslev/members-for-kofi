@@ -480,4 +480,51 @@ class DonationWebhookTest extends IntegrationTestCase {
 		$this->assertSame( 401, $response['status'], 'A forged token must be rejected.' );
 		$this->assertSame( array(), $this->roles_for( $email ), 'No user may be created for a rejected donation.' );
 	}
+
+	/**
+	 * A plain GET on the endpoint is turned away and writes nothing.
+	 *
+	 * Ko-fi always POSTs. Before this, any crawler following the endpoint URL
+	 * reached the request logger and inserted a row per visit -- an
+	 * unauthenticated way to grow the table indefinitely.
+	 */
+	public function test_get_request_is_rejected_and_not_logged(): void {
+		$before = $this->request_log_row_count();
+
+		$curl = curl_init( $this->base_url . '/webhook-kofi' );
+		curl_setopt_array(
+			$curl,
+			array(
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_TIMEOUT        => 30,
+				// WordPress answers the slashless form with a canonical 301 to
+				// /webhook-kofi/ before the handler ever runs, so follow it the
+				// way a crawler would; the 405 is on the other side.
+				CURLOPT_FOLLOWLOCATION => true,
+			)
+		);
+		curl_exec( $curl );
+		$status = (int) curl_getinfo( $curl, CURLINFO_HTTP_CODE );
+		unset( $curl );
+
+		$this->assertSame( 405, $status, 'A GET on the webhook endpoint must be refused' );
+		$this->assertSame(
+			$before,
+			$this->request_log_row_count(),
+			'A GET must not write a request log row'
+		);
+	}
+
+	/**
+	 * Counts rows in the request log via WP-CLI.
+	 *
+	 * @return int
+	 */
+	private function request_log_row_count(): int {
+		return (int) self::wp(
+			'eval ' . escapeshellarg(
+				'global $wpdb; echo (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$wpdb->prefix}members_for_kofi_request_logs" );'
+			)
+		);
+	}
 }

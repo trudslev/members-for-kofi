@@ -68,14 +68,6 @@ class WebhookIntegrationTest extends TestCase {
 				'role_expiry_days'   => 35,
 			)
 		);
-
-	}
-
-	/**
-	 * Cleans up the test environment after each test.
-	 */
-	protected function tearDown(): void {
-		parent::tearDown();
 	}
 
 	// ==================== VALID INPUT TESTS ====================
@@ -177,8 +169,10 @@ class WebhookIntegrationTest extends TestCase {
 		$this->assertSame( 400, $response->get_status() );
 		$this->assertStringContainsString( 'Missing verification token', $response->get_data()['error'] );
 
-		// Verify request was logged as failure.
-		$this->assert_request_logged( 'missing@example.com', 400, false );
+		// The attempt is still recorded, but nothing it sent is kept: an
+		// unauthenticated caller must not be able to choose what goes into the
+		// database.
+		$this->assert_failure_logged_without_content( 400, 'missing@example.com' );
 	}
 
 	/**
@@ -198,8 +192,8 @@ class WebhookIntegrationTest extends TestCase {
 		$this->assertSame( 401, $response->get_status() );
 		$this->assertStringContainsString( 'Unauthorized', $response->get_data()['error'] );
 
-		// Verify request was logged.
-		$this->assert_request_logged( 'invalid-token@example.com', 401, false );
+		// Recorded, but stripped of the caller's content -- see above.
+		$this->assert_failure_logged_without_content( 401, 'invalid-token@example.com' );
 	}
 
 	/**
@@ -355,9 +349,18 @@ class WebhookIntegrationTest extends TestCase {
 		$webhook = new Webhook();
 
 		$test_cases = array(
-			array( 'tier' => 'Gold', 'expected_role' => 'editor' ),
-			array( 'tier' => 'Silver', 'expected_role' => 'author' ),
-			array( 'tier' => 'Bronze', 'expected_role' => 'contributor' ),
+			array(
+				'tier'          => 'Gold',
+				'expected_role' => 'editor',
+			),
+			array(
+				'tier'          => 'Silver',
+				'expected_role' => 'author',
+			),
+			array(
+				'tier'          => 'Bronze',
+				'expected_role' => 'contributor',
+			),
 		);
 
 		foreach ( $test_cases as $index => $test_case ) {
@@ -421,13 +424,58 @@ class WebhookIntegrationTest extends TestCase {
 	// ==================== MALFORMED INPUT TESTS ====================
 
 	/**
-	 * Test webhook handles null payload gracefully.
+	 * Test webhook handles a null payload on a POST gracefully.
 	 */
 	public function test_reject_null_payload(): void {
-		$webhook  = new Webhook();
-		$response = $webhook->handle( null, null );
+		$original                  = $_SERVER['REQUEST_METHOD'] ?? null;
+		$_SERVER['REQUEST_METHOD'] = 'POST';
 
-		$this->assertSame( 400, $response->get_status() );
+		try {
+			$webhook  = new Webhook();
+			$response = $webhook->handle( null, null );
+
+			$this->assertSame( 400, $response->get_status() );
+		} finally {
+			if ( null === $original ) {
+				unset( $_SERVER['REQUEST_METHOD'] );
+			} else {
+				$_SERVER['REQUEST_METHOD'] = $original;
+			}
+		}
+	}
+
+	/**
+	 * Anything other than POST is turned away before the database is touched.
+	 *
+	 * A crawler following the endpoint URL used to insert a row per visit.
+	 */
+	public function test_non_post_request_is_rejected_without_logging(): void {
+		global $wpdb;
+
+		$original                  = $_SERVER['REQUEST_METHOD'] ?? null;
+		$_SERVER['REQUEST_METHOD'] = 'GET';
+
+		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table.
+		$before = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table_name}`" );
+
+		try {
+			$webhook  = new Webhook();
+			$response = $webhook->handle( null, null );
+
+			$this->assertSame( 405, $response->get_status() );
+		} finally {
+			if ( null === $original ) {
+				unset( $_SERVER['REQUEST_METHOD'] );
+			} else {
+				$_SERVER['REQUEST_METHOD'] = $original;
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table.
+		$after = (int) $wpdb->get_var( "SELECT COUNT(*) FROM `{$table_name}`" );
+
+		$this->assertSame( $before, $after, 'A non-POST request must not write a log row' );
 	}
 
 	/**
@@ -597,5 +645,36 @@ class WebhookIntegrationTest extends TestCase {
 		$this->assertNotNull( $log, "Request log not found for: {$email}" );
 		$this->assertEquals( $status_code, $log->status_code, "Status code mismatch for: {$email}" );
 		$this->assertEquals( $success ? 1 : 0, $log->success, "Success flag mismatch for: {$email}" );
+	}
+
+	/**
+	 * Asserts the latest log row records a failure holding none of the caller's
+	 * content.
+	 *
+	 * @param int    $status_code Status the attempt should have earned.
+	 * @param string $absent      Caller-supplied value that must not be stored.
+	 * @return void
+	 */
+	private function assert_failure_logged_without_content( int $status_code, string $absent ): void {
+		global $wpdb;
+
+		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table.
+		$log = $wpdb->get_row( "SELECT * FROM `{$table_name}` ORDER BY id DESC LIMIT 1" );
+
+		$this->assertNotNull( $log, 'Expected the failed attempt to be recorded' );
+		$this->assertEquals( $status_code, $log->status_code, 'Status code mismatch' );
+		$this->assertEquals( 0, $log->success, 'Expected the attempt to be marked unsuccessful' );
+		$this->assertSame(
+			'',
+			(string) $log->email,
+			'An unauthenticated request must not have its email stored'
+		);
+		$this->assertStringNotContainsString(
+			$absent,
+			(string) $log->payload,
+			'An unauthenticated request must not have its payload stored'
+		);
 	}
 }
