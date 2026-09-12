@@ -1,5 +1,7 @@
 # Members for Ko-fi for WordPress
 
+[![CI](https://github.com/trudslev/members-for-kofi/actions/workflows/ci.yml/badge.svg)](https://github.com/trudslev/members-for-kofi/actions/workflows/ci.yml)
+
 **Members for Ko-fi** is a WordPress plugin that integrates with [Ko-fi](https://ko-fi.com) to manage members based on donation tiers. It automatically creates users, assigns roles, and manages expiration of those roles based on webhook payloads received from Ko-fi.
 
 ## Features

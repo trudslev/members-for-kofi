@@ -93,11 +93,22 @@ $WP_CLI rewrite structure '/%postname%/' --hard >/dev/null
 $WP_CLI rewrite flush --hard >/dev/null
 
 echo ">>> Verifying the webhook endpoint responds..."
-status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${SITE_URL}/webhook-kofi" --data 'data={}' || echo 000)
-if [ "$status" = "000" ] || [ "$status" = "404" ]; then
-  echo "ERROR: webhook endpoint not reachable (HTTP ${status})." >&2
-  exit 1
-fi
+# Retry rather than checking once: on a cold machine (a CI runner, or the first
+# boot after a reset) the web server can still be starting even though WP-CLI
+# has already finished installing, and a single probe would fail the run for a
+# reason that resolves itself a second later.
+attempt=0
+status=000
+until [ "$status" != "000" ] && [ "$status" != "404" ]; do
+  status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${SITE_URL}/webhook-kofi" --data 'data={}' || echo 000)
+  attempt=$((attempt + 1))
+  if [ "$attempt" -ge 30 ]; then
+    echo "ERROR: webhook endpoint not reachable (HTTP ${status})." >&2
+    $COMPOSE logs --tail=50 wordpress >&2 || true
+    exit 1
+  fi
+  [ "$status" = "000" ] || [ "$status" = "404" ] && sleep 2
+done
 
 cat <<EOF
 

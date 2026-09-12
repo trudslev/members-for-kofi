@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The test environment always pulls the newest WordPress, so a weekly run
+  # reports a core release that breaks the plugin before a user does.
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch makes an in-flight run irrelevant.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Coding standards
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: WordPress coding standards
+        run: ./vendor/bin/phpcs
+
+      # The plugin header promises "Requires PHP: 7.4". This is what keeps that
+      # promise honest -- PHP 8 syntax would otherwise fatal on a 7.4 host with
+      # nothing in the suite noticing.
+      - name: PHP 7.4 compatibility
+        run: >
+          ./vendor/bin/phpcs -p src/ members-for-kofi.php
+          --standard=PHPCompatibilityWP
+          --runtime-set testVersion 7.4-
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    # Pulling WordPress and provisioning the site dominates the runtime.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+          tools: composer
+
+      - name: Install dependencies
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      # Boots a real WordPress in Docker. The suites run against an actual
+      # install, not a mocked one, so there is no way to skip this.
+      - name: Start the test environment
+        run: make test-env-up
+
+      - name: Report the WordPress version under test
+        run: make wp-version
+
+      - name: Unit and WordPress tests
+        run: make test
+
+      # The only suite that exercises raw request body parsing, which is where
+      # two production bugs have hidden.
+      - name: HTTP integration tests
+        run: make test-integration
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.test.yml logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: make test-env-down
