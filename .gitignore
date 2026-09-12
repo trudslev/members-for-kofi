@@ -37,3 +37,6 @@ release/*
 reports/
 # Claude Code local settings (agent permissions, session-specific)
 .claude/
+
+# Personal working preferences (not shared with contributors)
+CLAUDE.local.md

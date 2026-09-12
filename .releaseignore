@@ -12,6 +12,6 @@ README.md
 release
 bin
 reports
-CLAUDE.md
+CLAUDE*.md
 phpcs.xml
 vendor

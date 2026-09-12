@@ -241,7 +241,7 @@ Uses separate `docker-compose.site.yml` for manual QA testing.
 # Package plugin ZIP (excludes dev files via .releaseignore)
 make release
 
-# Create git tag {VERSION} (no v prefix, requires clean main branch)
+# Create git tag v{VERSION} (requires clean main branch), then push it
 make git-tag
 
 # Full release: package + tag + GitHub release (requires gh CLI)
@@ -253,33 +253,6 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 ```
 
 Version extracted from `members-for-kofi.php` header (`* Version: 1.1.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
-
-### Ready To Commit Workflow
-
-When the user says `Ready to commit`, always do the following in order:
-
-1. Run tests and fix any failures before committing.
-2. Choose the next version number based on change type:
-   - Patch: bug fixes only (e.g., `1.1.0` -> `1.1.1`)
-   - Minor: new features, backward compatible (e.g., `1.1.0` -> `1.2.0`)
-   - Major: breaking changes (e.g., `1.1.0` -> `2.0.0`)
-3. Update `Tested up to:` in `readme.txt` by running `make tested-up-to`.
-   - This reads the WordPress version from the test environment (the `wordpress:latest` image
-     the suite actually ran against) and rewrites the header — never hand-edit it.
-   - `make release` warns if the two have drifted apart.
-4. Update project instructions if any section is outdated.
-5. Update `Release History` for users in clear, non-technical language:
-   - Add version entry to `README.md` with summary of changes
-   - Add changelog section to `readme.txt` with detailed changes
-   - Update `Stable tag` in `readme.txt` to match new version
-6. Update version number in `members-for-kofi.php` plugin header (`* Version: X.Y.Z`).
-7. Commit all relevant changes with a meaningful commit message.
-8. Create a git tag using the version number without a `v` prefix (example: `1.2.0`).
-9. Push commit(s) and tag(s) to `origin`.
-10. Ask the user if they want to deploy now.
-11. If the user confirms deployment, deploy to WordPress.org SVN using the Makefile workflow:
-    - `make deploy-svn`
-    - `make commit-svn WPORG_USER=username WPORG_PASS=password`
 
 ## Key Files & Patterns
 
@@ -389,29 +362,3 @@ Use `DebugLogger::info()`, `DebugLogger::error()` - only outputs when `WP_DEBUG`
 - ❌ Don't bump the schema without a test that fails when the upgrade is missing
 - ❌ Don't use inconsistent option key names - always use `members_for_kofi_options`
 - ❌ Don't mix coding styles - follow WordPress Coding Standards (WPCS) strictly
-
-## Custom Reports
-
-Custom reports (security audits, test summaries, analysis reports) should be placed in the `reports/` directory to keep the root clean and prevent them from being committed to version control.
-
-### Report Directory Rules
-
-- **Location:** All custom reports go in `reports/` directory (created automatically if missing)
-- **Git Handling:** The `reports/` folder is in `.gitignore` - reports are local/temporary only
-- **File Types:** Markdown (`.md`), JSON (`.json`), or text (`.txt`) formats
-- **Naming Convention:** Use descriptive names like `SECURITY_AUDIT_REPORT.md`, `TEST_COVERAGE_REPORT.md`
-- **Cleanup:** Reports can be safely deleted - they are not part of the committed codebase
-
-### Example Report Files
-
-- `reports/SECURITY_AUDIT_REPORT.md` - Comprehensive security audit with findings and CVSS scores
-- `reports/SECURITY_FIXES_SUMMARY.md` - Summary of security fixes implemented
-- `reports/TEST_COVERAGE_REPORT.md` - Test coverage analysis
-- `reports/PERFORMANCE_ANALYSIS.md` - Performance profiling results
-
-### When to Generate Reports
-
-- After major security audits or fixes
-- When significant code changes are made
-- As part of release documentation (but don't commit)
-- For stakeholder communication about code quality
