@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.1.1) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.1.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -72,7 +72,15 @@ This plugin follows these security standards and guidelines:
 - **Nonce verification**: Required for ALL form submissions and AJAX requests - use `wp_verify_nonce()`, `check_admin_referer()`
 - **Role restrictions**: NEVER allow `administrator` role assignment via webhook (`Webhook::DISALLOWED_ROLES`)
 - **Webhook authentication**: ALWAYS validate `verification_token` against stored value before processing
-- **Rate limiting**: Consider implementing rate limiting for webhook endpoint to prevent abuse
+- **Rate limiting**: The webhook endpoint sheds requests from an address that keeps failing
+  (`Webhook::FAILURE_LIMIT` / `FAILURE_WINDOW`, filterable via
+  `members_for_kofi_webhook_failure_limit`). **Only failures are counted and the token is checked
+  before the limit is consulted**, so an authenticated donation is never throttled -- throttling a
+  real Ko-fi payment would silently lose it. Keep that ordering if you touch this code;
+  `HardeningTest::test_a_valid_donation_is_never_throttled` exists to catch its reversal
+- **Unauthenticated requests must not choose what is stored**: only POST reaches the parser, a
+  failed request is logged without its payload, and `RequestLogger::MAX_PAYLOAD_LENGTH` caps what
+  an authenticated one can store
 
 #### Database Security
 
@@ -289,9 +297,52 @@ UserLogger creates custom table `{$wpdb->prefix}members_for_kofi_user_logs` with
 - `id`, `user_id`, `email`, `action`, `role`, `amount`, `currency`, `timestamp`
 
 RequestLogger creates custom table `{$wpdb->prefix}members_for_kofi_request_logs` with columns:
-- `id`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `verification_token`, `payload`, `status_code`, `success`, `error`, `timestamp`
+- `id`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `payload`, `status_code`, `success`, `error`, `timestamp`
+
+**Never store the verification token, in whole or in part.** The 1.1.x development line had a
+`verification_token` column holding the first ten characters of the site's live token on every
+request. It was never displayed and never queried, and no public release shipped it. Schema
+version 3 drops the column, which is what destroys any historic fragments -- only blanking new
+writes would leave every previously logged request still holding part of the secret. The token is also redacted out of the stored `payload` JSON
+and out of `DebugLogger` output.
 
 Both tables are created during plugin activation and dropped on uninstall.
+
+### Database Schema Changes (MANDATORY)
+
+**Every change to the database structure must be able to upgrade a previous version.**
+WordPress fires the activation hook only when a plugin is *activated*, never when it is
+updated in place — so anything that relies on `activate()` alone will never reach an
+existing site. Sites that installed 1.0.x and updated through WordPress.org ended up with
+no `request_logs` table at all, and silently logged nothing, for exactly this reason.
+
+The upgrade path lives in `Plugin::maybe_upgrade()`, hooked on `init` (priority 5) and
+guarded by the `members_for_kofi_db_version` option:
+
+```php
+public const DB_VERSION = '3';
+public const DB_VERSION_OPTION = 'members_for_kofi_db_version';
+```
+
+When changing the schema — adding a table, adding or altering a column — you MUST:
+
+1. **Bump `Plugin::DB_VERSION`.** Nothing upgrades without it; the version comparison is
+   what makes `maybe_upgrade()` do any work.
+2. **Make the change through `dbDelta()`** in the relevant `create_table()` method.
+   `dbDelta` creates missing tables and adds missing columns to existing ones, so it is
+   safe to re-run. Never `DROP` and recreate a table that holds user data.
+3. **Add the new table to `Plugin::install_tables()`** so a fresh install and an upgrade
+   produce the same schema.
+4. **Cover it both ways:**
+   - a unit test in `tests/UpgradeTest.php` that simulates the older install and calls
+     `Plugin::maybe_upgrade()` directly, and
+   - an integration test in `tests/Integration/SchemaUpgradeTest.php` that breaks the
+     schema, makes a **real HTTP request**, and asserts the site healed. Only the
+     integration test proves the upgrade is actually reachable by a visitor.
+5. **Never destroy existing rows.** `test_upgrade_preserves_existing_log_rows` pins this.
+
+Fixtures in `SchemaUpgradeTest` talk to MySQL directly rather than through WP-CLI: booting
+WordPress at all — even with `--skip-plugins` — recreates the table the test needs missing.
 
 ### User Metadata for Expiry
 
@@ -333,6 +384,9 @@ Use `DebugLogger::info()`, `DebugLogger::error()` - only outputs when `WP_DEBUG`
 ### Code Quality Anti-Patterns
 
 - ❌ Don't create filesystem logs (removed in v1.0.0 - use database logging only)
+- ❌ **NEVER add or change a database table without an upgrade path** - `activate()` does not
+  run on plugin updates, so existing sites would never get the change
+- ❌ Don't bump the schema without a test that fails when the upgrade is missing
 - ❌ Don't use inconsistent option key names - always use `members_for_kofi_options`
 - ❌ Don't mix coding styles - follow WordPress Coding Standards (WPCS) strictly
 

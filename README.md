@@ -91,8 +91,7 @@ make test
 
 ## Release History
 
-- **1.1.1**: Critical security hardening with input validation, AJAX authorization, SQL injection prevention, token redaction, and privilege escalation protection. Updated test infrastructure to match production WordPress version.
-- **1.1.0**: Automatic log cleanup, improved admin UI with reorganized settings, request logs viewer, and enhanced logging management.
+- **1.1.0**: Automatic log cleanup, improved admin UI with reorganized settings, and a request logs viewer. Adds an upgrade path so the request log table is created when updating from 1.0.x, stops storing the Ko-fi verification token, hardens the webhook address against abuse, and fixes donation messages being mangled when they contained quotes or accented characters.
 - **1.0.1**: Packaging improvements (production-only vendor build). No functional changes.
 - **1.0.0**: Initial release.
 

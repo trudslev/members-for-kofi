@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.1
+Stable tag: 1.1.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -53,13 +53,6 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 
 == Changelog ==
 
-= 1.1.1 =
-* Security: Fixed critical vulnerabilities including file access protection, capability-based authorization, and SQL injection prevention.
-* Security: Added redaction of sensitive tokens in webhook request logs.
-* Security: Enhanced admin settings authentication to prevent unauthorized access.
-* Security: Strengthened protection against privilege escalation attacks.
-* Improvement: Updated automated test environment to match production WordPress version (6.9.1).
-
 = 1.1.0 =
 * Feature: Added automatic log cleanup with configurable retention period.
 * Feature: Reorganized admin settings page with separate sections for Ko-fi Settings, Role Assignment, and Logging.
@@ -69,6 +62,17 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 * Enhancement: Added daily cron job to automatically delete old logs based on retention settings.
 * Enhancement: Settings now include "Automatically Clear Logs" (default: enabled) and "Number of Days to Keep Logs" (default: 30 days).
 * Improvement: Better organization of settings with clear section headers.
+* Fix: The request log table is now created when the plugin is updated, not only when it is first activated. Without this, updating from 1.0.x would have left the new Request log permanently empty.
+* Fix: Donation messages containing quotes, backslashes or accented characters are no longer mangled, and are stored exactly as they were sent.
+* Fix: Log cleanup now actually deletes old entries. It previously compared dates in two different formats and removed nothing.
+* Fix: When a supporter changes tier, the role from their previous tier is now removed instead of being left in place.
+* Fix: The log viewer no longer errors when an unexpected "rows per page" value is used.
+* Fix: A role that no longer exists on the site is no longer assigned to a supporter.
+* Security: The Ko-fi verification token is never stored in the request log, and is removed from the stored request details.
+* Security: The verification token is no longer written to PHP error logs.
+* Security: The webhook address now accepts only the request type Ko-fi actually sends, and ignores an address that keeps failing, so it cannot be used to fill your database. Genuine donations are never affected.
+* Security: Tokens are compared in a way that does not reveal how much of a guess was correct.
+* Improvement: Automated tests now run against a fresh install of the latest WordPress, including tests that send real donation requests over HTTP.
 
 = 1.0.1 =
 * Build: Adjusted release packaging to exclude dev dependencies and include only production-ready vendor autoloader.
@@ -82,11 +86,8 @@ Yes, the plugin integrates with WordPress's privacy tools to allow exporting and
 
 == Upgrade Notice ==
 
-= 1.1.1 =
-Important security update. All users should update immediately to receive critical security improvements.
-
 = 1.1.0 =
-New features: Automatic log cleanup and improved admin UI. Settings have been reorganized for better clarity.
+New features: automatic log cleanup, a request log viewer and a reorganized settings page. Also includes security hardening and several fixes. Your existing settings are kept.
 
 = 1.0.1 =
 Maintenance release: improved packaging only. No action required.
