@@ -226,6 +226,16 @@ class Plugin {
 
 		// Remove the request logs table.
 		RequestLogger::drop_table();
+
+		// Remove the per-user tracking meta. The tables and the option were
+		// already being cleaned up, but these two keys were left on every
+		// supporter the plugin had ever touched.
+		//
+		// The roles themselves are deliberately left alone: the site owner gave
+		// those out, and silently stripping people's access because a plugin was
+		// removed would be a much worse surprise than a stale meta row.
+		delete_metadata( 'user', 0, 'kofi_role_assigned_at', '', true );
+		delete_metadata( 'user', 0, 'kofi_donation_assigned_role', '', true );
 	}
 
 	/**

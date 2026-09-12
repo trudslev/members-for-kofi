@@ -179,6 +179,18 @@ Coding standards are enforced with PHPCS against the WordPress ruleset:
 ./vendor/bin/phpcbf    # auto-fix
 ```
 
+Two further checks belong to a release rather than a commit:
+
+```bash
+make pot           # regenerate the translation template from source
+make plugin-check  # run WordPress.org's Plugin Check against the built package
+```
+
+`make plugin-check` builds the release zip, installs it into a disposable
+WordPress and runs the same automated review WordPress.org performs. It
+deliberately checks the *package* rather than the working tree, which contains
+plenty of files that never ship.
+
 Publishing targets (git tagging, GitHub releases, WordPress.org SVN) need push
 rights or credentials and live in an untracked `Makefile.local`, so they are not
 part of the repository. Everything above works without it.

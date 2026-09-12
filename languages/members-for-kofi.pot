@@ -1,222 +1,320 @@
-# Copyright (C) 2025 Sune Adelowo Trudslev
-# This file is distributed under the GPL-2.0-or-later.
+# Copyright (C) 2026 Sune Adelowo Trudslev
+# This file is distributed under the GPL-3.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Members for Ko-fi 1.0.0\n"
+"Project-Id-Version: Members for Ko-fi 1.1.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/members-for-kofi\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2025-07-30T05:15:45+00:00\n"
+"POT-Creation-Date: 2026-09-12T06:32:34+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
-"X-Generator: WP-CLI 2.6.0\n"
+"X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: members-for-kofi\n"
 
 #. Plugin Name of the plugin
-#: src/Plugin.php:135
-#: src/Plugin.php:136
+#: members-for-kofi.php
+#: src/Plugin.php:238
+#: src/Plugin.php:239
 msgid "Members for Ko-fi"
 msgstr ""
 
 #. Plugin URI of the plugin
+#: members-for-kofi.php
 msgid "https://github.com/trudslev/members-for-kofi"
 msgstr ""
 
 #. Description of the plugin
+#: members-for-kofi.php
 msgid "Integrate with Ko-fi to manage WordPress users or roles via webhook."
 msgstr ""
 
 #. Author of the plugin
+#: members-for-kofi.php
 msgid "Sune Adelowo Trudslev"
 msgstr ""
 
 #. Author URI of the plugin
+#: members-for-kofi.php
 msgid "https://foodgeek.io"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:77
-#: src/Admin/AdminSettings.php:446
-msgid "General Settings"
+#: src/Admin/AdminSettings.php:106
+#: src/Admin/AdminSettings.php:491
+msgid "Ko-fi Settings"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:78
+#: src/Admin/AdminSettings.php:107
 msgid "Verification Token"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:79
+#: src/Admin/AdminSettings.php:110
+#: src/Admin/AdminSettings.php:495
+msgid "Role Assignment"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:111
 msgid "Only Accept Subscriptions"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:80
+#: src/Admin/AdminSettings.php:112
 msgid "Tier to Role Mapping"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:81
+#: src/Admin/AdminSettings.php:113
 msgid "Default Role (if no match)"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:82
+#: src/Admin/AdminSettings.php:114
 msgid "Enable Expiry"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:83
+#: src/Admin/AdminSettings.php:115
 msgid "Role Expiry (days)"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:86
-#: src/Admin/AdminSettings.php:433
+#: src/Admin/AdminSettings.php:118
+#: src/Admin/AdminSettings.php:499
 msgid "Logging"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:87
-msgid "Enable Logging"
+#: src/Admin/AdminSettings.php:119
+msgid "Automatically Clear Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:88
-msgid "Log Level"
+#: src/Admin/AdminSettings.php:120
+msgid "Number of Days to Keep Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:116
+#: src/Admin/AdminSettings.php:149
 msgid "Are you sure you want to clear all logs? This action cannot be undone."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:117
+#: src/Admin/AdminSettings.php:150
 msgid "An error occurred. Please try again."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:135
+#: src/Admin/AdminSettings.php:151
+#: src/Admin/AdminSettings.php:572
+msgid "Search (email / action / role)"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:152
+#: src/Admin/AdminSettings.php:570
+msgid "Search (email / tier / status)"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:174
 msgid "Verification Token is required."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:139
-msgid "Role Expiry Days is required and must be a number."
+#: src/Admin/AdminSettings.php:179
+msgid "Role Expiry Days is required and must be a number when expiry is enabled."
+msgstr ""
+
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:199
+#: src/Admin/AdminSettings.php:215
+#, php-format
+msgid "Security: Role \"%s\" cannot be assigned via webhook for security reasons."
+msgstr ""
+
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:227
+#, php-format
+msgid "Security: Role \"%s\" cannot be used as default role for security reasons."
 msgstr ""
 
 #. translators: %s is a link to the Ko-fi Webhooks Management page.
-#: src/Admin/AdminSettings.php:188
-msgid "This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box."
+#: src/Admin/AdminSettings.php:275
+#, php-format
+msgid "This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. The token is masked for security purposes."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:189
+#: src/Admin/AdminSettings.php:276
 msgid "Ko-fi Webhooks Management"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:203
+#: src/Admin/AdminSettings.php:290
 msgid "Webhook URL:"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:206
+#: src/Admin/AdminSettings.php:293
 msgid "Copy to Clipboard"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:208
+#: src/Admin/AdminSettings.php:295
 msgid "Use this URL to configure your Ko-fi webhook."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:224
+#: src/Admin/AdminSettings.php:311
 msgid "When enabled, users must be active subscribers to receive a role."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:242
+#: src/Admin/AdminSettings.php:329
 msgid "Ko-fi Tier"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:242
-#: src/Admin/AdminSettings.php:624
+#: src/Admin/AdminSettings.php:329
+#: src/Admin/AdminSettings.php:921
 msgid "Role"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:283
+#: src/Admin/AdminSettings.php:367
 msgid "Add Tier Mapping"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:284
+#: src/Admin/AdminSettings.php:368
 msgid "Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:301
+#: src/Admin/AdminSettings.php:386
 msgid "— No default —"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:306
+#: src/Admin/AdminSettings.php:395
 msgid "If no tier matches, or if you are not using tiers, this role will be assigned to the user."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:350
-msgid "Enable logging to file"
+#: src/Admin/AdminSettings.php:426
+msgid "Number of days the role remains active (only used if expiry is enabled)."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:351
-msgid "Logs plugin activity to a file for debugging and auditing."
+#: src/Admin/AdminSettings.php:438
+msgid "Enable automatic deletion of old logs based on retention period."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:404
-msgid "Minimum severity of log messages to record."
+#: src/Admin/AdminSettings.php:450
+msgid "Number of days to keep logs before automatic deletion (minimum 1 day)."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:427
+#: src/Admin/AdminSettings.php:478
 msgid "Members for Ko-fi Settings"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:430
-msgid "General"
+#: src/Admin/AdminSettings.php:481
+msgid "Settings"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:436
-#: src/Admin/AdminSettings.php:460
+#: src/Admin/AdminSettings.php:484
+#: src/Admin/AdminSettings.php:507
+msgid "Logs"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:552
+msgid "Log Type:"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:556
 msgid "User Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:453
-msgid "Logging Settings"
+#: src/Admin/AdminSettings.php:559
+msgid "Request Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:517
+#: src/Admin/AdminSettings.php:579
+msgid "Search"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:580
+msgid "Reset"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:583
+msgid "Refresh"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:614
+#: src/Admin/AdminSettings.php:650
+#: src/Admin/AdminSettings.php:724
+#: src/Admin/AdminSettings.php:753
+#: src/Admin/AdminSettings.php:784
+#: src/Admin/AdminSettings.php:807
 msgid "You do not have permission to access this resource."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:524
+#: src/Admin/AdminSettings.php:623
 msgid "Invalid page number."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:558
+#: src/Admin/AdminSettings.php:683
 msgid "Logs table does not exist."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:620
+#: src/Admin/AdminSettings.php:917
+#: src/Admin/AdminSettings.php:1059
 msgid "Timestamp"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:621
+#: src/Admin/AdminSettings.php:918
 msgid "User ID"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:622
+#: src/Admin/AdminSettings.php:919
+#: src/Admin/AdminSettings.php:1060
 msgid "Email"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:623
+#: src/Admin/AdminSettings.php:920
 msgid "Action"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:630
+#: src/Admin/AdminSettings.php:927
+#: src/Admin/AdminSettings.php:1072
 msgid "No logs available."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:651
+#: src/Admin/AdminSettings.php:949
+#: src/Admin/AdminSettings.php:1097
 msgid "Clear Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:659
+#: src/Admin/AdminSettings.php:957
+#: src/Admin/AdminSettings.php:1105
 msgid "Rows per page:"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:684
-msgid "&laquo; Previous"
+#: src/Admin/AdminSettings.php:972
+#: src/Admin/AdminSettings.php:1120
+msgid "Previous"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:685
-msgid "Next &raquo;"
+#: src/Admin/AdminSettings.php:979
+#: src/Admin/AdminSettings.php:1127
+msgid "Next"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1061
+msgid "Tier Name"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1062
+msgid "Amount"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1063
+msgid "Subscription"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1064
+msgid "Status"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1065
+msgid "Success"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1066
+msgid "Error"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1081
+msgid "Yes"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:1081
+msgid "No"
 msgstr ""

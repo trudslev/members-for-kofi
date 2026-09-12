@@ -334,4 +334,46 @@ class UpgradeTest extends TestCase {
 			'Expected activate() to record the installed schema version'
 		);
 	}
+
+	/**
+	 * Uninstalling takes the per-user tracking meta with it.
+	 *
+	 * The tables and the options were already cleaned up, but two meta keys were
+	 * left behind on every supporter the plugin had ever touched.
+	 */
+	public function test_uninstall_removes_the_per_user_tracking_meta(): void {
+		$user_id = $this->create_user();
+		update_user_meta( $user_id, 'kofi_role_assigned_at', time() );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
+
+		Plugin::uninstall();
+
+		$this->assertSame(
+			'',
+			get_user_meta( $user_id, 'kofi_role_assigned_at', true ),
+			'Uninstall must not leave the expiry timestamp behind'
+		);
+		$this->assertSame(
+			'',
+			get_user_meta( $user_id, 'kofi_donation_assigned_role', true ),
+			'Uninstall must not leave the tracked role behind'
+		);
+	}
+
+	/**
+	 * Uninstalling does not strip roles from supporters.
+	 *
+	 * Removing a plugin should not quietly revoke access the site owner granted.
+	 */
+	public function test_uninstall_leaves_user_roles_alone(): void {
+		$user_id = $this->create_user();
+		$user    = get_user_by( 'ID', $user_id );
+		$user->add_role( 'editor' );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'editor' );
+
+		Plugin::uninstall();
+
+		$user = get_user_by( 'ID', $user_id );
+		$this->assertContains( 'editor', $user->roles );
+	}
 }

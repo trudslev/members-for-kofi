@@ -49,7 +49,7 @@ class RequestLogger {
 	public function log_request( array $payload, int $status_code, bool $success, string $error = '' ): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$table_name = esc_sql( $wpdb->prefix . 'members_for_kofi_request_logs' );
 
 		// Extract key fields from payload for easier querying.
 		$email           = sanitize_email( $payload['email'] ?? '' );
@@ -142,7 +142,7 @@ class RequestLogger {
 	public static function drop_verification_token_column(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$table_name = esc_sql( $wpdb->prefix . 'members_for_kofi_request_logs' );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Schema migration on the plugin's own table; the name comes from $wpdb->prefix.
 		$exists = $wpdb->get_var(
@@ -176,7 +176,7 @@ class RequestLogger {
 	public static function drop_table(): void {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$table_name = esc_sql( $wpdb->prefix . 'members_for_kofi_request_logs' );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.DirectDatabaseQuery.SchemaChange -- Dropping the plugin's own table during uninstall.
 		$wpdb->query( 'DROP TABLE IF EXISTS `' . esc_sql( $table_name ) . '`' );
 	}

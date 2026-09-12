@@ -83,6 +83,18 @@ tested-up-to: test-env-up
 
 # --- Packaging -------------------------------------------------------------
 
+# Regenerates the translation template from the current source. Run this before
+# a release: strings added since the last run are otherwise untranslatable, and
+# the header carries a stale version and licence.
+.PHONY: pot
+pot: test-env-up
+	$(TEST_COMPOSE) run --rm -T wpcli wp i18n make-pot \
+	  $(PLUGIN_PATH_IN_CONTAINER) \
+	  $(PLUGIN_PATH_IN_CONTAINER)/languages/members-for-kofi.pot \
+	  --exclude=vendor,tests,node_modules,dist,bin,reports \
+	  --domain=members-for-kofi
+	@echo "Strings: $$(grep -c '^msgid' languages/members-for-kofi.pot) in languages/members-for-kofi.pot"
+
 PLUGIN_SLUG:=members-for-kofi
 MAIN_FILE:=members-for-kofi.php
 VERSION:=$(shell grep -E '^ \* Version:' $(MAIN_FILE) | awk '{print $$3}')
@@ -109,7 +121,10 @@ release: .releaseignore
 	rm -rf $(STAGE_DIR) $(ZIP_FULL) $(ZIP_NAME) $(PLUGIN_SLUG).zip
 	mkdir -p $(STAGE_DIR)
 	rsync -a --exclude-from='.releaseignore' ./ $(STAGE_DIR)/$(PLUGIN_SLUG)/
-	# Build a production-only vendor/ in the staging dir. The working tree's
+	# Build a production-only vendor/ in the staging dir. composer.json is left
+	# in place afterwards: WordPress.org's Plugin Check flags a vendor/ directory
+	# with no composer.json as unexplained third-party code.
+	# The working tree's
 	# vendor/ holds PHPUnit, PHPCS and friends and is excluded from the copy --
 	# shipping it bloated the package and put the test toolchain in every
 	# release artifact.
@@ -117,7 +132,7 @@ release: .releaseignore
 	  cp composer.json $(STAGE_DIR)/$(PLUGIN_SLUG)/; \
 	  [ -f composer.lock ] && cp composer.lock $(STAGE_DIR)/$(PLUGIN_SLUG)/ || true; \
 	  cd $(STAGE_DIR)/$(PLUGIN_SLUG) && composer install --no-dev --prefer-dist --no-interaction --no-progress --optimize-autoloader; \
-	  rm -f $(STAGE_DIR)/$(PLUGIN_SLUG)/composer.json $(STAGE_DIR)/$(PLUGIN_SLUG)/composer.lock; \
+	  rm -f $(STAGE_DIR)/$(PLUGIN_SLUG)/composer.lock; \
 	else \
 	  echo "ERROR: composer.json missing - cannot build a production vendor/"; exit 1; \
 	fi
@@ -160,6 +175,28 @@ site-reset: site-down site-pull
 	docker compose -f docker-compose.site.yml up -d db wordpress
 	bash bin/site-init.sh
 
+# Runs WordPress.org's own Plugin Check against the packaged plugin, in a
+# disposable WordPress that mounts no part of this repository. Checking the
+# working tree would report on files that never ship, and letting WordPress
+# install plugins into a bind-mounted repo would overwrite it.
+.PHONY: plugin-check
+plugin-check: release
+	@set -e; \
+	dir=$$(mktemp -d); \
+	trap 'docker compose -p kofi-plugin-check -f $$dir/docker-compose.yml down -v >/dev/null 2>&1; rm -rf $$dir' EXIT; \
+	mkdir -p $$dir/artifact; \
+	cp $(ZIP_FULL) $$dir/artifact/; \
+	printf 'services:\n  db:\n    image: mysql:lts\n    environment:\n      MYSQL_DATABASE: wordpress\n      MYSQL_USER: wp\n      MYSQL_PASSWORD: wp\n      MYSQL_ROOT_PASSWORD: wp\n    healthcheck:\n      test: ["CMD","mysqladmin","ping","-h","127.0.0.1","--silent"]\n      interval: 5s\n      retries: 30\n  wordpress:\n    image: wordpress:latest\n    depends_on:\n      db: {condition: service_healthy}\n    environment:\n      WORDPRESS_DB_HOST: db:3306\n      WORDPRESS_DB_USER: wp\n      WORDPRESS_DB_PASSWORD: wp\n      WORDPRESS_DB_NAME: wordpress\n    volumes:\n      - wp:/var/www/html\n      - %s/artifact:/artifact:ro\n  wpcli:\n    image: wordpress:cli\n    depends_on: [wordpress]\n    user: "33:33"\n    environment:\n      WORDPRESS_DB_HOST: db:3306\n      WORDPRESS_DB_USER: wp\n      WORDPRESS_DB_PASSWORD: wp\n      WORDPRESS_DB_NAME: wordpress\n    working_dir: /var/www/html\n    volumes:\n      - wp:/var/www/html\n      - %s/artifact:/artifact:ro\nvolumes:\n  wp:\n' $$dir $$dir > $$dir/docker-compose.yml; \
+	C="docker compose -p kofi-plugin-check -f $$dir/docker-compose.yml"; \
+	echo "Booting a disposable WordPress for Plugin Check..."; \
+	$$C up -d db wordpress >/dev/null 2>&1; \
+	for i in $$(seq 1 40); do $$C exec -T wordpress test -f /var/www/html/wp-settings.php >/dev/null 2>&1 && break; sleep 2; done; \
+	$$C run --rm -T wpcli wp core install --url=http://localhost --title=check --admin_user=admin --admin_password=admin --admin_email=admin@example.com --skip-email >/dev/null 2>&1; \
+	$$C run --rm -T wpcli wp plugin install /artifact/$(ZIP_NAME) --activate >/dev/null 2>&1; \
+	$$C run --rm -T wpcli wp plugin install plugin-check --activate >/dev/null 2>&1; \
+	echo ""; \
+	$$C run --rm -T wpcli wp plugin check $(PLUGIN_SLUG) 2>/dev/null || true
+
 # --- Help ------------------------------------------------------------------
 
 .DEFAULT_GOAL := help
@@ -189,6 +226,8 @@ help:
 	@echo "  version              Print the version from the plugin header"
 	@echo "  release              Build a production zip (dev files and dev vendor excluded)"
 	@echo "                       Override the output directory with OUT_DIR=/some/path"
+	@echo "  pot                  Regenerate the translation template from source"
+	@echo "  plugin-check         Run WordPress.org's Plugin Check against the built package"
 	@echo ""
 	@if [ -f Makefile.local ]; then \
 	  echo "Publishing (from Makefile.local)"; \

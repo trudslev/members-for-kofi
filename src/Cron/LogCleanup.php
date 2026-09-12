@@ -55,7 +55,7 @@ class LogCleanup {
 	public function delete_old_user_logs( int $retention_days ): int {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'members_for_kofi_user_logs';
+		$table_name = esc_sql( $wpdb->prefix . 'members_for_kofi_user_logs' );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from $wpdb->prefix, which prepare() cannot parameterise; the cutoff value is a placeholder.
 		$deleted = $wpdb->query(
@@ -78,7 +78,7 @@ class LogCleanup {
 	public function delete_old_request_logs( int $retention_days ): int {
 		global $wpdb;
 
-		$table_name = $wpdb->prefix . 'members_for_kofi_request_logs';
+		$table_name = esc_sql( $wpdb->prefix . 'members_for_kofi_request_logs' );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Table name is built from $wpdb->prefix, which prepare() cannot parameterise; the cutoff value is a placeholder.
 		$deleted = $wpdb->query(
