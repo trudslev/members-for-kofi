@@ -112,7 +112,8 @@ the versions the findings applied to, and those versions stay in use on sites
 that have not updated yet.
 
 Found something? Please report it privately rather than opening a public issue,
-so there is time to ship a fix before the details are public.
+so there is time to ship a fix before the details are public. See
+[SECURITY.md](SECURITY.md) for how, what is in scope, and what happens next.
 
 ## Development
 
