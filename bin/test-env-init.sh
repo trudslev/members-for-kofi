@@ -36,6 +36,21 @@ until $COMPOSE exec -T wordpress test -f /var/www/html/wp-settings.php >/dev/nul
   sleep 2
 done
 
+# The image only copies core into /var/www/html when the volume is empty, so a
+# newer `wordpress:latest` never reaches an existing site on its own: the suite
+# would keep testing whatever version the volume was first created with. Sync
+# core from the image whenever the two disagree. wp-content is left alone, and
+# tar carries the image's www-data ownership across. Never `chown -R` the
+# docroot: the plugin under test is bind-mounted into it, and that would take
+# ownership of the working tree away from the developer.
+image_version=$($COMPOSE exec -T wordpress php -r 'include "/usr/src/wordpress/wp-includes/version.php"; echo $wp_version;')
+site_version=$($COMPOSE exec -T wordpress php -r 'include "/var/www/html/wp-includes/version.php"; echo $wp_version;')
+if [ "$image_version" != "$site_version" ]; then
+  echo ">>> Updating WordPress core ${site_version} -> ${image_version} from the image..."
+  $COMPOSE exec -T wordpress bash -c \
+    'tar -C /usr/src/wordpress --exclude=./wp-content -cf - . | tar -C /var/www/html -xf -'
+fi
+
 echo ">>> Installing WordPress (if needed)..."
 if ! $WP_CLI core is-installed >/dev/null 2>&1; then
   $WP_CLI core install \
@@ -47,6 +62,8 @@ if ! $WP_CLI core is-installed >/dev/null 2>&1; then
     --skip-email
 fi
 
+# Brings the database schema up to the core version synced above (no-op when current).
+$WP_CLI core update-db >/dev/null
 # Keep the stored URL in sync if the port changed between runs.
 $WP_CLI option update home "$SITE_URL" >/dev/null
 $WP_CLI option update siteurl "$SITE_URL" >/dev/null

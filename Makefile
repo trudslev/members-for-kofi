@@ -69,9 +69,11 @@ wp-version:
 	@echo
 
 # Syncs readme.txt's "Tested up to:" with the version we just tested against.
+# WordPress.org reads only major.minor there (7.1 covers 7.1.2), so the patch
+# level is dropped.
 .PHONY: tested-up-to
 tested-up-to: test-env-up
-	@version=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'); \
+	@version=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
 	if [ -z "$$version" ]; then echo "ERROR: could not determine WordPress version from the test environment."; exit 1; fi; \
 	current=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
 	if [ "$$current" = "$$version" ]; then \
@@ -144,7 +146,7 @@ release: .releaseignore
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \
 	fi
 	# Ensure "Tested up to" reflects the WordPress version we actually tested against
-	@tested=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'); \
+	@tested=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
 	declared=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
 	if [ -n "$$tested" ] && [ "$$tested" != "$$declared" ]; then \
 		echo "WARNING: readme.txt says 'Tested up to: $$declared' but the test environment runs $$tested. Run 'make tested-up-to'."; \

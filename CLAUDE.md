@@ -156,7 +156,9 @@ Before merging any code, verify:
 
 Tests run against a **real install of the newest WordPress**, never against a remote site. The
 `wordpress:latest` image is pulled on every `make test-env-up`, so the suite tracks core releases
-automatically. Nothing is pinned to `dev.foodgeek.dk`.
+automatically. Nothing is pinned to `dev.foodgeek.dk`. Core lives in a persistent volume the image
+never refreshes on its own, so `bin/test-env-init.sh` copies core over from the image whenever the
+two versions differ — without that, the suite silently stays on the version the volume was created with.
 
 - **Environment**: `docker-compose.test.yml` (WordPress + MySQL + WP-CLI), provisioned by
   `bin/test-env-init.sh`, which installs WordPress, activates the plugin, flushes permalinks and
