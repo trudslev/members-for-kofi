@@ -32,6 +32,7 @@ use MembersForKofi\Admin\AdminSettings;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Cron\RoleExpiryChecker;
 use MembersForKofi\Webhook\Webhook;
+use MembersForKofi\Webhook\VerificationToken;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
 
@@ -46,12 +47,13 @@ class Plugin {
 	/**
 	 * Current database schema version.
 	 *
-	 * Bump this whenever a table is added or its columns change, so existing
-	 * installs pick the change up on their next request.
+	 * Bump this whenever a table is added or its columns change, or stored data
+	 * changes shape, so existing installs pick the change up on their next
+	 * request. Version 4 replaces the plaintext verification token with a hash.
 	 *
 	 * @var string
 	 */
-	public const DB_VERSION = '3';
+	public const DB_VERSION = '4';
 
 	/**
 	 * Option key holding the schema version currently installed on this site.
@@ -70,6 +72,7 @@ class Plugin {
 		add_action( 'init', array( self::class, 'maybe_upgrade' ), 5 );
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
+		add_action( 'admin_notices', array( AdminSettings::class, 'render_token_conflict_notice' ) );
 		add_action( 'init', array( $this, 'initialize_logger' ) );
 		add_action( 'init', array( $this, 'initialize_cron' ) );
 		add_action( 'init', array( self::class, 'add_rewrite_rules' ) );
@@ -111,8 +114,9 @@ class Plugin {
 		if ( false === get_option( 'members_for_kofi_options' ) ) {
 			add_option(
 				'members_for_kofi_options',
+				// No token key at all: a fresh install never stores a plaintext
+				// token, and has no hash until one is entered.
 				array(
-					'verification_token' => '',
 					'only_subscriptions' => true,
 					'tier_role_map'      => array(),
 					'default_role'       => '',
@@ -128,6 +132,11 @@ class Plugin {
 
 		self::install_tables();
 		RequestLogger::drop_verification_token_column();
+
+		// Deactivating, updating the files and reactivating records the new
+		// schema version here without ever passing through maybe_upgrade(), so
+		// the token has to be migrated on this path too.
+		VerificationToken::migrate();
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 	}
@@ -152,6 +161,10 @@ class Plugin {
 
 		self::install_tables();
 		RequestLogger::drop_verification_token_column();
+
+		// Runs on init, before the webhook is handled on template_redirect, so a
+		// site nobody has opened wp-admin on is migrated by Ko-fi's own request.
+		VerificationToken::migrate();
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 

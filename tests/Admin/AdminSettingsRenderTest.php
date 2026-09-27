@@ -172,29 +172,119 @@ class AdminSettingsRenderTest extends TestCase {
 	// Logging fields removed; corresponding render tests dropped.
 
 	/**
-	 * The token field must escape the stored value, not echo it raw.
-	 *
-	 * Whatever is stored is printed straight back into an HTML attribute, so a
-	 * value containing a quote would otherwise break out of it. Asserting only
-	 * that the field has the right `name` (as the other render tests do) leaves
-	 * this entirely uncovered.
+	 * The field is write-only: neither a stored plaintext token nor its hash
+	 * may ever reach the page. This replaces the old escaping test -- a value
+	 * that is never rendered cannot break out of its attribute.
 	 */
-	public function test_render_verification_token_field_escapes_the_value(): void {
-		$options                       = (array) get_option( 'members_for_kofi_options', array() );
-		$options['verification_token'] = 'tok"><script>alert(1)</script>';
-		update_option( 'members_for_kofi_options', $options );
+	public function test_the_stored_token_is_never_rendered(): void {
+		$legacy = 'tok"><script>alert(1)</script>';
+		$this->write_options_raw( array( 'verification_token' => $legacy ) );
 
 		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
 
-		$this->assertStringNotContainsString(
-			'tok"><script>',
-			$output,
-			'The stored token must never reach the attribute unescaped.'
+		$this->assertStringContainsString( 'name="members_for_kofi_options[verification_token]" value=""', $output );
+		$this->assertStringNotContainsString( 'alert(1)', $output );
+		$this->assertStringNotContainsString( 'tok&quot;', $output );
+		$this->assertStringNotContainsString( hash( 'sha256', $legacy ), $output );
+	}
+
+	/**
+	 * With a hash saved, the page says so, shows an eight-character
+	 * fingerprint, and never the hash itself.
+	 */
+	public function test_a_saved_token_shows_its_fingerprint_only(): void {
+		$hash = hash( 'sha256', 'fingerprinted-token' );
+		$this->write_options_raw( array( 'verification_token_sha256' => $hash ) );
+
+		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
+
+		$this->assertStringContainsString( '<code>' . substr( $hash, 0, 8 ) . '</code>', $output );
+		$this->assertStringNotContainsString( substr( $hash, 0, 9 ), $output );
+		$this->assertStringContainsString( 'A token is saved', $output );
+	}
+
+	/**
+	 * Without a token the page says none is set, and shows no fingerprint.
+	 */
+	public function test_no_token_says_so(): void {
+		$this->write_options_raw( array( 'default_role' => 'subscriber' ) );
+
+		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
+
+		$this->assertStringContainsString( 'No token set yet', $output );
+		$this->assertStringNotContainsString( 'fingerprint:', $output );
+	}
+
+	/**
+	 * A conflicting hash and plaintext are flagged under the field.
+	 */
+	public function test_a_conflict_is_flagged_on_the_field(): void {
+		$this->write_options_raw(
+			array(
+				'verification_token_sha256' => hash( 'sha256', 'one' ),
+				'verification_token'        => 'two',
+			)
 		);
-		$this->assertStringContainsString(
-			'tok&quot;&gt;&lt;script&gt;',
-			$output,
-			'The value should be present in escaped form.'
+
+		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
+
+		$this->assertStringContainsString( 'two different verification tokens are stored', $output );
+		$this->assertStringNotContainsString( '>two<', $output );
+	}
+
+	/**
+	 * The conflict notice shows on admin screens for administrators only, and
+	 * only while there is a conflict.
+	 */
+	public function test_the_conflict_notice_is_shown_to_admins_only_while_it_applies(): void {
+		$conflict = array(
+			'verification_token_sha256' => hash( 'sha256', 'one' ),
+			'verification_token'        => 'two',
 		);
+		$previous = get_current_user_id();
+
+		try {
+			wp_set_current_user( $this->create_user( array( 'role' => 'administrator' ) ) );
+
+			$this->write_options_raw( $conflict );
+			$this->assertStringContainsString( 'notice-error', $this->capture_render( array( AdminSettings::class, 'render_token_conflict_notice' ) ) );
+
+			$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'one' ) ) );
+			$this->assertSame( '', $this->capture_render( array( AdminSettings::class, 'render_token_conflict_notice' ) ) );
+
+			wp_set_current_user( $this->create_user( array( 'role' => 'editor' ) ) );
+			$this->write_options_raw( $conflict );
+			$this->assertSame( '', $this->capture_render( array( AdminSettings::class, 'render_token_conflict_notice' ) ) );
+		} finally {
+			wp_set_current_user( $previous );
+		}
+	}
+
+	/**
+	 * The notice is hooked where WordPress prints admin notices.
+	 */
+	public function test_the_conflict_notice_is_hooked(): void {
+		$this->assertNotFalse( has_action( 'admin_notices', array( AdminSettings::class, 'render_token_conflict_notice' ) ) );
+	}
+
+	/**
+	 * Settings API messages are printed on the page.
+	 *
+	 * This is a top-level menu page, where WordPress does not print them by
+	 * itself: before 1.2.0 a rejected save -- a missing token, a disallowed
+	 * role -- was dropped without a word.
+	 */
+	public function test_the_settings_page_shows_validation_errors(): void {
+		$GLOBALS['wp_settings_errors'] = array(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test isolation.
+		add_settings_error( 'members_for_kofi_options', 'members_for_kofi_options_error', 'Verification Token is required.', 'error' );
+
+		try {
+			$output = $this->capture_render( array( $this->settings, 'render_settings_page' ) );
+		} finally {
+			$GLOBALS['wp_settings_errors'] = array(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test isolation.
+		}
+
+		$this->assertStringContainsString( 'Verification Token is required.', $output );
+		$this->assertStringContainsString( 'notice-error', $output );
 	}
 }

@@ -18,7 +18,7 @@ class DebugLogger {
 	 *
 	 * @var array<string>
 	 */
-	private const REDACTED_KEYS = array( 'verification_token' );
+	private const REDACTED_KEYS = array( 'verification_token', 'verification_token_sha256' );
 
 	/**
 	 * Logs a message with optional context when WP_DEBUG is true.

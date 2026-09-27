@@ -197,6 +197,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.2.0**: The Ko-fi verification token is now stored only as a one-way hash, so database backups and exports no longer reveal it. Existing sites convert automatically on their next visit or Ko-fi payment, with nothing to re-enter. The token field becomes write-only and shows a short fingerprint for comparing sites; the Request log says why a webhook was refused; and the settings page now shows its save and error messages. Going back to an older version afterwards requires entering the token again.
 - **1.1.0**: Automatic log cleanup, improved admin UI with reorganized settings, and a request logs viewer. Adds an upgrade path so the request log table is created when updating from 1.0.x, stops storing the Ko-fi verification token, hardens the webhook address against abuse, and fixes donation messages being mangled when they contained quotes or accented characters.
 - **1.0.1**: Packaging improvements (production-only vendor build). No functional changes.
 - **1.0.0**: Initial release.

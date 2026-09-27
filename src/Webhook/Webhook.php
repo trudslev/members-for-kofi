@@ -75,6 +75,16 @@ class Webhook {
 	public const FAILURE_WINDOW = 300;
 
 	/**
+	 * Why the last authentication failure happened, for the request log only.
+	 *
+	 * Kept out of the response: telling an unauthenticated caller whether a
+	 * token is configured at all would describe the site to an attacker.
+	 *
+	 * @var string
+	 */
+	private string $auth_failure_detail = '';
+
+	/**
 	 * Constructor for the Webhook class.
 	 */
 	public function __construct() {}
@@ -154,7 +164,8 @@ class Webhook {
 			return $this->reject(
 				$request_logger,
 				$rejection->get_status(),
-				$rejection->get_data()['error'] ?? 'Unauthorized'
+				$rejection->get_data()['error'] ?? 'Unauthorized',
+				$this->auth_failure_detail
 			);
 		}
 
@@ -174,25 +185,28 @@ class Webhook {
 	/**
 	 * Reports whether the request carries the configured verification token.
 	 *
-	 * Constant-time by design: hash_equals() compares every byte, where !==
-	 * short-circuits at the first
-	 * difference, which leaks the length of a correct prefix through timing.
-	 * The is_string() guard is not cosmetic -- hash_equals() raises a TypeError
-	 * on anything else, and casting an array warns, so a payload sending a
-	 * non-string token would otherwise break a public endpoint.
+	 * Only a hash of the token is stored, so the incoming token is hashed and
+	 * the two hashes compared. Constant-time by design: hash_equals() compares
+	 * every byte, where !== short-circuits at the first difference.
+	 * The is_string() guard is not cosmetic -- hash() and hash_equals() raise a
+	 * TypeError on anything else, and casting an array warns, so a payload
+	 * sending a non-string token would otherwise break a public endpoint.
 	 *
 	 * @param array $body The decoded webhook payload.
 	 * @return bool
 	 */
 	private function is_authenticated( array $body ): bool {
-		$options  = get_option( 'members_for_kofi_options' );
-		$expected = $options['verification_token'] ?? '';
-
-		if ( empty( $expected ) || empty( $body['verification_token'] ) || ! is_string( $body['verification_token'] ) ) {
+		if ( empty( $body['verification_token'] ) || ! is_string( $body['verification_token'] ) ) {
 			return false;
 		}
 
-		return hash_equals( $expected, $body['verification_token'] );
+		$expected = VerificationToken::expected_hash( get_option( VerificationToken::OPTION ) );
+
+		if ( '' === $expected ) {
+			return false;
+		}
+
+		return hash_equals( $expected, VerificationToken::hash( $body['verification_token'] ) );
 	}
 
 	/**
@@ -217,19 +231,20 @@ class Webhook {
 	 * over the failure limit nothing is written at all and the request is shed
 	 * with a 429.
 	 *
-	 * @param RequestLogger $logger Logger to record the attempt with.
-	 * @param int           $status HTTP status the request earned.
-	 * @param string        $error  Error message to return and log.
+	 * @param RequestLogger $logger     Logger to record the attempt with.
+	 * @param int           $status     HTTP status the request earned.
+	 * @param string        $error      Error message to return and log.
+	 * @param string        $log_detail More specific message for the log only; the caller still gets $error.
 	 * @return \WP_REST_Response
 	 */
-	private function reject( RequestLogger $logger, int $status, string $error ): \WP_REST_Response {
+	private function reject( RequestLogger $logger, int $status, string $error, string $log_detail = '' ): \WP_REST_Response {
 		if ( $this->too_many_recent_failures() ) {
 			return new \WP_REST_Response( array( 'error' => 'Too many requests' ), 429 );
 		}
 
 		$this->record_failure();
 
-		$logger->log_request( array(), $status, false, $error );
+		$logger->log_request( array(), $status, false, '' !== $log_detail ? $log_detail : $error );
 
 		return new \WP_REST_Response( array( 'error' => $error ), $status );
 	}
@@ -319,7 +334,16 @@ class Webhook {
 		}
 
 		if ( ! $this->is_authenticated( $body ) ) {
-			DebugLogger::warning( 'Invalid verification token' );
+			// Once the token field is write-only, this is the only diagnostic a
+			// site owner has, so say which of the two it was -- in the request
+			// log, which is readable without WP_DEBUG, as well as the debug log.
+			if ( 'not_configured' === VerificationToken::failure_reason( get_option( VerificationToken::OPTION ) ) ) {
+				DebugLogger::warning( 'No verification token configured' );
+				$this->auth_failure_detail = 'Unauthorized: no token configured';
+			} else {
+				DebugLogger::warning( 'Verification token does not match' );
+				$this->auth_failure_detail = 'Unauthorized: token mismatch';
+			}
 			return new \WP_REST_Response( array( 'error' => 'Unauthorized' ), 401 );
 		}
 

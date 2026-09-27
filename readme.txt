@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -115,6 +115,15 @@ their WordPress user and clear the logs from the Logs tab.
 
 == Changelog ==
 
+= 1.2.0 =
+* Security: The Ko-fi verification token is no longer stored in readable form. Only a one-way hash (SHA-256) of it is kept, so a database backup or export no longer reveals it.
+* Existing sites are converted automatically on the first visit or Ko-fi payment after updating. Your webhook keeps working and there is nothing to re-enter.
+* Settings: The token field is now write-only. It shows whether a token is saved, plus a short fingerprint you can compare between sites (for example staging and production). Leaving the field blank keeps the saved token; paste a new token to replace it.
+* Settings: If two different tokens are ever found stored at once, administrators see a warning asking them to re-enter the token.
+* Logs: A rejected webhook now says in the Request log whether no token was set up or the token did not match. Ko-fi itself is still only told "Unauthorized".
+* Fix: The settings page now shows its messages. Before, a save that was refused (for example a missing token, or mapping a tier to the administrator role) was silently ignored, and a successful save showed no confirmation.
+* Important: After updating, going back to an older version of the plugin will stop webhooks from being accepted until you enter your Ko-fi verification token again in the settings.
+
 = 1.1.0 =
 * Feature: Added automatic log cleanup with configurable retention period.
 * Feature: Reorganized admin settings page with separate sections for Ko-fi Settings, Role Assignment, and Logging.
@@ -149,6 +158,9 @@ their WordPress user and clear the logs from the Logs tab.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.2.0 =
+Security update: your Ko-fi verification token is now stored only as a hash, converted automatically with nothing to re-enter. If you later go back to an older version, webhooks will stop working until you re-enter the token in the settings.
 
 = 1.1.0 =
 New features: automatic log cleanup, a request log viewer and a reorganized settings page. Also includes security hardening and several fixes. Your existing settings are kept.

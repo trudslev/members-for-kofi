@@ -42,14 +42,15 @@ class HardeningTest extends TestCase {
 	 * @return void
 	 */
 	private function configure( string $token, array $extra = array() ): void {
-		update_option(
-			'members_for_kofi_options',
+		// Stored as the plugin itself stores it since 1.2.0: the hash only, so
+		// these tests exercise the hashed path, not the plaintext fallback.
+		$this->write_options_raw(
 			array_merge(
 				array(
-					'verification_token' => $token,
-					'only_subscriptions' => false,
-					'default_role'       => 'subscriber',
-					'tier_role_map'      => array(),
+					'verification_token_sha256' => hash( 'sha256', $token ),
+					'only_subscriptions'        => false,
+					'default_role'              => 'subscriber',
+					'tier_role_map'             => array(),
 				),
 				$extra
 			)
@@ -467,5 +468,142 @@ class HardeningTest extends TestCase {
 		$output = (string) ob_get_clean();
 
 		$this->assertNotSame( '', $output, 'Expected the logs table to render' );
+	}
+
+	// ------------------------------------------------------------------
+	// Hashed token storage (1.2.0)
+	// ------------------------------------------------------------------
+
+	/**
+	 * The error recorded for the most recent request log row.
+	 *
+	 * @return string
+	 */
+	private function last_logged_error(): string {
+		global $wpdb;
+
+		$table = $wpdb->prefix . 'members_for_kofi_request_logs';
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table, test-only read.
+		return (string) $wpdb->get_var( "SELECT `error` FROM `{$table}` ORDER BY `id` DESC LIMIT 1" );
+	}
+
+	/**
+	 * Knowing the stored hash is not enough: it is not the token.
+	 */
+	public function test_sending_the_stored_hash_is_rejected(): void {
+		$this->configure( 'real-token' );
+
+		$response = ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => hash( 'sha256', 'real-token' ),
+				'email'              => 'hash-replay@example.com',
+			)
+		);
+
+		$this->assertSame( 401, $response->get_status() );
+	}
+
+	/**
+	 * A site with no token configured rejects every token, and a non-string
+	 * token still cannot reach hash() and raise a TypeError.
+	 *
+	 * @dataProvider tokens_against_an_unconfigured_site
+	 *
+	 * @param mixed $token Token to send.
+	 * @param int   $status Expected status.
+	 */
+	public function test_an_unconfigured_site_rejects_everything( $token, int $status ): void {
+		$this->write_options_raw( array( 'default_role' => 'subscriber' ) );
+
+		$response = ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => $token,
+				'email'              => 'unconfigured@example.com',
+			)
+		);
+
+		$this->assertSame( $status, $response->get_status() );
+	}
+
+	/**
+	 * Tokens an unconfigured site must refuse.
+	 *
+	 * @return array
+	 */
+	public function tokens_against_an_unconfigured_site(): array {
+		return array(
+			'a token'             => array( 'anything', 401 ),
+			'hash of empty token' => array( hash( 'sha256', '' ), 401 ),
+			'array'               => array( array( 'x' ), 401 ),
+			'integer'             => array( 42, 401 ),
+			'empty string'        => array( '', 400 ),
+		);
+	}
+
+	/**
+	 * The request log says why authentication failed, so a site owner can
+	 * tell "no token saved" from "wrong token" without WP_DEBUG. The caller is
+	 * told only "Unauthorized": the reason would describe the site to an
+	 * attacker.
+	 */
+	public function test_a_wrong_token_is_logged_as_a_mismatch_but_answered_generically(): void {
+		$this->configure( 'real-token' );
+
+		$response = ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => 'wrong-token',
+				'email'              => 'mismatch@example.com',
+			)
+		);
+
+		$this->assertSame( array( 'error' => 'Unauthorized' ), $response->get_data() );
+		$this->assertSame( 'Unauthorized: token mismatch', $this->last_logged_error() );
+	}
+
+	/**
+	 * The other reason: nothing saved at all.
+	 */
+	public function test_an_unconfigured_site_is_logged_as_such_but_answered_generically(): void {
+		$this->write_options_raw( array( 'default_role' => 'subscriber' ) );
+
+		$response = ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => 'any-token',
+				'email'              => 'unconfigured@example.com',
+			)
+		);
+
+		$this->assertSame( array( 'error' => 'Unauthorized' ), $response->get_data() );
+		$this->assertSame( 'Unauthorized: no token configured', $this->last_logged_error() );
+	}
+
+	/**
+	 * The hash key is redacted from debug output like the token itself.
+	 */
+	public function test_the_token_hash_is_redacted_from_the_debug_log(): void {
+		$hash     = hash( 'sha256', 'redact-me' );
+		$log_file = tempnam( sys_get_temp_dir(), 'kofi-log-' );
+		// phpcs:ignore WordPress.PHP.IniSet.Risky -- Redirecting error_log is the only way to capture logger output.
+		$original = ini_set( 'error_log', $log_file );
+
+		try {
+			\MembersForKofi\Logging\DebugLogger::info( 'Context with a hash', array( 'options' => array( 'verification_token_sha256' => $hash ) ) );
+		} finally {
+			// phpcs:ignore WordPress.PHP.IniSet.Risky -- Restoring the original value.
+			ini_set( 'error_log', false === $original ? '' : $original );
+		}
+
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Reading a local temp file, not a URL.
+		$contents = (string) file_get_contents( $log_file );
+		wp_delete_file( $log_file );
+
+		$this->assertStringContainsString( 'Context with a hash', $contents );
+		$this->assertStringNotContainsString( $hash, $contents );
+		$this->assertStringContainsString( '[REDACTED]', $contents );
 	}
 }

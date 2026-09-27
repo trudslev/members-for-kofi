@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.1.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.2.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -261,7 +261,7 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 `make release` builds `vendor/` fresh with `--no-dev` into a staging directory
 rather than copying the working tree's, which carries the whole test toolchain.
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.1.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.2.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
 ## Key Files & Patterns
 
@@ -288,6 +288,30 @@ version 3 drops the column, which is what destroys any historic fragments -- onl
 writes would leave every previously logged request still holding part of the secret. The token is also redacted out of the stored `payload` JSON
 and out of `DebugLogger` output.
 
+**The token itself is stored only as a hash** (since 1.2.0, schema version 4):
+`members_for_kofi_options['verification_token_sha256']`, plain `hash( 'sha256', $token )`. No
+`password_hash()` (a slow KDF on every webhook, for a UUID that cannot be brute-forced) and no
+`wp_salt()` (rotating the salts would silently break every webhook). All token rules live in
+`Webhook\VerificationToken`:
+
+- `migrate()` is the only code allowed to remove a plaintext `verification_token`. It re-reads the
+  option past the cache, removes the plaintext only in the same write that stores a non-empty hash,
+  leaves an empty or non-string token untouched, and leaves a hash + *different* plaintext untouched
+  (`has_conflict()` then shows an admin notice). It runs from `maybe_upgrade()` **and** `activate()` --
+  a deactivate/update/reactivate cycle never passes through `maybe_upgrade()`.
+- `expected_hash()` carries a **fallback, to be removed in 1.3.0**: a site still holding only
+  plaintext is verified against it and migrated on the spot. When removing it, switch the many tests
+  that seed a plaintext `verification_token` through `update_option()` to the hash key.
+- The settings field is write-only: never render the stored value, a blank submission keeps the
+  saved token, and a submitted `verification_token_sha256` is ignored. The page shows an
+  8-character fingerprint so two sites can be compared.
+- Keep the migration on `init`, never `admin_init`: Ko-fi's own request must be able to migrate a
+  site nobody opens wp-admin on, and the Settings API sanitizer (registered on `admin_init`) must not
+  run over the migration's write.
+- Tests seeding legacy option shapes must use `TestCase::write_options_raw()`, which bypasses the
+  sanitizer; a test that calls `register_settings()` must `unregister_setting()` afterwards, or the
+  sanitizer rewrites every later test's fixtures.
+
 Both tables are created during plugin activation and dropped on uninstall.
 
 ### Database Schema Changes (MANDATORY)
@@ -302,7 +326,7 @@ The upgrade path lives in `Plugin::maybe_upgrade()`, hooked on `init` (priority 
 guarded by the `members_for_kofi_db_version` option:
 
 ```php
-public const DB_VERSION = '3';
+public const DB_VERSION = '4';
 public const DB_VERSION_OPTION = 'members_for_kofi_db_version';
 ```
 

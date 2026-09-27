@@ -84,10 +84,13 @@ BASH
 echo ">>> Activating plugin..."
 $WP_CLI plugin activate members-for-kofi
 
+# Only the token's hash is stored, as the plugin itself would after a save.
+KOFI_TEST_TOKEN_HASH=$(printf '%s' "$KOFI_TEST_TOKEN" | sha256sum | cut -d' ' -f1)
+
 echo ">>> Configuring plugin options (verification token: ${KOFI_TEST_TOKEN})..."
 $WP_CLI option update members_for_kofi_options --format=json <<JSON
 {
-  "verification_token": "${KOFI_TEST_TOKEN}",
+  "verification_token_sha256": "${KOFI_TEST_TOKEN_HASH}",
   "only_subscriptions": false,
   "tier_role_map": { "Gold": "editor", "Silver": "author", "Bronze": "contributor" },
   "default_role": "subscriber",

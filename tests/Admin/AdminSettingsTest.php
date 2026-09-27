@@ -22,6 +22,7 @@ namespace MembersForKofi\Tests\Admin;
 
 use MembersForKofi\Tests\TestCase;
 use MembersForKofi\Admin\AdminSettings;
+use MembersForKofi\Webhook\VerificationToken;
 
 /**
  * Unit tests for the AdminSettings class.
@@ -55,6 +56,10 @@ class AdminSettingsTest extends TestCase {
 		}
 
 		$this->settings = new AdminSettings();
+
+		// add_settings_error() collects into a global for the whole run, so a
+		// test asserting "no errors" would otherwise see an earlier test's.
+		$GLOBALS['wp_settings_errors'] = array(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test isolation.
 	}
 
 	/**
@@ -80,7 +85,8 @@ class AdminSettingsTest extends TestCase {
 
 		$sanitized = $this->settings->sanitize_options( $input );
 
-		$this->assertSame( 'abc123', $sanitized['verification_token'] );
+		$this->assertSame( hash( 'sha256', 'abc123' ), $sanitized['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $sanitized, 'The plaintext token must never be stored.' );
 		$this->assertTrue( $sanitized['only_subscriptions'] );
 		$this->assertSame( array( 'Gold' => 'editor' ), $sanitized['tier_role_map'] );
 		$this->assertSame( 'subscriber', $sanitized['default_role'] );
@@ -206,5 +212,166 @@ class AdminSettingsTest extends TestCase {
 		$sanitized = $this->settings->sanitize_options( $input );
 
 		$this->assertSame( 9999, $sanitized['log_retention_days'], 'log_retention_days should accept large values' );
+	}
+
+	/**
+	 * A minimal valid settings submission.
+	 *
+	 * @param array $overrides Fields to change.
+	 * @return array
+	 */
+	private function submission( array $overrides = array() ): array {
+		return array_merge(
+			array(
+				'verification_token' => '',
+				'only_subscriptions' => true,
+				'default_role'       => 'subscriber',
+				'enable_expiry'      => true,
+				'role_expiry_days'   => '35',
+				'auto_clear_logs'    => true,
+				'log_retention_days' => '30',
+			),
+			$overrides
+		);
+	}
+
+	/**
+	 * The field is write-only, so a blank submission means "keep the saved
+	 * token". Treating it as "clear" would break the webhook every time an
+	 * admin saved any other setting.
+	 */
+	public function test_an_empty_token_field_keeps_the_saved_hash(): void {
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'saved-token' ) ) );
+
+		$sanitized = $this->settings->sanitize_options( $this->submission() );
+
+		$this->assertSame( hash( 'sha256', 'saved-token' ), $sanitized['verification_token_sha256'] );
+		$this->assertEmpty( get_settings_errors( 'members_for_kofi_options' ), 'A blank field must not be an error when a token is saved.' );
+	}
+
+	/**
+	 * Pasting a new token replaces the saved one.
+	 */
+	public function test_a_new_token_replaces_the_saved_hash(): void {
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'old-token' ) ) );
+
+		$sanitized = $this->settings->sanitize_options( $this->submission( array( 'verification_token' => 'new-token' ) ) );
+
+		$this->assertSame( hash( 'sha256', 'new-token' ), $sanitized['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $sanitized );
+	}
+
+	/**
+	 * With nothing saved and nothing submitted there is no token at all, which
+	 * is still an error, and the stored options are left alone.
+	 */
+	public function test_a_token_is_required_when_none_is_saved(): void {
+		$this->write_options_raw( array( 'default_role' => 'subscriber' ) );
+
+		$sanitized = $this->settings->sanitize_options( $this->submission() );
+
+		$this->assertSame( array( 'default_role' => 'subscriber' ), $sanitized );
+		$this->assertNotEmpty( get_settings_errors( 'members_for_kofi_options' ) );
+	}
+
+	/**
+	 * A hash can only come from this code. Accepting one from the form would let
+	 * a submission set a token without anyone knowing its plaintext -- and it
+	 * would be hashed a second time into something no token could match.
+	 */
+	public function test_a_submitted_hash_is_ignored(): void {
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'saved-token' ) ) );
+
+		$sanitized = $this->settings->sanitize_options(
+			$this->submission( array( 'verification_token_sha256' => str_repeat( 'a', 64 ) ) )
+		);
+
+		$this->assertSame( hash( 'sha256', 'saved-token' ), $sanitized['verification_token_sha256'] );
+	}
+
+	/**
+	 * A site still holding a plaintext token (the fallback case) is migrated by
+	 * the next save, even if the field is left blank.
+	 */
+	public function test_a_blank_save_hashes_a_still_plaintext_token(): void {
+		$this->write_options_raw( array( 'verification_token' => 'legacy-token' ) );
+
+		$sanitized = $this->settings->sanitize_options( $this->submission() );
+
+		$this->assertSame( hash( 'sha256', 'legacy-token' ), $sanitized['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $sanitized );
+	}
+
+	/**
+	 * Saving resolves a conflict: the output never carries the plaintext key.
+	 */
+	public function test_saving_a_token_clears_a_conflict(): void {
+		$this->write_options_raw(
+			array(
+				'verification_token_sha256' => hash( 'sha256', 'hashed-token' ),
+				'verification_token'        => 'other-token',
+			)
+		);
+
+		$sanitized = $this->settings->sanitize_options( $this->submission( array( 'verification_token' => 'hashed-token' ) ) );
+
+		$this->assertFalse( VerificationToken::has_conflict( $sanitized ) );
+		$this->assertArrayNotHasKey( 'verification_token', $sanitized );
+	}
+
+	/**
+	 * A token pasted with stray whitespace is stored trimmed.
+	 *
+	 * This is the rule as it stands, not a new one: sanitize_text_field()
+	 * trims. It matches Ko-fi's real traffic, whose form-encoded body goes
+	 * through the same function (see DonationWebhookTest). A caller handing
+	 * handle() an array directly, or the REST route, is NOT trimmed -- so
+	 * nothing here claims that a padded token verifies on every path.
+	 */
+	public function test_a_padded_token_is_stored_trimmed(): void {
+		$sanitized = $this->settings->sanitize_options( $this->submission( array( 'verification_token' => "  padded-token \t\n" ) ) );
+
+		$this->assertSame( hash( 'sha256', 'padded-token' ), $sanitized['verification_token_sha256'] );
+	}
+
+	/**
+	 * Saving through the real Settings API (update_option with the sanitizer
+	 * registered) stores only the hash.
+	 */
+	public function test_saving_through_the_settings_api_stores_only_the_hash(): void {
+		$this->settings->register_settings();
+
+		try {
+			update_option( 'members_for_kofi_options', $this->submission( array( 'verification_token' => 'api-token' ) ) );
+		} finally {
+			// Left registered, the sanitizer would rewrite every later test's
+			// option fixtures for the rest of the run.
+			unregister_setting( 'members_for_kofi_options', 'members_for_kofi_options' );
+		}
+
+		$stored = get_option( 'members_for_kofi_options' );
+		$this->assertSame( hash( 'sha256', 'api-token' ), $stored['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $stored );
+	}
+
+	/**
+	 * The sanitizer also sees internal writes to the option -- the migration's
+	 * own update_option() when it runs in an admin request. Feeding it the
+	 * already-migrated options must hand them back unchanged in substance.
+	 */
+	public function test_sanitizing_already_hashed_options_keeps_the_hash(): void {
+		$hashed = array(
+			'verification_token_sha256' => hash( 'sha256', 'kept-token' ),
+			'only_subscriptions'        => false,
+			'tier_role_map'             => array( 'Gold' => 'editor' ),
+			'default_role'              => 'subscriber',
+			'enable_expiry'             => true,
+			'role_expiry_days'          => 35,
+			'auto_clear_logs'           => true,
+			'log_retention_days'        => 30,
+		);
+		$this->write_options_raw( array( 'verification_token' => 'kept-token' ) );
+
+		$this->assertSame( $hashed, $this->settings->sanitize_options( $hashed ) );
 	}
 }

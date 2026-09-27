@@ -21,7 +21,10 @@
 namespace MembersForKofi\Tests;
 
 use MembersForKofi\Logging\RequestLogger;
+use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Plugin;
+use MembersForKofi\Webhook\VerificationToken;
+use MembersForKofi\Webhook\Webhook;
 
 /**
  * Covers the database schema upgrade path.
@@ -53,6 +56,7 @@ class UpgradeTest extends TestCase {
 	 * Restores the schema version and makes sure the tables are back.
 	 */
 	protected function tearDown(): void {
+		UserLogger::create_table();
 		RequestLogger::create_table();
 
 		if ( false === $this->original_db_version ) {
@@ -375,5 +379,306 @@ class UpgradeTest extends TestCase {
 
 		$user = get_user_by( 'ID', $user_id );
 		$this->assertContains( 'editor', $user->roles );
+	}
+
+	/**
+	 * Options as a pre-1.2.0 install stored them: the token in plaintext.
+	 *
+	 * @param mixed $token Value of the legacy token key.
+	 * @return array
+	 */
+	private function legacy_options( $token = 'legacy-token' ): array {
+		return array(
+			'verification_token' => $token,
+			'only_subscriptions' => false,
+			'tier_role_map'      => array(),
+			'default_role'       => 'subscriber',
+			'enable_expiry'      => true,
+			'role_expiry_days'   => 35,
+			'auto_clear_logs'    => true,
+			'log_retention_days' => 30,
+		);
+	}
+
+	/**
+	 * Puts the site in the state a 1.1.0 install is in: schema version 3 and a
+	 * plaintext token.
+	 *
+	 * @param mixed $token Value of the legacy token key.
+	 */
+	private function simulate_plaintext_token_install( $token = 'legacy-token' ): void {
+		update_option( Plugin::DB_VERSION_OPTION, '3' );
+		$this->write_options_raw( $this->legacy_options( $token ) );
+	}
+
+	/**
+	 * The options exactly as stored, with no cache in the way.
+	 *
+	 * @return mixed
+	 */
+	private function stored_options() {
+		wp_cache_delete( 'members_for_kofi_options', 'options' );
+		wp_cache_delete( 'alloptions', 'options' );
+
+		return get_option( 'members_for_kofi_options' );
+	}
+
+	/**
+	 * Sends a donation straight to the handler.
+	 *
+	 * @param mixed $token Token to send.
+	 * @return \WP_REST_Response
+	 */
+	private function donate( $token ): \WP_REST_Response {
+		return ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => $token,
+				'email'              => 'upgrade-' . wp_generate_password( 8, false, false ) . '@example.com',
+				'tier_name'          => '',
+				'amount'             => 5,
+				'currency'           => 'USD',
+			)
+		);
+	}
+
+	/**
+	 * The core promise: a site that works on 1.1.0 keeps working after the
+	 * update, and stops storing the token in plaintext.
+	 */
+	public function test_upgrade_replaces_a_plaintext_token_with_its_hash(): void {
+		$this->simulate_plaintext_token_install();
+
+		Plugin::maybe_upgrade();
+
+		$options = $this->stored_options();
+		$this->assertSame( hash( 'sha256', 'legacy-token' ), $options['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $options, 'The plaintext token must be gone after the upgrade.' );
+		$this->assertSame( 'subscriber', $options['default_role'], 'Other settings must survive the migration.' );
+		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status(), 'The token Ko-fi already sends must still verify.' );
+	}
+
+	/**
+	 * The fallback: a site whose options still hold plaintext although the
+	 * schema version says it is current -- a restored backup, another code
+	 * path, or a request that beat init -- verifies and migrates on the spot.
+	 */
+	public function test_the_webhook_verifies_and_migrates_a_plaintext_token_without_the_upgrade(): void {
+		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
+		$this->write_options_raw( $this->legacy_options() );
+
+		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
+
+		$options = $this->stored_options();
+		$this->assertSame( hash( 'sha256', 'legacy-token' ), $options['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $options );
+	}
+
+	/**
+	 * A wrong token is still rejected on the fallback path, and a rejected
+	 * request still migrates the site (the stored token is not in doubt).
+	 */
+	public function test_the_fallback_rejects_a_wrong_token(): void {
+		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
+		$this->write_options_raw( $this->legacy_options() );
+
+		$this->assertSame( 401, $this->donate( 'not-the-token' )->get_status() );
+		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
+	}
+
+	/**
+	 * If the migration's write fails, the donation must still go through and
+	 * the plaintext must still be there -- nothing destroyed, nothing lost.
+	 */
+	public function test_a_failed_migration_write_neither_breaks_the_webhook_nor_loses_the_token(): void {
+		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
+		$this->write_options_raw( $this->legacy_options() );
+
+		// Returning the old value makes update_option() write nothing.
+		$refuse = static function ( $value, $old_value ) {
+			unset( $value );
+			return $old_value;
+		};
+		add_filter( 'pre_update_option_members_for_kofi_options', $refuse, 10, 2 );
+
+		try {
+			$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
+			$this->assertFalse( VerificationToken::migrate() );
+		} finally {
+			remove_filter( 'pre_update_option_members_for_kofi_options', $refuse, 10 );
+		}
+
+		$this->assertSame( $this->legacy_options(), $this->stored_options() );
+	}
+
+	/**
+	 * Running the upgrade again changes nothing.
+	 */
+	public function test_the_token_migration_is_idempotent(): void {
+		$this->simulate_plaintext_token_install();
+
+		Plugin::maybe_upgrade();
+		$after_first = $this->stored_options();
+
+		$this->assertFalse( VerificationToken::migrate(), 'A second migration must report no change.' );
+		delete_option( Plugin::DB_VERSION_OPTION );
+		Plugin::maybe_upgrade();
+
+		$this->assertSame( $after_first, $this->stored_options() );
+		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status(), 'A hash must never be hashed again.' );
+	}
+
+	/**
+	 * Two requests racing: this one read the plaintext options, but by the time
+	 * it migrates, an admin has saved a different token. The stale read must
+	 * not put the old token back.
+	 */
+	public function test_a_stale_read_never_overwrites_a_newer_saved_token(): void {
+		$stale = $this->legacy_options( 'old-token' );
+		$this->write_options_raw(
+			array( 'verification_token_sha256' => hash( 'sha256', 'new-token' ) )
+			+ array_diff_key( $this->legacy_options(), array( 'verification_token' => true ) )
+		);
+
+		// What the stale request computes for its own check.
+		VerificationToken::expected_hash( $stale );
+
+		$this->assertSame( hash( 'sha256', 'new-token' ), $this->stored_options()['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $this->stored_options() );
+	}
+
+	/**
+	 * The same race where the newer token is only in the database: another
+	 * process saved it, and this request's in-memory option cache still holds
+	 * the plaintext it loaded at start-up. migrate() must go back to the
+	 * database before writing, or it would store the hash of the old token
+	 * over the one the admin just saved.
+	 */
+	public function test_migration_rereads_past_a_stale_option_cache(): void {
+		global $wpdb;
+
+		$this->write_options_raw( $this->legacy_options( 'old-token' ) );
+		get_option( 'members_for_kofi_options' ); // Warm the cache with the plaintext.
+
+		$newer = array( 'verification_token_sha256' => hash( 'sha256', 'new-token' ) )
+			+ array_diff_key( $this->legacy_options(), array( 'verification_token' => true ) );
+		// Another process's write: straight to the table, cache untouched.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Simulating a concurrent request's write, which by definition bypasses this request's cache.
+		$wpdb->update( $wpdb->options, array( 'option_value' => maybe_serialize( $newer ) ), array( 'option_name' => 'members_for_kofi_options' ) );
+
+		$this->assertSame( 'old-token', get_option( 'members_for_kofi_options' )['verification_token'], 'Fixture failed: the cache should still be stale.' );
+
+		VerificationToken::migrate();
+
+		$this->assertSame( $newer, $this->stored_options(), 'The newer token must survive.' );
+	}
+
+	/**
+	 * An install that never configured a token has nothing to migrate: no
+	 * bogus hash of an empty string, options untouched, webhooks rejected as
+	 * before.
+	 *
+	 * @dataProvider unusable_tokens
+	 *
+	 * @param mixed $token Stored legacy token value.
+	 */
+	public function test_an_unusable_token_is_left_untouched( $token ): void {
+		$this->simulate_plaintext_token_install( $token );
+		$before = $this->stored_options();
+
+		Plugin::maybe_upgrade();
+
+		$this->assertSame( $before, $this->stored_options() );
+		$this->assertArrayNotHasKey( 'verification_token_sha256', $this->stored_options() );
+		$this->assertSame( 401, $this->donate( 'anything' )->get_status() );
+		$this->assertSame( 401, $this->donate( hash( 'sha256', '' ) )->get_status() );
+	}
+
+	/**
+	 * Stored token values that are not a usable token.
+	 *
+	 * @return array
+	 */
+	public function unusable_tokens(): array {
+		return array(
+			'empty string' => array( '' ),
+			'array'        => array( array( 'x' ) ),
+			'integer'      => array( 12345 ),
+			'null'         => array( null ),
+		);
+	}
+
+	/**
+	 * A plaintext token that matches the stored hash is a redundant copy, and
+	 * is removed.
+	 */
+	public function test_a_matching_plaintext_copy_is_removed(): void {
+		update_option( Plugin::DB_VERSION_OPTION, '3' );
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'same' ) ) + $this->legacy_options( 'same' ) );
+
+		Plugin::maybe_upgrade();
+
+		$this->assertArrayNotHasKey( 'verification_token', $this->stored_options() );
+		$this->assertSame( hash( 'sha256', 'same' ), $this->stored_options()['verification_token_sha256'] );
+	}
+
+	/**
+	 * A plaintext token that does NOT match the hash cannot be judged: both are
+	 * kept, the hash is what verifies, and the conflict is flagged.
+	 */
+	public function test_a_conflicting_plaintext_token_is_kept_and_flagged(): void {
+		update_option( Plugin::DB_VERSION_OPTION, '3' );
+		$conflict = array( 'verification_token_sha256' => hash( 'sha256', 'hashed' ) ) + $this->legacy_options( 'plain' );
+		$this->write_options_raw( $conflict );
+
+		Plugin::maybe_upgrade();
+
+		$this->assertSame( $conflict, $this->stored_options() );
+		$this->assertTrue( VerificationToken::has_conflict( $this->stored_options() ) );
+		$this->assertSame( 200, $this->donate( 'hashed' )->get_status() );
+		$this->assertSame( 401, $this->donate( 'plain' )->get_status() );
+	}
+
+	/**
+	 * A fresh install never writes a plaintext token key, even an empty one.
+	 */
+	public function test_a_fresh_install_writes_no_token_key(): void {
+		$this->write_options_raw( false );
+		delete_option( Plugin::DB_VERSION_OPTION );
+
+		Plugin::activate();
+
+		$options = $this->stored_options();
+		$this->assertIsArray( $options );
+		$this->assertArrayNotHasKey( 'verification_token', $options );
+		$this->assertArrayNotHasKey( 'verification_token_sha256', $options );
+		$this->assertSame( 401, $this->donate( 'anything' )->get_status() );
+	}
+
+	/**
+	 * Deactivate, update the files, reactivate: activation records the new
+	 * schema version without maybe_upgrade() ever running, so it has to
+	 * migrate the token itself.
+	 */
+	public function test_reactivation_migrates_a_plaintext_token(): void {
+		$this->simulate_plaintext_token_install();
+
+		Plugin::activate();
+
+		$options = $this->stored_options();
+		$this->assertSame( hash( 'sha256', 'legacy-token' ), $options['verification_token_sha256'] );
+		$this->assertArrayNotHasKey( 'verification_token', $options );
+		$this->assertSame( Plugin::DB_VERSION, get_option( Plugin::DB_VERSION_OPTION ) );
+	}
+
+	/**
+	 * Uninstall removes the hash along with the rest of the options.
+	 */
+	public function test_uninstall_removes_the_token_hash(): void {
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'x' ) ) );
+
+		Plugin::uninstall();
+
+		$this->assertFalse( $this->stored_options() );
 	}
 }

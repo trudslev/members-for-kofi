@@ -28,6 +28,8 @@ namespace MembersForKofi\Tests\Integration;
 // phpcs:disable WordPress.WP.AlternativeFunctions.curl_curl_error
 // phpcs:disable WordPress.WP.AlternativeFunctions.json_encode_json_encode
 // phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.system_calls_shell_exec
+// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
+// phpcs:disable WordPress.PHP.DiscouragedPHPFunctions.serialize_unserialize
 
 /**
  * Proves that a site left behind by an older release repairs itself.
@@ -41,9 +43,33 @@ namespace MembersForKofi\Tests\Integration;
 class SchemaUpgradeTest extends IntegrationTestCase {
 
 	/**
+	 * The plugin options row as it was before the test, hex-encoded.
+	 *
+	 * @var string
+	 */
+	private string $options_snapshot = '';
+
+	/**
+	 * Remembers the site's configured options, byte for byte.
+	 */
+	protected function setUp(): void {
+		parent::setUp();
+
+		$this->options_snapshot = self::db_query(
+			"SELECT HEX(option_value) FROM wp_options WHERE option_name = 'members_for_kofi_options'"
+		);
+	}
+
+	/**
 	 * Makes sure the site is left in a healthy state whatever happens.
 	 */
 	protected function tearDown(): void {
+		// Restore the token configuration exactly, before anything boots
+		// WordPress: the other integration tests share this install.
+		if ( '' !== $this->options_snapshot ) {
+			self::write_options( hex2bin( $this->options_snapshot ) );
+		}
+
 		self::wp( 'eval ' . escapeshellarg( 'MembersForKofi\Plugin::activate();' ) );
 
 		parent::tearDown();
@@ -75,6 +101,71 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		);
 
 		return trim( (string) shell_exec( $command ) );
+	}
+
+	/**
+	 * Replaces the stored plugin options with a raw serialized value.
+	 *
+	 * Hex-encoded so no quoting of the serialized string can go wrong.
+	 *
+	 * @param string $serialized Serialized option value.
+	 * @return void
+	 */
+	private static function write_options( string $serialized ): void {
+		self::db_query(
+			'UPDATE wp_options SET option_value = 0x' . bin2hex( $serialized ) . " WHERE option_name = 'members_for_kofi_options'"
+		);
+	}
+
+	/**
+	 * The plugin options as currently stored.
+	 *
+	 * @return array
+	 */
+	private static function read_options(): array {
+		$hex = self::db_query( "SELECT HEX(option_value) FROM wp_options WHERE option_name = 'members_for_kofi_options'" );
+
+		$options = unserialize( (string) hex2bin( $hex ), array( 'allowed_classes' => false ) );
+
+		return is_array( $options ) ? $options : array();
+	}
+
+	/**
+	 * Puts the site where a 1.1.0 install is: the given schema version, and
+	 * the token in plaintext rather than hashed.
+	 *
+	 * Written straight to MySQL: booting WordPress to write it -- WP-CLI
+	 * included -- would run the migration and leave nothing to test.
+	 *
+	 * @param string $db_version Schema version to record.
+	 * @return void
+	 */
+	private function simulate_plaintext_token_install( string $db_version ): void {
+		$options = unserialize( (string) hex2bin( $this->options_snapshot ), array( 'allowed_classes' => false ) );
+		$this->assertIsArray( $options, 'Fixture failed: could not read the configured options.' );
+
+		unset( $options['verification_token_sha256'] );
+		$options['verification_token'] = $this->token;
+
+		self::write_options( serialize( $options ) );
+		self::db_query( "UPDATE wp_options SET option_value = '" . $db_version . "' WHERE option_name = 'members_for_kofi_db_version'" );
+
+		$stored = self::read_options();
+		$this->assertSame( $this->token, $stored['verification_token'] ?? null, 'Fixture failed: the plaintext token was not stored.' );
+		$this->assertArrayNotHasKey( 'verification_token_sha256', $stored, 'Fixture failed: a hash is still stored.' );
+	}
+
+	/**
+	 * Asserts the stored options hold the hash of the test token and no
+	 * plaintext.
+	 *
+	 * @return void
+	 */
+	private function assert_token_migrated(): void {
+		$options = self::read_options();
+
+		$this->assertSame( hash( 'sha256', $this->token ), $options['verification_token_sha256'] ?? null, 'Expected the token to be stored as its hash.' );
+		$this->assertArrayNotHasKey( 'verification_token', $options, 'Expected the plaintext token to be gone.' );
 	}
 
 	/**
@@ -296,9 +387,83 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		);
 
 		$this->assertSame(
-			'3',
+			'4',
 			$recorded,
 			'Expected the site to record the schema version it upgraded to'
 		);
+	}
+
+	/**
+	 * The update must not break a working site, and Ko-fi's own request is
+	 * enough to migrate it: a 1.1.0 install, updated, whose first request
+	 * after the update is a donation -- nobody has opened wp-admin.
+	 */
+	public function test_a_donation_is_the_first_request_after_the_update(): void {
+		$this->simulate_plaintext_token_install( '3' );
+
+		$email  = $this->donor_email( 'webhook-first' );
+		$status = $this->post_donation(
+			array(
+				'verification_token'      => $this->token,
+				'email'                   => $email,
+				'tier_name'               => 'Gold',
+				'amount'                  => '5.00',
+				'is_subscription_payment' => false,
+			)
+		);
+
+		$this->assertSame( 200, $status, 'The donation must be accepted with the token Ko-fi already sends.' );
+		$this->assert_token_migrated();
+		$this->assertSame(
+			'4',
+			self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" )
+		);
+		$this->assertSame( 1, $this->logged_request_count( $email ) );
+	}
+
+	/**
+	 * The fallback over real HTTP: the schema version is already current, so
+	 * the upgrade on init does nothing, and the webhook itself has to verify
+	 * against the plaintext and migrate it.
+	 */
+	public function test_a_plaintext_token_left_behind_is_verified_and_migrated_by_the_webhook(): void {
+		$this->simulate_plaintext_token_install( '4' );
+
+		$status = $this->post_donation(
+			array(
+				'verification_token'      => $this->token,
+				'email'                   => $this->donor_email( 'fallback' ),
+				'tier_name'               => 'Gold',
+				'amount'                  => '5.00',
+				'is_subscription_payment' => false,
+			)
+		);
+
+		$this->assertSame( 200, $status );
+		$this->assert_token_migrated();
+	}
+
+	/**
+	 * A wrong token on a not-yet-migrated site is still refused, and the
+	 * right one still works afterwards.
+	 */
+	public function test_a_wrong_token_is_refused_on_a_plaintext_install(): void {
+		$this->simulate_plaintext_token_install( '4' );
+
+		$wrong = $this->post_donation(
+			array(
+				'verification_token' => 'not-the-token',
+				'email'              => $this->donor_email( 'fallback-wrong' ),
+			)
+		);
+		$right = $this->post_donation(
+			array(
+				'verification_token' => $this->token,
+				'email'              => $this->donor_email( 'fallback-right' ),
+			)
+		);
+
+		$this->assertSame( 401, $wrong );
+		$this->assertSame( 200, $right );
 	}
 }

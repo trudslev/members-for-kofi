@@ -482,6 +482,42 @@ class DonationWebhookTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * A token with stray whitespace is accepted over Ko-fi's real transport.
+	 *
+	 * The form-encoded body is run through sanitize_text_field(), which trims,
+	 * and the token saved in settings is trimmed the same way. That holds for
+	 * this path only: the REST route and callers handing handle() an array
+	 * get the token exactly as sent, so this is deliberately an HTTP test.
+	 */
+	public function test_a_padded_token_is_accepted_over_http(): void {
+		$response = $this->post_donation(
+			array(
+				'verification_token'      => "  {$this->token} \t",
+				'email'                   => $this->donor_email( 'padded-token' ),
+				'tier_name'               => 'Gold',
+				'is_subscription_payment' => true,
+			)
+		);
+
+		$this->assertSame( 200, $response['status'] );
+	}
+
+	/**
+	 * Knowing the stored hash does not let anyone donate as the site's token.
+	 */
+	public function test_sending_the_stored_hash_is_rejected(): void {
+		$response = $this->post_donation(
+			array(
+				'verification_token' => hash( 'sha256', $this->token ),
+				'email'              => $this->donor_email( 'hash-replay' ),
+			)
+		);
+
+		$this->assertSame( 401, $response['status'] );
+		$this->assertSame( array( 'error' => 'Unauthorized' ), $response['json'], 'The caller must not learn why.' );
+	}
+
+	/**
 	 * A plain GET on the endpoint is turned away and writes nothing.
 	 *
 	 * Ko-fi always POSTs. Before this, any crawler following the endpoint URL

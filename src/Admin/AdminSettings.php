@@ -23,6 +23,7 @@ namespace MembersForKofi\Admin;
 defined( 'ABSPATH' ) || exit;
 
 use MembersForKofi\Webhook\Webhook;
+use MembersForKofi\Webhook\VerificationToken;
 
 use function add_settings_section;
 use function add_settings_field;
@@ -169,8 +170,18 @@ class AdminSettings {
 		$errors        = array();
 		$enable_expiry = ! empty( $options['enable_expiry'] );
 
-		$verification_token = isset( $options['verification_token'] ) ? sanitize_text_field( $options['verification_token'] ) : '';
-		if ( '' === $verification_token ) {
+		// The field is write-only: only a hash is stored, and the form never
+		// shows it. A blank submission therefore means "keep the saved token",
+		// never "clear it". sanitize_text_field() trims, so a token pasted with
+		// stray whitespace is stored the way Ko-fi's real traffic arrives. A
+		// submitted hash is never accepted: it can only come from this code.
+		$submitted_token = isset( $options['verification_token'] ) && is_string( $options['verification_token'] )
+			? sanitize_text_field( $options['verification_token'] )
+			: '';
+		$token_hash      = '' !== $submitted_token
+			? VerificationToken::hash( $submitted_token )
+			: VerificationToken::stored_hash( $stored );
+		if ( '' === $token_hash ) {
 			$errors[] = __( 'Verification Token is required.', 'members-for-kofi' );
 		}
 
@@ -245,14 +256,14 @@ class AdminSettings {
 		}
 
 		return array(
-			'verification_token' => $verification_token,
-			'only_subscriptions' => ! empty( $options['only_subscriptions'] ),
-			'tier_role_map'      => $tier_map,
-			'default_role'       => $default_role,
-			'enable_expiry'      => $enable_expiry,
-			'role_expiry_days'   => $role_expiry_days,
-			'auto_clear_logs'    => $auto_clear_logs,
-			'log_retention_days' => $log_retention_days,
+			VerificationToken::HASH_KEY => $token_hash,
+			'only_subscriptions'        => ! empty( $options['only_subscriptions'] ),
+			'tier_role_map'             => $tier_map,
+			'default_role'              => $default_role,
+			'enable_expiry'             => $enable_expiry,
+			'role_expiry_days'          => $role_expiry_days,
+			'auto_clear_logs'           => $auto_clear_logs,
+			'log_retention_days'        => $log_retention_days,
 		);
 	}   /**
 		 * Renders the verification token field in the settings page.
@@ -266,13 +277,31 @@ class AdminSettings {
 		$options     = get_option( 'members_for_kofi_options' );
 		$webhook_url = home_url( '/webhook-kofi/' );
 
-		// Verification Token Input - Use password type to mask sensitive token.
-		echo '<input type="password" name="members_for_kofi_options[verification_token]" value="' . esc_attr( $options['verification_token'] ?? '' ) . '" class="regular-text" autocomplete="off">';
+		$fingerprint = VerificationToken::fingerprint( $options );
+
+		// Write-only: the saved token is never rendered back into the page, and
+		// only its hash is stored, so the value is always empty.
+		echo '<input type="password" name="members_for_kofi_options[verification_token]" value="" class="regular-text" autocomplete="new-password">';
+
+		if ( '' !== $fingerprint ) {
+			echo '<p class="description">' . esc_html__( 'A token is saved. Leave this blank to keep it, or paste a new one to replace it.', 'members-for-kofi' ) . '</p>';
+			echo '<p class="description">' . sprintf(
+				// translators: %s is the first eight characters of the saved token's SHA-256 hash.
+				esc_html__( 'Saved token fingerprint: %s', 'members-for-kofi' ),
+				'<code>' . esc_html( $fingerprint ) . '</code>'
+			) . '</p>';
+		} else {
+			echo '<p class="description">' . esc_html__( 'No token set yet. Webhooks are rejected until one is saved.', 'members-for-kofi' ) . '</p>';
+		}
+
+		if ( VerificationToken::has_conflict( $options ) ) {
+			echo '<p class="description" style="color: #b32d2e;">' . esc_html( self::token_conflict_message() ) . '</p>';
+		}
 
 		// Description for Verification Token.
 		$description = sprintf(
 			// translators: %s is a link to the Ko-fi Webhooks Management page.
-			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. The token is masked for security purposes.', 'members-for-kofi' ),
+			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. Only a hash of it is stored, so it cannot be shown again; to change it, paste the new one.', 'members-for-kofi' ),
 			'<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank">' . esc_html__( 'Ko-fi Webhooks Management', 'members-for-kofi' ) . '</a>'
 		);
 		echo '<p class="description">' . wp_kses(
@@ -294,6 +323,41 @@ class AdminSettings {
 		echo '</div>';
 		echo '<p class="description">' . esc_html__( 'Use this URL to configure your Ko-fi webhook.', 'members-for-kofi' ) . '</p>';
 		echo '</div>';
+	}
+
+	/**
+	 * Explains a stored hash and plaintext token that disagree.
+	 *
+	 * @return string
+	 */
+	private static function token_conflict_message(): string {
+		return __( 'Members for Ko-fi: two different verification tokens are stored, and webhooks are checked against the hashed one. Re-enter your Ko-fi verification token in the settings to resolve this.', 'members-for-kofi' );
+	}
+
+	/**
+	 * Warns administrators, on every admin screen, about conflicting tokens.
+	 *
+	 * The site is verifying against a hash nobody can inspect, and the debug
+	 * log is off on most sites, so this is the only place it will be noticed.
+	 * Saving a token clears it: the settings never store the plaintext key.
+	 *
+	 * @return void
+	 */
+	public static function render_token_conflict_notice(): void {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		if ( ! VerificationToken::has_conflict( get_option( VerificationToken::OPTION ) ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-error"><p>%s <a href="%s">%s</a></p></div>',
+			esc_html( self::token_conflict_message() ),
+			esc_url( admin_url( 'admin.php?page=members-for-kofi' ) ),
+			esc_html__( 'Open settings', 'members-for-kofi' )
+		);
 	}
 
 	/**
@@ -476,6 +540,13 @@ class AdminSettings {
 		?>
 		<div class="wrap">
 			<h1><?php esc_html_e( 'Members for Ko-fi Settings', 'members-for-kofi' ); ?></h1>
+			<?php
+			// WordPress prints Settings API messages by itself only on pages
+			// under Settings. This is a top-level page, so without this call a
+			// rejected save ("Verification Token is required", a disallowed
+			// role) was silently dropped, and a good one got no confirmation.
+			settings_errors();
+			?>
 			<h2 class="nav-tab-wrapper" role="tablist">
 				<a href="#" role="tab" data-tab="settings" aria-selected="<?php echo 'settings' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'settings' === $active_tab ? 'nav-tab-active' : ''; ?>">
 					<?php esc_html_e( 'Settings', 'members-for-kofi' ); ?>

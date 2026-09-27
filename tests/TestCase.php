@@ -70,13 +70,45 @@ abstract class TestCase extends PHPUnitTestCase {
 		$this->delete_users_created_during_test();
 		$this->truncate_log_tables();
 
-		if ( false === $this->original_options ) {
-			delete_option( 'members_for_kofi_options' );
-		} else {
-			update_option( 'members_for_kofi_options', $this->original_options );
-		}
+		// Raw, so the restore is not rewritten by sanitize_options(): that would
+		// keep this test's token hash instead of the site's, and the HTTP suite
+		// sharing this install would then fail to authenticate.
+		$this->write_options_raw( $this->original_options );
 
 		parent::tearDown();
+	}
+
+	/**
+	 * Writes the plugin options exactly as given, bypassing sanitize_options().
+	 *
+	 * Once any test has called AdminSettings::register_settings(), every
+	 * update_option() on the plugin option runs through the settings sanitizer
+	 * for the rest of the run, which hashes a plaintext token on the way in.
+	 * Fixtures that must look like an older install -- a plaintext token, an
+	 * empty one, a conflicting pair -- have to bypass it, or the upgrade tests
+	 * would be exercising data the sanitizer had already migrated.
+	 *
+	 * @param mixed $value Options to store, or false to delete the option.
+	 * @return void
+	 */
+	protected function write_options_raw( $value ): void {
+		global $wp_filter;
+
+		$hook  = 'sanitize_option_members_for_kofi_options';
+		$saved = $wp_filter[ $hook ] ?? null;
+		unset( $wp_filter[ $hook ] );
+
+		try {
+			if ( false === $value ) {
+				delete_option( 'members_for_kofi_options' );
+			} else {
+				update_option( 'members_for_kofi_options', $value );
+			}
+		} finally {
+			if ( null !== $saved ) {
+				$wp_filter[ $hook ] = $saved; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Restoring exactly what was removed above.
+			}
+		}
 	}
 
 	/**
