@@ -207,26 +207,17 @@ class PersonalData {
 	public static function anonymize_legacy_accounts(): int {
 		global $wpdb;
 
-		$ids = get_users(
-			array(
-				'fields'     => 'ID',
-				'number'     => -1,
-				// phpcs:ignore WordPress.DB.SlowDBQuery.slow_db_query_meta_query -- Runs once, during the upgrade.
-				'meta_query' => array(
-					'relation' => 'OR',
-					array(
-						'key'     => 'kofi_donation_assigned_role',
-						'compare' => 'EXISTS',
-					),
-					array(
-						'key'     => 'kofi_role_assigned_at',
-						'compare' => 'EXISTS',
-					),
-					array(
-						'key'     => Webhook::CREATED_META,
-						'compare' => 'EXISTS',
-					),
-				),
+		// One indexed lookup on meta_key. 1.3.0 used get_users() with three
+		// OR'd EXISTS clauses, which WordPress turns into three self-joins of
+		// usermeta: on foodgeek.io (2,746 rows) it never finished, and as it ran
+		// on init, every request started another copy until the site jammed.
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Read once, during the upgrade.
+		$ids = $wpdb->get_col(
+			$wpdb->prepare(
+				"SELECT DISTINCT user_id FROM {$wpdb->usermeta} WHERE meta_key IN ( %s, %s, %s )",
+				'kofi_donation_assigned_role',
+				'kofi_role_assigned_at',
+				Webhook::CREATED_META
 			)
 		);
 

@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.0
+Stable tag: 1.3.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -115,6 +115,10 @@ their WordPress user and clear the logs from the Logs tab.
 
 == Changelog ==
 
+= 1.3.1 =
+* Fix: Updating to 1.3.0 could make a site very slow or unresponsive. A one-time clean-up of supporter accounts used a database query that could take many minutes, and it was started again by every visitor until it finished. The clean-up now takes a fraction of a second, and only one visitor's request ever runs an update at a time, so the rest of the site keeps working.
+* If your site was affected, this update finishes the clean-up that 1.3.0 could not.
+
 = 1.3.0 =
 * Security: New supporter accounts no longer receive the site's "New User Default Role". On a site where that setting was something powerful (even Administrator), every supporter used to get it.
 * Security: Roles with administrator-level powers can no longer be assigned to supporters, whatever they are called.
@@ -170,6 +174,9 @@ their WordPress user and clear the logs from the Logs tab.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.3.1 =
+Important fix: updating to 1.3.0 could make a site slow or unresponsive. Update to 1.3.1 straight away; it completes 1.3.0's clean-up quickly.
 
 = 1.3.0 =
 Security, privacy and reliability update. Note three changes: shop orders and commissions no longer grant membership, Ko-fi's "Send test" no longer creates an account, and supporter accounts that showed an email address as their name are renamed automatically.

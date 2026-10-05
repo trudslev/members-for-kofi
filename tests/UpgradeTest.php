@@ -783,4 +783,117 @@ class UpgradeTest extends TestCase {
 		$this->assertSame( '', get_user_meta( $id, Webhook::PREEXISTING_ROLE_META, true ) );
 		$this->assertSame( '', get_user_meta( $id, Webhook::CREATED_META, true ) );
 	}
+
+	/**
+	 * Builds a user table bigger than foodgeek.io's (54 users, 2,746 meta
+	 * rows), written straight to the database so the fixture itself is fast.
+	 *
+	 * @param int $users          Users to create.
+	 * @param int $meta_per_user  Meta rows per user.
+	 * @return array<int> IDs of the users made the old way, as donors.
+	 */
+	private function bulk_users( int $users, int $meta_per_user ): array {
+		global $wpdb;
+
+		$legacy = array();
+
+		for ( $i = 0; $i < $users; $i++ ) {
+			$email = 'bulk-' . $i . '-' . wp_generate_password( 6, false, false ) . '@example.com';
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Test fixture written in bulk.
+			$wpdb->insert(
+				$wpdb->users,
+				array(
+					'user_login'      => $email,
+					'user_email'      => $email,
+					'user_pass'       => 'x',
+					'user_nicename'   => sanitize_title( sanitize_user( $email, true ) ),
+					'display_name'    => $email,
+					'user_registered' => current_time( 'mysql' ),
+				)
+			);
+			$id = (int) $wpdb->insert_id;
+
+			$values = array();
+			for ( $m = 0; $m < $meta_per_user; $m++ ) {
+				$values[] = $wpdb->prepare( '(%d, %s, %s)', $id, 'bulk_meta_' . $m, 'v' );
+			}
+			$values[] = $wpdb->prepare( '(%d, %s, %s)', $id, 'nickname', $email );
+			if ( 0 === $i % 5 ) {
+				$values[] = $wpdb->prepare( '(%d, %s, %s)', $id, 'kofi_donation_assigned_role', 'subscriber' );
+				$values[] = $wpdb->prepare( '(%d, %s, %s)', $id, 'kofi_role_assigned_at', (string) time() );
+				$legacy[] = $id;
+			}
+
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- Values prepared above.
+			$wpdb->query( "INSERT INTO {$wpdb->usermeta} (user_id, meta_key, meta_value) VALUES " . implode( ',', $values ) );
+		}
+
+		return $legacy;
+	}
+
+	/**
+	 * The account clean-up finishes quickly on a user table larger than
+	 * production's. 1.3.0's version never finished on foodgeek.io and, run on
+	 * every request, took the site down.
+	 */
+	public function test_the_account_clean_up_is_fast_on_a_large_user_table(): void {
+		$legacy = $this->bulk_users( 120, 60 );
+
+		$started = microtime( true );
+		$changed = \MembersForKofi\Privacy\PersonalData::anonymize_legacy_accounts();
+		$elapsed = microtime( true ) - $started;
+
+		$this->assertLessThan( 5.0, $elapsed, sprintf( 'The clean-up took %.1fs on 120 users / 7,000+ meta rows.', $elapsed ) );
+		$this->assertSame( count( $legacy ), $changed );
+		foreach ( $legacy as $id ) {
+			clean_user_cache( $id );
+			$this->assertSame( 'Supporter', get_userdata( $id )->display_name );
+		}
+	}
+
+	/**
+	 * While another request holds the upgrade, this one skips it rather than
+	 * starting a second copy -- the pile-up that jammed foodgeek.io.
+	 */
+	public function test_the_upgrade_runs_in_one_request_at_a_time(): void {
+		global $wpdb;
+
+		update_option( Plugin::DB_VERSION_OPTION, '5' );
+
+		// Another request: a second database connection holding the lock.
+		$other = new \wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+		$this->assertSame( '1', (string) $other->get_var( $other->prepare( 'SELECT GET_LOCK( %s, 0 )', Plugin::upgrade_lock_name() ) ), 'Fixture: the other connection must hold the lock.' );
+
+		try {
+			$started = microtime( true );
+			Plugin::maybe_upgrade();
+
+			$this->assertLessThan( 1.0, microtime( true ) - $started, 'Must not wait for the lock.' );
+			wp_cache_delete( Plugin::DB_VERSION_OPTION, 'options' );
+			$this->assertSame( '5', get_option( Plugin::DB_VERSION_OPTION ), 'Must not upgrade while another request is.' );
+		} finally {
+			$other->query( $other->prepare( 'SELECT RELEASE_LOCK( %s )', Plugin::upgrade_lock_name() ) );
+			$other->close();
+		}
+
+		Plugin::maybe_upgrade();
+		$this->assertSame( Plugin::DB_VERSION, get_option( Plugin::DB_VERSION_OPTION ) );
+		$this->assertSame( '0', (string) $wpdb->get_var( $wpdb->prepare( 'SELECT IS_USED_LOCK( %s ) IS NOT NULL', Plugin::upgrade_lock_name() ) ), 'The lock is released.' );
+	}
+
+	/**
+	 * A site left at schema 5 without the clean-up -- foodgeek.io, whose 1.3.0
+	 * upgrade had to be stopped -- gets it on the way to 6.
+	 */
+	public function test_a_site_stuck_at_schema_5_gets_the_clean_up(): void {
+		$id = $this->legacy_donor( 'stuck.donor@example.com' );
+		update_user_meta( $id, 'kofi_donation_assigned_role', 'subscriber' );
+		update_option( Plugin::DB_VERSION_OPTION, '5' );
+
+		Plugin::maybe_upgrade();
+
+		clean_user_cache( $id );
+		$this->assertSame( 'Supporter', get_userdata( $id )->display_name );
+		$this->assertSame( '6', get_option( Plugin::DB_VERSION_OPTION ) );
+	}
 }

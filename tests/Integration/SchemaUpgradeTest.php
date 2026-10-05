@@ -387,7 +387,7 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		);
 
 		$this->assertSame(
-			'5',
+			'6',
 			$recorded,
 			'Expected the site to record the schema version it upgraded to'
 		);
@@ -415,7 +415,7 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		$this->assertSame( 200, $status, 'The donation must be accepted with the token Ko-fi already sends.' );
 		$this->assert_token_migrated();
 		$this->assertSame(
-			'5',
+			'6',
 			self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" )
 		);
 		$this->assertSame( 1, $this->logged_request_count( $email ) );
@@ -486,6 +486,114 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 
 		$this->assertSame( 'Supporter', self::db_query( 'SELECT display_name FROM wp_users WHERE ID = ' . $id ) );
 		$this->assertStringStartsWith( 'kofi-', self::db_query( 'SELECT user_nicename FROM wp_users WHERE ID = ' . $id ) );
-		$this->assertSame( '5', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
+		$this->assertSame( '6', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
+	}
+
+	/**
+	 * Requests a page and reports how long it took.
+	 *
+	 * @param string $path Path below the site URL.
+	 * @return array{0:int,1:float} Status and seconds.
+	 */
+	private function timed_get( string $path ): array {
+		$curl = curl_init( $this->base_url . $path );
+		curl_setopt_array(
+			$curl,
+			array(
+				CURLOPT_RETURNTRANSFER => true,
+				CURLOPT_TIMEOUT        => 30,
+			)
+		);
+		curl_exec( $curl );
+		$result = array( (int) curl_getinfo( $curl, CURLINFO_HTTP_CODE ), (float) curl_getinfo( $curl, CURLINFO_TOTAL_TIME ) );
+		unset( $curl );
+
+		return $result;
+	}
+
+	/**
+	 * While another process holds the upgrade, pages answer at once and the
+	 * upgrade is left to it; once it lets go, the next request upgrades.
+	 *
+	 * The lock is held by a separate MySQL session, as a slow upgrading
+	 * request would hold it. In 1.3.0 each request started its own copy of
+	 * the upgrade instead, and foodgeek.io jammed.
+	 */
+	public function test_pages_answer_while_another_process_upgrades(): void {
+		self::db_query( "UPDATE wp_options SET option_value = '5' WHERE option_name = 'members_for_kofi_db_version'" );
+
+		$name   = 'mfk_up_' . md5( 'wordpress_test|wp_' );
+		$holder = proc_open(
+			array( 'docker', 'compose', '-f', dirname( __DIR__, 2 ) . '/docker-compose.test.yml', 'exec', '-T', 'db', 'mysql', '-uwp', '-pwp', 'wordpress_test', '-N', '-e', "SELECT GET_LOCK('{$name}', 0); SELECT SLEEP(12);" ),
+			array(
+				1 => array( 'pipe', 'w' ),
+				2 => array( 'pipe', 'w' ),
+			),
+			$pipes
+		);
+		$this->assertIsResource( $holder );
+
+		try {
+			// Wait until the other session really holds the lock.
+			$held = '';
+			for ( $i = 0; $i < 40; $i++ ) {
+				$held = self::db_query( "SELECT IS_USED_LOCK('{$name}') IS NOT NULL" );
+				if ( '1' === $held ) {
+					break;
+				}
+				usleep( 250000 );
+			}
+			$this->assertSame( '1', $held, 'Fixture: the lock must be held.' );
+
+			list( $status, $seconds ) = $this->timed_get( '/?locked=' . uniqid() );
+			$this->assertSame( 200, $status );
+			$this->assertLessThan( 3.0, $seconds, 'A page must not wait for another process\'s upgrade.' );
+			$this->assertSame( '5', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
+		} finally {
+			foreach ( $pipes as $pipe ) {
+				fclose( $pipe );
+			}
+			proc_close( $holder );
+		}
+
+		$this->timed_get( '/?after=' . uniqid() );
+		$this->assertSame( '6', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
+	}
+
+	/**
+	 * Many simultaneous first requests after an update all answer, and the
+	 * site ends up upgraded.
+	 */
+	public function test_simultaneous_requests_after_an_update_all_answer(): void {
+		self::db_query( "UPDATE wp_options SET option_value = '4' WHERE option_name = 'members_for_kofi_db_version'" );
+
+		$multi   = curl_multi_init();
+		$handles = array();
+		for ( $i = 0; $i < 12; $i++ ) {
+			$ch = curl_init( $this->base_url . '/?burst=' . $i . uniqid() );
+			curl_setopt_array(
+				$ch,
+				array(
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_TIMEOUT        => 30,
+				)
+			);
+			curl_multi_add_handle( $multi, $ch );
+			$handles[] = $ch;
+		}
+		do {
+			curl_multi_exec( $multi, $running );
+			curl_multi_select( $multi );
+		} while ( $running > 0 );
+
+		$statuses = array();
+		foreach ( $handles as $ch ) {
+			$statuses[] = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+			curl_multi_remove_handle( $multi, $ch );
+		}
+		curl_multi_close( $multi );
+
+		$this->assertSame( array_fill( 0, 12, 200 ), $statuses );
+		$this->assertSame( '6', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
 	}
 }

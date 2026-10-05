@@ -695,7 +695,9 @@ class Webhook {
 	private function lock_email( string $email ): string {
 		global $wpdb;
 
-		$name = 'mfk_' . md5( strtolower( $email ) );
+		// Lock names are global to the MySQL server, which other sites may
+		// share, so the name carries this site's database and table prefix.
+		$name = 'mfk_' . md5( DB_NAME . '|' . $wpdb->prefix . '|' . strtolower( $email ) );
 
 		$suppress = $wpdb->suppress_errors( true );
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A named lock has no WordPress API, and must never be cached.

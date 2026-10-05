@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.3.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.3.1) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -273,7 +273,7 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 `make release` builds `vendor/` fresh with `--no-dev` into a staging directory
 rather than copying the working tree's, which carries the whole test toolchain.
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.3.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.3.1`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
 ## Key Files & Patterns
 
@@ -338,9 +338,23 @@ The upgrade path lives in `Plugin::maybe_upgrade()`, hooked on `init` (priority 
 guarded by the `members_for_kofi_db_version` option:
 
 ```php
-public const DB_VERSION = '5';
+public const DB_VERSION = '6';
 public const DB_VERSION_OPTION = 'members_for_kofi_db_version';
 ```
+
+**The upgrade is single-flight and must stay cheap.** It runs on `init`, so a slow step is started
+again by every request until it finishes. 1.3.0's account clean-up used `get_users()` with three OR'd
+meta `EXISTS` clauses (three self-joins of usermeta); it never finished on foodgeek.io, 42 copies piled
+up and the site jammed for ~12 minutes. Since 1.3.1:
+
+- `maybe_upgrade()` takes a non-blocking `GET_LOCK()` (`Plugin::upgrade_lock_name()`); any other
+  request skips the upgrade instead of waiting, and the version is recorded only by the request that
+  finished. Lock names are global to the MySQL server, so they carry `DB_NAME` and the table prefix
+- Never use `get_users()`/`WP_User_Query` meta queries with several clauses in upgrade code; query
+  `usermeta` by `meta_key` directly
+- Time any upgrade step against production-sized data before release
+  (`UpgradeTest::test_the_account_clean_up_is_fast_on_a_large_user_table` failed in 47 s with the
+  1.3.0 query), and release in the order dev site → production → WordPress.org
 
 When changing the schema — adding a table, adding or altering a column — you MUST:
 

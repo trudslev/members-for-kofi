@@ -51,11 +51,13 @@ class Plugin {
 	 * Bump this whenever a table is added or its columns change, or stored data
 	 * changes shape, so existing installs pick the change up on their next
 	 * request. Version 4 replaces the plaintext verification token with a hash;
-	 * version 5 takes donors' email addresses out of their public names.
+	 * version 5 takes donors' email addresses out of their public names;
+	 * version 6 reruns that clean-up, which 1.3.0 could not finish on sites
+	 * where its query stalled.
 	 *
 	 * @var string
 	 */
-	public const DB_VERSION = '5';
+	public const DB_VERSION = '6';
 
 	/**
 	 * Option key holding the schema version currently installed on this site.
@@ -203,6 +205,36 @@ class Plugin {
 			return;
 		}
 
+		// One request upgrades; every other carries on without waiting. This
+		// runs on init, so without it a slow step is started again by every
+		// request until the site jams -- which is how 1.3.0 took foodgeek.io
+		// down. The version is only recorded by the request that finished.
+		$lock = self::upgrade_lock_name();
+		if ( ! self::acquire_lock( $lock ) ) {
+			return;
+		}
+
+		try {
+			self::run_upgrade( $installed );
+		} finally {
+			self::release_lock( $lock );
+		}
+	}
+
+	/**
+	 * Performs the upgrade steps and records the new version.
+	 *
+	 * @param mixed $installed Version recorded before the upgrade.
+	 * @return void
+	 */
+	private static function run_upgrade( $installed ): void {
+		// Another request may have finished while this one waited for init.
+		wp_cache_delete( self::DB_VERSION_OPTION, 'options' );
+		wp_cache_delete( 'alloptions', 'options' );
+		if ( self::DB_VERSION === get_option( self::DB_VERSION_OPTION ) ) {
+			return;
+		}
+
 		self::install_tables();
 		RequestLogger::drop_verification_token_column();
 
@@ -220,6 +252,55 @@ class Plugin {
 				'to'   => self::DB_VERSION,
 			)
 		);
+	}
+
+	/**
+	 * Name of the database lock that makes the upgrade single-flight.
+	 *
+	 * Lock names are global to the MySQL server, which several sites may share,
+	 * so the name carries this site's database and table prefix.
+	 *
+	 * @return string
+	 */
+	public static function upgrade_lock_name(): string {
+		global $wpdb;
+
+		return 'mfk_up_' . md5( DB_NAME . '|' . $wpdb->prefix );
+	}
+
+	/**
+	 * Takes a named database lock without waiting.
+	 *
+	 * Where named locks are unavailable (a database without GET_LOCK), the
+	 * upgrade proceeds unlocked rather than never running.
+	 *
+	 * @param string $name Lock name.
+	 * @return bool False only when another connection holds the lock.
+	 */
+	private static function acquire_lock( string $name ): bool {
+		global $wpdb;
+
+		$suppress = $wpdb->suppress_errors( true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A named lock has no WordPress API, and must never be cached.
+		$got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, 0 )', $name ) );
+		$wpdb->suppress_errors( $suppress );
+
+		return '0' !== (string) $got;
+	}
+
+	/**
+	 * Releases a lock taken by acquire_lock().
+	 *
+	 * @param string $name Lock name.
+	 * @return void
+	 */
+	private static function release_lock( string $name ): void {
+		global $wpdb;
+
+		$suppress = $wpdb->suppress_errors( true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- See acquire_lock().
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK( %s )', $name ) );
+		$wpdb->suppress_errors( $suppress );
 	}
 
 	/**
