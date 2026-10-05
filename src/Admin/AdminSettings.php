@@ -202,9 +202,9 @@ class AdminSettings {
 				$tier = sanitize_text_field( $tier_raw );
 				$role = isset( $options['tier_role_map']['role'][ $index ] ) ? sanitize_key( $options['tier_role_map']['role'][ $index ] ) : '';
 				// Security: Explicitly reject disallowed roles (e.g., administrator).
-				if ( $tier && $role && ! in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
 					$tier_map[ $tier ] = $role;
-				} elseif ( $tier && $role && in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
 					$errors[] = sprintf(
 						// translators: %s is the role name that was rejected.
 						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
@@ -218,9 +218,9 @@ class AdminSettings {
 				$tier = sanitize_text_field( $tier_raw );
 				$role = sanitize_key( $role_raw );
 				// Security: Explicitly reject disallowed roles (e.g., administrator).
-				if ( $tier && $role && ! in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
 					$tier_map[ $tier ] = $role;
-				} elseif ( $tier && $role && in_array( $role, Webhook::DISALLOWED_ROLES, true ) ) {
+				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
 					$errors[] = sprintf(
 						// translators: %s is the role name that was rejected.
 						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
@@ -232,7 +232,7 @@ class AdminSettings {
 
 		// Security: Validate default role is not in disallowed list.
 		$default_role = isset( $options['default_role'] ) ? sanitize_key( $options['default_role'] ) : '';
-		if ( $default_role && in_array( $default_role, Webhook::DISALLOWED_ROLES, true ) ) {
+		if ( $default_role && ! Webhook::is_assignable_role( $default_role ) ) {
 			$errors[] = sprintf(
 				// translators: %s is the role name that was rejected.
 				__( 'Security: Role "%s" cannot be used as default role for security reasons.', 'members-for-kofi' ),
@@ -275,7 +275,7 @@ class AdminSettings {
 		 */
 	public function render_verification_token_field(): void {
 		$options     = get_option( 'members_for_kofi_options' );
-		$webhook_url = home_url( '/webhook-kofi/' );
+		$webhook_url = self::webhook_url();
 
 		$fingerprint = VerificationToken::fingerprint( $options );
 
@@ -323,6 +323,109 @@ class AdminSettings {
 		echo '</div>';
 		echo '<p class="description">' . esc_html__( 'Use this URL to configure your Ko-fi webhook.', 'members-for-kofi' ) . '</p>';
 		echo '</div>';
+	}
+
+	/**
+	 * The webhook address to give Ko-fi.
+	 *
+	 * `/webhook-kofi/` needs pretty permalinks to reach WordPress at all on
+	 * some servers; the query form works everywhere, so it is what a site on
+	 * plain permalinks is shown.
+	 *
+	 * @return string
+	 */
+	public static function webhook_url(): string {
+		if ( '' === (string) get_option( 'permalink_structure' ) ) {
+			return add_query_arg( 'kofi_webhook', '1', home_url( '/' ) );
+		}
+
+		return home_url( '/webhook-kofi/' );
+	}
+
+	/**
+	 * Warns when the plugin's scheduled tasks are not running.
+	 *
+	 * With WP-Cron disabled and no system cron, roles never expire -- free
+	 * access for anyone who ever paid -- and logs are never pruned, with
+	 * nothing to say so. An event more than a day overdue is that evidence.
+	 *
+	 * @return void
+	 */
+	public function render_cron_warning(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$hooks   = array( 'kofi_members_cleanup_logs' );
+
+		if ( ! empty( $options['enable_expiry'] ?? true ) ) {
+			$hooks[] = 'kofi_members_check_expired_roles';
+		}
+
+		foreach ( $hooks as $hook ) {
+			$next = wp_next_scheduled( $hook );
+
+			if ( false !== $next && $next < time() - DAY_IN_SECONDS ) {
+				echo '<div class="notice notice-warning"><p>' . esc_html(
+					sprintf(
+						// translators: %s is a human-readable time span, e.g. "3 days".
+						__( 'Scheduled tasks are not running: role expiry and log cleanup are %s overdue. Make sure WP-Cron runs, or that a system cron calls wp-cron.php.', 'members-for-kofi' ),
+						human_time_diff( $next )
+					)
+				) . '</p></div>';
+				return;
+			}
+		}
+	}
+
+	/**
+	 * Points administrators at an account left behind by Ko-fi's test button.
+	 *
+	 * Before 1.3.0 a "Send test" webhook was processed like a payment, so a
+	 * site that ever pressed it has a "Jo Example" account, usually holding the
+	 * membership role. Shown where an administrator would see and act on it.
+	 *
+	 * @param string|null $screen_id Screen to check; defaults to the current one.
+	 * @return void
+	 */
+	public static function render_test_account_notice( $screen_id = null ): void {
+		if ( ! current_user_can( 'delete_users' ) ) {
+			return;
+		}
+
+		// do_action( 'admin_notices' ) hands every callback an empty string, so
+		// '' has to mean "the current screen" just like no argument does.
+		if ( ! is_string( $screen_id ) || '' === $screen_id ) {
+			$screen    = function_exists( 'get_current_screen' ) ? get_current_screen() : null;
+			$screen_id = $screen ? (string) $screen->id : '';
+		}
+
+		if ( ! in_array( $screen_id, array( 'dashboard', 'users', 'toplevel_page_members-for-kofi' ), true ) ) {
+			return;
+		}
+
+		$user = get_user_by( 'email', Webhook::KOFI_TEST_EMAIL );
+
+		if ( ! $user ) {
+			return;
+		}
+
+		$names = wp_roles()->get_names();
+		$roles = array();
+		foreach ( $user->roles as $slug ) {
+			$roles[] = isset( $names[ $slug ] ) ? translate_user_role( $names[ $slug ] ) : $slug;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p>%s <a href="%s">%s</a></p></div>',
+			esc_html(
+				sprintf(
+					// translators: 1: email address, 2: comma-separated role names, or "no role".
+					__( 'Members for Ko-fi: an account was created by Ko-fi\'s "Send test" button (%1$s, role: %2$s). It is not a real supporter; earlier versions treated tests as payments. You can safely delete it.', 'members-for-kofi' ),
+					Webhook::KOFI_TEST_EMAIL,
+					array() !== $roles ? implode( ', ', $roles ) : __( 'none', 'members-for-kofi' )
+				)
+			),
+			esc_url( get_edit_user_link( $user->ID ) ),
+			esc_html__( 'Review the account', 'members-for-kofi' )
+		);
 	}
 
 	/**
@@ -384,10 +487,9 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_tier_role_map_field(): void {
-		$options          = get_option( 'members_for_kofi_options', array() );
-		$map              = isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ? $options['tier_role_map'] : array();
-		$roles            = get_editable_roles();
-		$disallowed_roles = Webhook::DISALLOWED_ROLES;
+		$options = get_option( 'members_for_kofi_options', array() );
+		$map     = isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ? $options['tier_role_map'] : array();
+		$roles   = get_editable_roles();
 
 		echo '<table id="tier-role-map-table" class="form-table" style="margin-top:0">';
 		echo '<thead><tr><th>' . esc_html__( 'Ko-fi Tier', 'members-for-kofi' ) . '</th><th>' . esc_html__( 'Role', 'members-for-kofi' ) . '</th><th></th></tr></thead><tbody>';
@@ -400,7 +502,7 @@ class AdminSettings {
 				echo '<td><input type="text" name="members_for_kofi_options[tier_role_map][tier][]" value="' . esc_attr( $tier_val ) . '" class="regular-text"></td>';
 				echo '<td><select name="members_for_kofi_options[tier_role_map][role][]" class="regular-text">';
 				foreach ( $roles as $key => $details ) {
-					if ( in_array( $key, $disallowed_roles, true ) ) {
+					if ( ! Webhook::is_assignable_role( $key ) ) {
 						continue;
 					}
 					echo '<option value="' . esc_attr( $key ) . '"' . selected( $role_val, $key, false ) . '>' . esc_html( $details['name'] ) . '</option>';
@@ -418,7 +520,7 @@ class AdminSettings {
 		echo '<td><input type="text" name="members_for_kofi_options[tier_role_map][tier][]" class="regular-text tier-name-input"></td>';
 		echo '<td><select name="members_for_kofi_options[tier_role_map][role][]" class="regular-text tier-role-select">';
 		foreach ( $roles as $key => $details ) {
-			if ( in_array( $key, $disallowed_roles, true ) ) {
+			if ( ! Webhook::is_assignable_role( $key ) ) {
 				continue;
 			}
 			echo '<option value="' . esc_attr( $key ) . '">' . esc_html( $details['name'] ) . '</option>';
@@ -441,16 +543,15 @@ class AdminSettings {
 	 * @return void
 	 */
 	public function render_default_role_field(): void {
-		$options          = get_option( 'members_for_kofi_options', array() );
-		$roles            = get_editable_roles();
-		$selected         = $options['default_role'] ?? array();
-		$disallowed_roles = Webhook::DISALLOWED_ROLES;
+		$options  = get_option( 'members_for_kofi_options', array() );
+		$roles    = get_editable_roles();
+		$selected = $options['default_role'] ?? array();
 
 		echo '<select name="members_for_kofi_options[default_role]">';
 		echo '<option value="">' . esc_html__( '— No default —', 'members-for-kofi' ) . '</option>';
 		foreach ( $roles as $role_key => $role_details ) {
 			// Skip disallowed roles (e.g., administrator) for security.
-			if ( in_array( $role_key, $disallowed_roles, true ) ) {
+			if ( ! Webhook::is_assignable_role( $role_key ) ) {
 				continue;
 			}
 			echo '<option value="' . esc_attr( $role_key ) . '"' . selected( $role_key, $selected, false ) . '>' . esc_html( $role_details['name'] ) . '</option>';
@@ -546,6 +647,7 @@ class AdminSettings {
 			// rejected save ("Verification Token is required", a disallowed
 			// role) was silently dropped, and a good one got no confirmation.
 			settings_errors();
+			$this->render_cron_warning();
 			?>
 			<h2 class="nav-tab-wrapper" role="tablist">
 				<a href="#" role="tab" data-tab="settings" aria-selected="<?php echo 'settings' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'settings' === $active_tab ? 'nav-tab-active' : ''; ?>">

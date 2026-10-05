@@ -316,4 +316,100 @@ class WebhookHttpTest extends IntegrationTestCase {
 			'Should handle long strings gracefully'
 		);
 	}
+
+	// ==================== FMEA FIXES (1.3.0) ====================
+
+	/**
+	 * Counts accounts holding an email address.
+	 *
+	 * @param string $email Email.
+	 * @return int
+	 */
+	private function accounts_for( string $email ): int {
+		return (int) self::wp( 'user list --search=' . escapeshellarg( $email ) . ' --search-columns=user_email --format=count' );
+	}
+
+	/**
+	 * On plain permalinks the advertised URL used to fall through to the front
+	 * page and answer 200, so Ko-fi marked the payment delivered while nothing
+	 * was processed. It must now reach the plugin.
+	 */
+	public function test_the_webhook_works_on_plain_permalinks(): void {
+		self::wp( "rewrite structure '' --hard" );
+
+		try {
+			$email    = $this->donor_email( 'plain-permalinks' );
+			$response = $this->send_webhook_request(
+				array(
+					'verification_token'      => $this->valid_token,
+					'email'                   => $email,
+					'tier_name'               => 'Gold',
+					'is_subscription_payment' => true,
+				)
+			);
+
+			$this->assertSame( 200, $response['status_code'] );
+			$this->assertSame( array( 'success' => true ), $response['decoded'], 'The plugin, not the front page, must answer.' );
+			$this->assertSame( 1, $this->accounts_for( $email ) );
+		} finally {
+			self::wp( "rewrite structure '/%postname%/' --hard" );
+			self::wp( 'rewrite flush --hard' );
+		}
+	}
+
+	/**
+	 * Simultaneous first payments from one new email create one account.
+	 *
+	 * WordPress checks an email is unused in PHP, with no unique key behind
+	 * it, and four concurrent requests once produced three accounts with the
+	 * same login and address. Several rounds, because the race is timing.
+	 */
+	public function test_simultaneous_first_payments_create_one_account(): void {
+		for ( $round = 1; $round <= 3; $round++ ) {
+			$email   = $this->donor_email( 'race-' . $round );
+			$payload = 'data=' . rawurlencode(
+				wp_json_encode(
+					array(
+						'verification_token'      => $this->valid_token,
+						'email'                   => $email,
+						'tier_name'               => 'Gold',
+						'is_subscription_payment' => true,
+					)
+				)
+			);
+
+			$multi   = curl_multi_init();
+			$handles = array();
+			for ( $i = 0; $i < 6; $i++ ) {
+				$ch = curl_init( $this->webhook_url );
+				curl_setopt_array(
+					$ch,
+					array(
+						CURLOPT_POST           => true,
+						CURLOPT_POSTFIELDS     => $payload,
+						CURLOPT_RETURNTRANSFER => true,
+						CURLOPT_HTTPHEADER     => array( 'Content-Type: application/x-www-form-urlencoded' ),
+						CURLOPT_TIMEOUT        => 30,
+					)
+				);
+				curl_multi_add_handle( $multi, $ch );
+				$handles[] = $ch;
+			}
+
+			do {
+				curl_multi_exec( $multi, $running );
+				curl_multi_select( $multi );
+			} while ( $running > 0 );
+
+			$statuses = array();
+			foreach ( $handles as $ch ) {
+				$statuses[] = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
+				curl_multi_remove_handle( $multi, $ch );
+			}
+			curl_multi_close( $multi );
+
+			$this->assertSame( array_fill( 0, 6, 200 ), $statuses, "Round {$round}: every request must succeed." );
+			$this->assertSame( 1, $this->accounts_for( $email ), "Round {$round}: exactly one account." );
+		}
+	}
 }

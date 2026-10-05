@@ -95,7 +95,7 @@ class VerificationToken {
 	/**
 	 * The hash an incoming token must match.
 	 *
-	 * Fallback, to be removed in 1.3.0: when a site still holds only a plaintext
+	 * Fallback, to be removed in 1.4.0: when a site still holds only a plaintext
 	 * token -- restored from an old backup, written by another code path, or
 	 * reached before the upgrade on init ran -- it is verified against that
 	 * plaintext and migrated on the spot. Once this is gone, tests that seed a

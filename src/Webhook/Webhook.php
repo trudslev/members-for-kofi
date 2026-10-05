@@ -58,6 +58,94 @@ class Webhook {
 	public const DISALLOWED_ROLES = array( 'administrator' );
 
 	/**
+	 * Capabilities a webhook-assigned role must never carry.
+	 *
+	 * Blocking the `administrator` slug alone left any custom role with admin
+	 * powers assignable by anyone who can pay. These are the capabilities that
+	 * amount to running the site. `unfiltered_html` is deliberately absent:
+	 * editors carry it on single sites, and mapping a tier to editor is a
+	 * legitimate configuration.
+	 *
+	 * @var array<string>
+	 */
+	public const DANGEROUS_CAPABILITIES = array(
+		'manage_options',
+		'edit_users',
+		'create_users',
+		'delete_users',
+		'promote_users',
+		'install_plugins',
+		'activate_plugins',
+		'edit_plugins',
+		'delete_plugins',
+		'update_plugins',
+		'install_themes',
+		'edit_themes',
+		'switch_themes',
+		'edit_files',
+		'update_core',
+		'manage_network',
+		'manage_sites',
+		'manage_network_users',
+		'manage_network_options',
+	);
+
+	/**
+	 * Ko-fi event types that grant membership.
+	 *
+	 * Shop orders and commissions are purchases, not support: they used to
+	 * create an account and hand out the default role. Filterable through
+	 * `members_for_kofi_granting_types` for a site that sells access as a
+	 * shop item. A payload without a type is treated as granting, which keeps
+	 * older and hand-made payloads working.
+	 *
+	 * @var array<string>
+	 */
+	public const GRANTING_TYPES = array( 'Donation', 'Subscription' );
+
+	/**
+	 * User meta naming a role the user already had when the webhook first
+	 * assigned it. Such a role was granted by someone else, so expiry and tier
+	 * changes stop tracking it but never remove it.
+	 *
+	 * @var string
+	 */
+	public const PREEXISTING_ROLE_META = 'kofi_role_preexisting';
+
+	/**
+	 * User meta marking an account this plugin created.
+	 *
+	 * @var string
+	 */
+	public const CREATED_META = 'kofi_created_by_plugin';
+
+	/**
+	 * The transaction id Ko-fi puts in every "Send test" webhook.
+	 *
+	 * Real payments carry a random one. A test used to be processed like a
+	 * payment and leave a "Jo Example" account holding a membership role.
+	 *
+	 * @var string
+	 */
+	public const KOFI_TEST_TRANSACTION_ID = '00000000-1111-2222-3333-444444444444';
+
+	/**
+	 * The donor address in every Ko-fi "Send test" webhook.
+	 *
+	 * Used only to find accounts that tests created before 1.3.0.
+	 *
+	 * @var string
+	 */
+	public const KOFI_TEST_EMAIL = 'jo.example@example.com';
+
+	/**
+	 * How long a delivered Ko-fi message is remembered, to ignore redelivery.
+	 *
+	 * @var int
+	 */
+	public const DUPLICATE_WINDOW = 7 * DAY_IN_SECONDS;
+
+	/**
 	 * Failed attempts from one IP before the endpoint starts shedding them.
 	 *
 	 * Only failures count, and an authenticated request is never throttled,
@@ -276,9 +364,22 @@ class Webhook {
 	 */
 	private function client_ip(): string {
 		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading the connecting address, not form input.
-		return isset( $_SERVER['REMOTE_ADDR'] )
+		$ip = isset( $_SERVER['REMOTE_ADDR'] )
 			? sanitize_text_field( wp_unslash( $_SERVER['REMOTE_ADDR'] ) )
 			: '';
+
+		/**
+		 * Filters the address failures are counted against.
+		 *
+		 * Behind a reverse proxy REMOTE_ADDR is the proxy, so every client shares
+		 * one failure bucket and anyone can exhaust it. A site that knows its
+		 * proxy can return the real client address here. The default stays
+		 * REMOTE_ADDR because forwarding headers are client-controlled unless a
+		 * trusted proxy set them.
+		 *
+		 * @param string $ip REMOTE_ADDR.
+		 */
+		return (string) apply_filters( 'members_for_kofi_client_ip', $ip );
 	}
 
 	/**
@@ -327,7 +428,18 @@ class Webhook {
 	 */
 	private function process( array $body ): \WP_REST_Response {
 		$options = get_option( 'members_for_kofi_options' );
-		DebugLogger::info( 'Webhook received', array( 'body' => $body ) );
+		$options = is_array( $options ) ? $options : array();
+
+		// Only what is needed to follow a request: the payload carries the
+		// donor's email, name and message, which must not reach a log file.
+		DebugLogger::info(
+			'Webhook received',
+			array(
+				'type'            => isset( $body['type'] ) && is_string( $body['type'] ) ? $body['type'] : '',
+				'tier'            => isset( $body['tier_name'] ) && is_string( $body['tier_name'] ) ? $body['tier_name'] : '',
+				'is_subscription' => $this->is_true( $body['is_subscription_payment'] ?? false ),
+			)
+		);
 
 		if ( empty( $body['verification_token'] ) ) {
 			return new \WP_REST_Response( array( 'error' => 'Missing verification token' ), 400 );
@@ -347,101 +459,363 @@ class Webhook {
 			return new \WP_REST_Response( array( 'error' => 'Unauthorized' ), 401 );
 		}
 
-		if ( empty( $body['email'] ) || ! is_email( $body['email'] ) ) {
+		// Ko-fi's "Send test" button. It has authenticated, which is what the
+		// test is for -- the token and URL work -- so record that and stop: no
+		// account, no role. Checked after authentication, so a test with the
+		// wrong token is still refused and still says so.
+		if ( isset( $body['kofi_transaction_id'] ) && self::KOFI_TEST_TRANSACTION_ID === $body['kofi_transaction_id'] ) {
+			DebugLogger::info( 'Ko-fi test webhook received' );
+			$test_email = isset( $body['email'] ) && is_string( $body['email'] ) && is_email( $body['email'] ) ? sanitize_email( $body['email'] ) : '';
+			( new UserLogger() )->log_action( 0, $test_email, 'Ko-fi test received' );
+
+			return new \WP_REST_Response(
+				array(
+					'success' => true,
+					'test'    => true,
+				),
+				200
+			);
+		}
+
+		if ( empty( $body['email'] ) || ! is_string( $body['email'] ) || ! is_email( $body['email'] ) ) {
 			DebugLogger::warning( 'Invalid or missing email' );
 			return new \WP_REST_Response( array( 'error' => 'Invalid email' ), 400 );
 		}
 
 		$email     = sanitize_email( $body['email'] );
-		$tier_name = sanitize_text_field( $body['tier_name'] ?? '' );
+		$tier_name = isset( $body['tier_name'] ) && is_string( $body['tier_name'] ) ? sanitize_text_field( $body['tier_name'] ) : '';
 		$amount    = floatval( $body['amount'] ?? 0 );
-		$currency  = sanitize_text_field( $body['currency'] ?? 'USD' );
-		$user      = get_user_by( 'email', $email );
-
-		$is_subscription    = $body['is_subscription_payment'] ?? false;
-		$only_subscriptions = $options['only_subscriptions'] ?? false;
+		$currency  = isset( $body['currency'] ) && is_string( $body['currency'] ) ? sanitize_text_field( $body['currency'] ) : 'USD';
+		$type      = isset( $body['type'] ) && is_string( $body['type'] ) ? sanitize_text_field( $body['type'] ) : '';
 
 		$user_logger = new UserLogger();
 
-		if ( ! $only_subscriptions || $is_subscription ) {
+		// Every outcome below answers 200: the payment was received and
+		// understood, and anything else makes Ko-fi retry a request that would
+		// be decided the same way again.
+		if ( ! $this->grants_membership( $type ) ) {
+			$user = get_user_by( 'email', $email );
+			$user_logger->log_action( $user ? $user->ID : 0, $email, $this->log_label( 'Ignored', $type ) );
+			return new \WP_REST_Response( array( 'success' => true ), 200 );
+		}
+
+		if ( ! empty( $options['only_subscriptions'] ) && ! $this->is_true( $body['is_subscription_payment'] ?? false ) ) {
+			DebugLogger::info( 'Ignoring non-subscription payment due to only_subscriptions setting' );
+			$user = get_user_by( 'email', $email );
+			$user_logger->log_action( $user ? $user->ID : 0, $email, 'Ignored non-subscription payment' );
+			return new \WP_REST_Response( array( 'success' => true ), 200 );
+		}
+
+		// Two deliveries for the same new email used to race: WordPress checks
+		// that an email is unused in PHP, with no unique key behind it, so
+		// simultaneous requests could each create an account -- the same login
+		// and address several times over. One request per email at a time.
+		$lock = $this->lock_email( $email );
+
+		try {
+			$delivery_key = $this->delivery_key( $body, $email );
+			if ( '' !== $delivery_key && get_transient( $delivery_key ) ) {
+				DebugLogger::info( 'Ignoring a redelivered Ko-fi message' );
+				return new \WP_REST_Response( array( 'success' => true ), 200 );
+			}
+
+			// Read inside the lock: a request that waited may find the account
+			// the one before it just created.
+			$user = get_user_by( 'email', $email );
+
 			if ( ! $user ) {
-				$user_id = $this->create_user( $email );
+				$user_id = $this->create_user( $email, $this->display_name_for( $body ) );
 				if ( is_wp_error( $user_id ) ) {
 					DebugLogger::error( 'User creation failed', array( 'error' => $user_id->get_error_message() ) );
 					return new \WP_REST_Response( array( 'error' => 'User creation failed' ), 500 );
 				}
+				update_user_meta( $user_id, self::CREATED_META, 1 );
 				$user = get_user_by( 'ID', $user_id );
-				DebugLogger::info(
-					'New user created',
-					array(
-						'user_id' => $user_id,
-						'email'   => $email,
-					)
-				);
+				DebugLogger::info( 'New user created', array( 'user_id' => $user_id ) );
 
-				// Log user creation.
 				$user_logger->log_action( $user_id, $email, 'User created' );
 			}
 
 			$role = $this->resolve_role_from_tier( $tier_name, $options );
+
+			if ( '' !== $tier_name && ! $this->tier_is_mapped( $tier_name, $options ) ) {
+				// A tier renamed on Ko-fi stops matching its mapping without a
+				// word; record it where the site owner looks.
+				$user_logger->log_action( $user->ID, $email, $this->log_label( 'Unmapped tier', $tier_name ), $role );
+			}
+
 			if ( $role ) {
-				// Only one Ko-fi role is tracked per user. Drop the previous one
-				// first, or a tier change would leave it attached forever: it stops
-				// being tracked, so expiry can never remove it and the donor keeps
-				// privileges from a tier they no longer pay for.
-				$previous_role = get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
-				if ( $previous_role && $previous_role !== $role && in_array( $previous_role, $user->roles, true ) ) {
-					$user->remove_role( $previous_role );
-					$user_logger->log_role_removal( $user->ID, $email, $previous_role );
-				}
-
-				$user->add_role( $role );
-				update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
-				update_user_meta( $user->ID, 'kofi_role_assigned_at', time() );
-				DebugLogger::info(
-					'Assigned role to user',
-					array(
-						'user_id' => $user->ID,
-						'email'   => $email,
-						'role'    => $role,
-					)
-				);
-
-				// Log role assignment.
-				$user_logger->log_role_assignment( $user->ID, $email, $role );
+				$this->assign_role( $user, $role, $email, $user_logger );
 			} else {
 				DebugLogger::info( 'No matching tier or default role for user', array( 'tier' => $tier_name ) );
 			}
 
-			// Log the donation.
 			$user_logger->log_donation( $user->ID, $email, $amount, $currency );
-			DebugLogger::info(
-				'Donation logged',
-				array(
-					'user_id'  => $user->ID,
-					'email'    => $email,
-					'amount'   => $amount,
-					'currency' => $currency,
-				)
-			);
-		} else {
-			// Subscription required but payment not a subscription.
-			DebugLogger::info( 'Ignoring non-subscription payment due to only_subscriptions setting', array( 'email' => $email ) );
-			// Still log the ignored event for visibility (user_id 0 when user absent).
-			$user_logger->log_action( $user ? $user->ID : 0, $email, 'Ignored non-subscription payment' );
+			DebugLogger::info( 'Donation logged', array( 'user_id' => $user->ID ) );
+
+			if ( '' !== $delivery_key ) {
+				set_transient( $delivery_key, 1, self::DUPLICATE_WINDOW );
+			}
+		} finally {
+			$this->unlock_email( $lock );
 		}
 
 		return new \WP_REST_Response( array( 'success' => true ), 200 );
 	}
 
 	/**
+	 * Gives the user the role a payment earned, and records what was done.
+	 *
+	 * Only one Ko-fi role is tracked per user. The previous one is dropped
+	 * first, or a tier change would leave it attached forever: untracked, so
+	 * expiry could never remove it. A role the user already held from someone
+	 * else is tracked but marked, so neither a tier change nor expiry ever
+	 * takes it away.
+	 *
+	 * @param \WP_User   $user        User to update.
+	 * @param string     $role        Role to assign.
+	 * @param string     $email       Email for the log.
+	 * @param UserLogger $user_logger Logger.
+	 * @return void
+	 */
+	private function assign_role( \WP_User $user, string $role, string $email, UserLogger $user_logger ): void {
+		$previous_role = (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
+		$preexisting   = (string) get_user_meta( $user->ID, self::PREEXISTING_ROLE_META, true );
+
+		if ( '' !== $previous_role && $previous_role !== $role
+			&& in_array( $previous_role, $user->roles, true )
+			&& $preexisting !== $previous_role ) {
+			$user->remove_role( $previous_role );
+			$user_logger->log_role_removal( $user->ID, $email, $previous_role );
+		}
+
+		if ( $previous_role !== $role ) {
+			if ( in_array( $role, $user->roles, true ) ) {
+				update_user_meta( $user->ID, self::PREEXISTING_ROLE_META, $role );
+			} else {
+				delete_user_meta( $user->ID, self::PREEXISTING_ROLE_META );
+			}
+		}
+
+		$user->add_role( $role );
+		update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
+		update_user_meta( $user->ID, 'kofi_role_assigned_at', time() );
+		DebugLogger::info(
+			'Assigned role to user',
+			array(
+				'user_id' => $user->ID,
+				'role'    => $role,
+			)
+		);
+
+		$user_logger->log_role_assignment( $user->ID, $email, $role );
+	}
+
+	/**
+	 * Reports whether a Ko-fi event type grants membership.
+	 *
+	 * @param string $type Ko-fi's `type` field.
+	 * @return bool
+	 */
+	private function grants_membership( string $type ): bool {
+		if ( '' === $type ) {
+			return true;
+		}
+
+		/**
+		 * Filters the Ko-fi event types that grant membership.
+		 *
+		 * @param array<string> $types Defaults to Donation and Subscription.
+		 */
+		$types = (array) apply_filters( 'members_for_kofi_granting_types', self::GRANTING_TYPES );
+
+		foreach ( $types as $granting ) {
+			if ( is_string( $granting ) && 0 === strcasecmp( $granting, $type ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Reads a Ko-fi boolean, which is a JSON boolean but must not be fooled by
+	 * the string "false".
+	 *
+	 * @param mixed $value Raw value.
+	 * @return bool
+	 */
+	private function is_true( $value ): bool {
+		return true === $value || 1 === $value || ( is_string( $value ) && in_array( strtolower( $value ), array( 'true', '1' ), true ) );
+	}
+
+	/**
+	 * Builds a user-log action that fits its 50-character column.
+	 *
+	 * @param string $prefix Action.
+	 * @param string $detail Detail.
+	 * @return string
+	 */
+	private function log_label( string $prefix, string $detail ): string {
+		$label = '' === $detail ? $prefix : $prefix . ': ' . $detail;
+
+		return function_exists( 'mb_substr' ) ? mb_substr( $label, 0, 50 ) : substr( $label, 0, 50 );
+	}
+
+	/**
+	 * Transient key identifying one Ko-fi message for one donor.
+	 *
+	 * Keyed on `message_id`, which a redelivery repeats and a new payment does
+	 * not. Not on `kofi_transaction_id`: Ko-fi's test button always sends the
+	 * same placeholder one, so every test after the first would be dropped.
+	 *
+	 * @param array  $body  Payload.
+	 * @param string $email Donor email.
+	 * @return string Empty when the payload carries no message id.
+	 */
+	private function delivery_key( array $body, string $email ): string {
+		$message_id = $body['message_id'] ?? '';
+
+		if ( ! is_string( $message_id ) || '' === $message_id ) {
+			return '';
+		}
+
+		return 'members_for_kofi_seen_' . md5( strtolower( $email ) . '|' . $message_id );
+	}
+
+	/**
+	 * Takes the per-email database lock.
+	 *
+	 * Waits up to ten seconds, then carries on without it: a slow lock must
+	 * never cost a payment.
+	 *
+	 * @param string $email Donor email.
+	 * @return string Lock name, or '' when no lock is held.
+	 */
+	private function lock_email( string $email ): string {
+		global $wpdb;
+
+		$name = 'mfk_' . md5( strtolower( $email ) );
+
+		$suppress = $wpdb->suppress_errors( true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- A named lock has no WordPress API, and must never be cached.
+		$got = $wpdb->get_var( $wpdb->prepare( 'SELECT GET_LOCK( %s, %d )', $name, 10 ) );
+		$wpdb->suppress_errors( $suppress );
+
+		if ( '1' !== (string) $got ) {
+			DebugLogger::warning( 'Could not lock the donor email; continuing without it' );
+			return '';
+		}
+
+		return $name;
+	}
+
+	/**
+	 * Releases a lock taken by lock_email().
+	 *
+	 * @param string $name Lock name, or ''.
+	 * @return void
+	 */
+	private function unlock_email( string $name ): void {
+		global $wpdb;
+
+		if ( '' === $name ) {
+			return;
+		}
+
+		$suppress = $wpdb->suppress_errors( true );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- See lock_email().
+		$wpdb->query( $wpdb->prepare( 'SELECT RELEASE_LOCK( %s )', $name ) );
+		$wpdb->suppress_errors( $suppress );
+	}
+
+	/**
+	 * The public name for a new account.
+	 *
+	 * The donor's Ko-fi name when they chose to support publicly, otherwise a
+	 * neutral label. Never the email address: that used to become the display
+	 * name, which themes print on the author archive.
+	 *
+	 * @param array $body Payload.
+	 * @return string
+	 */
+	private function display_name_for( array $body ): string {
+		$name = isset( $body['from_name'] ) && is_string( $body['from_name'] ) ? sanitize_text_field( $body['from_name'] ) : '';
+
+		if ( '' !== $name && $this->is_true( $body['is_public'] ?? false ) && ! is_email( $name ) ) {
+			return $name;
+		}
+
+		return __( 'Supporter', 'members-for-kofi' );
+	}
+
+	/**
 	 * Creates a new WordPress user with the given email.
 	 *
-	 * @param string $email The email address of the user to create.
+	 * The login and URL slug are random rather than derived from the email,
+	 * which used to put the address in public author URLs; donors sign in with
+	 * their email, which WordPress accepts in place of the login. The role is
+	 * explicitly empty: left unset, WordPress applies the site's "New User
+	 * Default Role", which bypassed every check on what a webhook may grant --
+	 * with that set to administrator, a payment created an administrator.
+	 *
+	 * @param string $email        The email address of the user to create.
+	 * @param string $display_name Public name for the account.
 	 * @return int|\WP_Error The user ID on success, or a WP_Error object on failure.
 	 */
-	protected function create_user( $email ) {
-		return wp_create_user( $email, wp_generate_password(), $email );
+	protected function create_user( $email, string $display_name = '' ) {
+		$login = self::generate_login();
+		$name  = '' !== $display_name ? $display_name : __( 'Supporter', 'members-for-kofi' );
+
+		return wp_insert_user(
+			array(
+				'user_login'    => $login,
+				'user_nicename' => $login,
+				'user_email'    => $email,
+				'user_pass'     => wp_generate_password( 24 ),
+				'display_name'  => $name,
+				'nickname'      => $name,
+				'role'          => '',
+			)
+		);
+	}
+
+	/**
+	 * A random, unused login for a new supporter account.
+	 *
+	 * @return string
+	 */
+	public static function generate_login(): string {
+		do {
+			$login = 'kofi-' . strtolower( wp_generate_password( 10, false, false ) );
+		} while ( username_exists( $login ) || get_user_by( 'slug', $login ) );
+
+		return $login;
+	}
+
+	/**
+	 * Reports whether a tier name has a mapping.
+	 *
+	 * @param string $tier    Tier name from Ko-fi.
+	 * @param array  $options Plugin options.
+	 * @return bool
+	 */
+	private function tier_is_mapped( string $tier, array $options ): bool {
+		$map = $options['tier_role_map'] ?? array();
+
+		if ( ! is_array( $map ) ) {
+			return false;
+		}
+
+		$names = ( isset( $map['tier'] ) && is_array( $map['tier'] ) ) ? $map['tier'] : array_keys( $map );
+
+		foreach ( $names as $name ) {
+			if ( 0 === strcasecmp( (string) $name, $tier ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -498,8 +872,8 @@ class Webhook {
 			return null;
 		}
 
-		// Security: Block disallowed roles.
-		if ( in_array( $role, self::DISALLOWED_ROLES, true ) ) {
+		// Security: Block disallowed roles, by name and by what they can do.
+		if ( in_array( $role, self::DISALLOWED_ROLES, true ) || self::is_too_powerful( $role ) ) {
 			DebugLogger::error(
 				'Security: Blocked attempt to assign disallowed role via webhook',
 				array( 'role' => $role )
@@ -520,5 +894,42 @@ class Webhook {
 		}
 
 		return $role;
+	}
+
+	/**
+	 * Reports whether a role carries a capability that amounts to running the
+	 * site.
+	 *
+	 * @param string $role Role slug.
+	 * @return bool
+	 */
+	public static function is_too_powerful( string $role ): bool {
+		$object = get_role( $role );
+
+		if ( ! $object ) {
+			return false;
+		}
+
+		foreach ( self::DANGEROUS_CAPABILITIES as $capability ) {
+			if ( ! empty( $object->capabilities[ $capability ] ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Reports whether a role may be handed out by the webhook at all.
+	 *
+	 * The single rule the settings screen and the webhook both apply.
+	 *
+	 * @param string $role Role slug.
+	 * @return bool
+	 */
+	public static function is_assignable_role( string $role ): bool {
+		return '' !== $role
+			&& ! in_array( $role, self::DISALLOWED_ROLES, true )
+			&& ! self::is_too_powerful( $role );
 	}
 }

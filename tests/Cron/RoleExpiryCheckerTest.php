@@ -281,4 +281,110 @@ class RoleExpiryCheckerTest extends \MembersForKofi\Tests\TestCase {
 		$user = get_user_by( 'ID', $user_id );
 		$this->assertNotContains( 'editor', $user->roles );
 	}
+
+	/**
+	 * Sends a payment for an email through the real webhook.
+	 *
+	 * @param string $email Email.
+	 * @param string $tier  Tier name.
+	 * @return void
+	 */
+	private function pay( string $email, string $tier ): void {
+		$this->write_options_raw(
+			array(
+				'verification_token_sha256' => hash( 'sha256', 'tok' ),
+				'tier_role_map'             => array(
+					'Silver' => 'author',
+					'Gold'   => 'editor',
+				),
+				'role_expiry_days'          => 30,
+			)
+		);
+
+		( new \MembersForKofi\Webhook\Webhook() )->handle(
+			null,
+			array(
+				'verification_token' => 'tok',
+				'email'              => $email,
+				'tier_name'          => $tier,
+			)
+		);
+	}
+
+	/**
+	 * A role an admin granted by hand survives expiry, even when the donor's
+	 * tier maps to the same role.
+	 */
+	public function test_a_role_granted_by_hand_survives_expiry(): void {
+		$user_id = $this->create_user(
+			array(
+				'role'       => 'author',
+				'user_email' => 'staff@example.com',
+			)
+		);
+
+		$this->pay( 'staff@example.com', 'Silver' );
+		$this->assertSame( 'author', get_user_meta( $user_id, \MembersForKofi\Webhook\Webhook::PREEXISTING_ROLE_META, true ) );
+
+		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-31 days' ) );
+		( new RoleExpiryChecker( new UserLogger() ) )->check_and_remove_expired_roles();
+
+		$this->assertContains( 'author', get_userdata( $user_id )->roles, 'The plugin did not grant this role, so it must not take it.' );
+		$this->assertEmpty( get_user_meta( $user_id, 'kofi_donation_assigned_role', true ), 'Tracking ends.' );
+		$this->assertEmpty( get_user_meta( $user_id, \MembersForKofi\Webhook\Webhook::PREEXISTING_ROLE_META, true ) );
+	}
+
+	/**
+	 * A tier change keeps a hand-granted role too, and still removes one the
+	 * plugin granted.
+	 */
+	public function test_a_tier_change_removes_only_what_the_plugin_granted(): void {
+		$staff = $this->create_user(
+			array(
+				'role'       => 'author',
+				'user_email' => 'staff2@example.com',
+			)
+		);
+		$this->pay( 'staff2@example.com', 'Silver' );
+		$this->pay( 'staff2@example.com', 'Gold' );
+		$this->assertContains( 'author', get_userdata( $staff )->roles );
+		$this->assertContains( 'editor', get_userdata( $staff )->roles );
+
+		$this->pay( 'donor@example.com', 'Silver' );
+		$this->pay( 'donor@example.com', 'Gold' );
+		$donor = get_user_by( 'email', 'donor@example.com' );
+		$this->assertNotContains( 'author', $donor->roles );
+		$this->assertContains( 'editor', $donor->roles );
+	}
+
+	/**
+	 * A renewal that lands while expiry runs is not undone.
+	 *
+	 * The checker reads the old timestamp from its cache; the renewal is
+	 * written behind it, as another request would. The timestamp must be read
+	 * again before anything is removed.
+	 */
+	public function test_a_renewal_landing_mid_run_is_kept(): void {
+		global $wpdb;
+
+		$user_id = $this->create_user( array( 'role' => 'subscriber' ) );
+		update_user_meta( $user_id, 'kofi_donation_assigned_role', 'subscriber' );
+		update_user_meta( $user_id, 'kofi_role_assigned_at', strtotime( '-31 days' ) );
+		get_user_meta( $user_id ); // Warm the cache with the old timestamp.
+
+		// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.SlowDBQuery -- Simulating another request's write, which bypasses this request's cache.
+		$wpdb->update(
+			$wpdb->usermeta,
+			array( 'meta_value' => (string) time() ),
+			array(
+				'user_id'  => $user_id,
+				'meta_key' => 'kofi_role_assigned_at',
+			)
+		);
+		// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.SlowDBQuery
+
+		( new RoleExpiryChecker( new UserLogger() ) )->check_and_remove_expired_roles();
+
+		$this->assertContains( 'subscriber', get_userdata( $user_id )->roles );
+	}
 }

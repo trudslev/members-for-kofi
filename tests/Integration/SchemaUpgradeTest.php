@@ -387,7 +387,7 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		);
 
 		$this->assertSame(
-			'4',
+			'5',
 			$recorded,
 			'Expected the site to record the schema version it upgraded to'
 		);
@@ -415,7 +415,7 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		$this->assertSame( 200, $status, 'The donation must be accepted with the token Ko-fi already sends.' );
 		$this->assert_token_migrated();
 		$this->assertSame(
-			'4',
+			'5',
 			self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" )
 		);
 		$this->assertSame( 1, $this->logged_request_count( $email ) );
@@ -465,5 +465,27 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 
 		$this->assertSame( 401, $wrong );
 		$this->assertSame( 200, $right );
+	}
+
+	/**
+	 * A donor account made before 1.3.0 loses the email from its public
+	 * fields on the first page view after the update.
+	 */
+	public function test_a_page_view_removes_the_email_from_old_donor_accounts(): void {
+		$email = $this->donor_email( 'legacy-public' );
+
+		// Made the way the old code made them; WP-CLI boots WordPress, so the
+		// schema version is lowered only afterwards.
+		$id = (int) self::wp( 'user create ' . escapeshellarg( $email ) . ' ' . escapeshellarg( $email ) . ' --display_name=' . escapeshellarg( $email ) . ' --porcelain' );
+		self::wp( 'user meta update ' . $id . ' kofi_donation_assigned_role subscriber' );
+		self::db_query( "UPDATE wp_options SET option_value = '4' WHERE option_name = 'members_for_kofi_db_version'" );
+
+		$this->assertSame( $email, self::db_query( 'SELECT display_name FROM wp_users WHERE ID = ' . $id ), 'Fixture failed.' );
+
+		$this->assertSame( 200, $this->request_home_page() );
+
+		$this->assertSame( 'Supporter', self::db_query( 'SELECT display_name FROM wp_users WHERE ID = ' . $id ) );
+		$this->assertStringStartsWith( 'kofi-', self::db_query( 'SELECT user_nicename FROM wp_users WHERE ID = ' . $id ) );
+		$this->assertSame( '5', self::db_query( "SELECT option_value FROM wp_options WHERE option_name = 'members_for_kofi_db_version'" ) );
 	}
 }

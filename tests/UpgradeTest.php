@@ -681,4 +681,106 @@ class UpgradeTest extends TestCase {
 
 		$this->assertFalse( $this->stored_options() );
 	}
+
+	/**
+	 * Creates an account the way releases before 1.3.0 did: the email as
+	 * login, display name and nickname, the slug derived from it.
+	 *
+	 * @param string $email Email.
+	 * @return int
+	 */
+	private function legacy_donor( string $email ): int {
+		$id = wp_create_user( $email, wp_generate_password(), $email );
+		$this->assertIsInt( $id );
+
+		return $id;
+	}
+
+	/**
+	 * The upgrade takes the email out of a donor account's public fields.
+	 */
+	public function test_upgrade_removes_the_email_from_legacy_donor_accounts(): void {
+		$id = $this->legacy_donor( 'old.donor@example.com' );
+		update_user_meta( $id, 'kofi_donation_assigned_role', 'subscriber' );
+		$this->assertSame( 'old.donor@example.com', get_userdata( $id )->display_name, 'Fixture: the old code used the email as display name.' );
+
+		update_option( Plugin::DB_VERSION_OPTION, '4' );
+		Plugin::maybe_upgrade();
+
+		clean_user_cache( $id );
+		$user = get_userdata( $id );
+		$this->assertSame( 'Supporter', $user->display_name );
+		$this->assertSame( 'Supporter', get_user_meta( $id, 'nickname', true ) );
+		$this->assertStringStartsWith( 'kofi-', $user->user_nicename );
+		$this->assertSame( 'old.donor@example.com', $user->user_email, 'The address itself is untouched.' );
+		$this->assertSame( Plugin::DB_VERSION, get_option( Plugin::DB_VERSION_OPTION ) );
+	}
+
+	/**
+	 * Evidence from the user log alone is enough: a donor whose role expired
+	 * still has a "User created" row.
+	 */
+	public function test_upgrade_finds_donors_through_the_user_log(): void {
+		$id = $this->legacy_donor( 'expired.donor@example.com' );
+		( new \MembersForKofi\Logging\UserLogger() )->log_action( $id, 'expired.donor@example.com', 'User created' );
+
+		\MembersForKofi\Privacy\PersonalData::anonymize_legacy_accounts();
+
+		clean_user_cache( $id );
+		$this->assertSame( 'Supporter', get_userdata( $id )->display_name );
+	}
+
+	/**
+	 * Accounts the plugin did not create are never touched, even when their
+	 * login happens to be an email address.
+	 */
+	public function test_upgrade_leaves_other_accounts_alone(): void {
+		$id     = $this->legacy_donor( 'someone.else@example.com' );
+		$before = get_userdata( $id );
+
+		$this->assertSame( 0, \MembersForKofi\Privacy\PersonalData::anonymize_legacy_accounts() );
+
+		clean_user_cache( $id );
+		$after = get_userdata( $id );
+		$this->assertSame( $before->display_name, $after->display_name );
+		$this->assertSame( $before->user_nicename, $after->user_nicename );
+	}
+
+	/**
+	 * A name the donor or an admin already changed is kept, and running the
+	 * clean-up again changes nothing.
+	 */
+	public function test_upgrade_keeps_chosen_names_and_is_idempotent(): void {
+		$id = $this->legacy_donor( 'named.donor@example.com' );
+		update_user_meta( $id, 'kofi_role_assigned_at', time() );
+		wp_update_user(
+			array(
+				'ID'           => $id,
+				'display_name' => 'Named Donor',
+			)
+		);
+
+		\MembersForKofi\Privacy\PersonalData::anonymize_legacy_accounts();
+		clean_user_cache( $id );
+		$first = get_userdata( $id );
+
+		$this->assertSame( 'Named Donor', $first->display_name );
+		$this->assertSame( 0, \MembersForKofi\Privacy\PersonalData::anonymize_legacy_accounts() );
+		clean_user_cache( $id );
+		$this->assertSame( $first->user_nicename, get_userdata( $id )->user_nicename );
+	}
+
+	/**
+	 * Uninstall also removes the meta added in 1.3.0.
+	 */
+	public function test_uninstall_removes_the_new_tracking_meta(): void {
+		$id = $this->create_user();
+		update_user_meta( $id, Webhook::PREEXISTING_ROLE_META, 'author' );
+		update_user_meta( $id, Webhook::CREATED_META, 1 );
+
+		Plugin::uninstall();
+
+		$this->assertSame( '', get_user_meta( $id, Webhook::PREEXISTING_ROLE_META, true ) );
+		$this->assertSame( '', get_user_meta( $id, Webhook::CREATED_META, true ) );
+	}
 }

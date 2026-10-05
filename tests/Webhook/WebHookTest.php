@@ -185,10 +185,11 @@ class WebhookTest extends TestCase {
 			/**
 			 * Creates a user with the given email address.
 			 *
-			 * @param string $email The email address of the user to create.
+			 * @param string $email        The email address of the user to create.
+			 * @param string $display_name Unused.
 			 * @return mixed|\WP_Error The created user object or a WP_Error on failure.
 			 */
-			protected function create_user( $email ) {
+			protected function create_user( $email, string $display_name = '' ) {
 				return new \WP_Error( 'fail', 'Simulated failure' );
 			}
 		};
@@ -396,7 +397,7 @@ class WebhookTest extends TestCase {
 	 */
 	public function test_assigns_default_role_if_tier_not_mapped(): void {
 		update_option(
-			'kofi_members_options',
+			'members_for_kofi_options',
 			array(
 				'verification_token' => 'fallback-token',
 				'tier_role_map'      => array(

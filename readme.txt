@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.2.0
+Stable tag: 1.3.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -115,6 +115,18 @@ their WordPress user and clear the logs from the Logs tab.
 
 == Changelog ==
 
+= 1.3.0 =
+* Security: New supporter accounts no longer receive the site's "New User Default Role". On a site where that setting was something powerful (even Administrator), every supporter used to get it.
+* Security: Roles with administrator-level powers can no longer be assigned to supporters, whatever they are called.
+* Privacy: Supporters' email addresses are no longer used as their username or public name, where some themes showed them on a public author page. New accounts get a neutral username and the supporter's Ko-fi name (if they supported publicly) or "Supporter". Existing accounts created by the plugin are updated automatically; supporters still sign in with their email address.
+* Privacy: The plugin's logs are now included in WordPress's Export Personal Data and Erase Personal Data tools, and suggested text has been added to the privacy policy guide. Shipping addresses from shop orders are no longer stored.
+* Fix: The webhook now works on sites using plain permalinks, where Ko-fi payments could be lost without any error, and on multisite sub-sites. The settings page shows the right webhook address for your site.
+* Fix: Two payments arriving at the same moment from a new supporter no longer create duplicate accounts, and a payment Ko-fi delivers twice is only processed once.
+* Fix: Roles you gave someone yourself are no longer removed when their Ko-fi membership expires or their tier changes.
+* Change: Ko-fi shop orders and commissions no longer grant membership; only donations and subscriptions do.
+* Change: Ko-fi's "Send test" button no longer creates an account. If an earlier test left one behind, you will see a notice pointing to it so you can delete it.
+* Settings: A warning appears if scheduled tasks (role expiry and log cleanup) are not running, and Ko-fi tier names that have no role mapping are noted in the log.
+
 = 1.2.0 =
 * Security: The Ko-fi verification token is no longer stored in readable form. Only a one-way hash (SHA-256) of it is kept, so a database backup or export no longer reveals it.
 * Existing sites are converted automatically on the first visit or Ko-fi payment after updating. Your webhook keeps working and there is nothing to re-enter.
@@ -158,6 +170,9 @@ their WordPress user and clear the logs from the Logs tab.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.3.0 =
+Security, privacy and reliability update. Note three changes: shop orders and commissions no longer grant membership, Ko-fi's "Send test" no longer creates an account, and supporter accounts that showed an email address as their name are renamed automatically.
 
 = 1.2.0 =
 Security update: your Ko-fi verification token is now stored only as a hash, converted automatically with nothing to re-enter. If you later go back to an older version, webhooks will stop working until you re-enter the token in the settings.

@@ -33,6 +33,7 @@ use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Cron\RoleExpiryChecker;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Webhook\VerificationToken;
+use MembersForKofi\Privacy\PersonalData;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
 
@@ -49,11 +50,12 @@ class Plugin {
 	 *
 	 * Bump this whenever a table is added or its columns change, or stored data
 	 * changes shape, so existing installs pick the change up on their next
-	 * request. Version 4 replaces the plaintext verification token with a hash.
+	 * request. Version 4 replaces the plaintext verification token with a hash;
+	 * version 5 takes donors' email addresses out of their public names.
 	 *
 	 * @var string
 	 */
-	public const DB_VERSION = '4';
+	public const DB_VERSION = '5';
 
 	/**
 	 * Option key holding the schema version currently installed on this site.
@@ -73,6 +75,7 @@ class Plugin {
 		add_action( 'admin_menu', array( $this, 'add_menu' ) );
 		add_action( 'admin_init', array( $this, 'register_settings' ) );
 		add_action( 'admin_notices', array( AdminSettings::class, 'render_token_conflict_notice' ) );
+		add_action( 'admin_notices', array( AdminSettings::class, 'render_test_account_notice' ) );
 		add_action( 'init', array( $this, 'initialize_logger' ) );
 		add_action( 'init', array( $this, 'initialize_cron' ) );
 		add_action( 'init', array( self::class, 'add_rewrite_rules' ) );
@@ -98,6 +101,46 @@ class Plugin {
 			}
 		);
 		add_filter( 'query_vars', array( $this, 'initialize_query_vars' ) );
+		add_filter( 'request', array( self::class, 'route_webhook_path' ) );
+
+		PersonalData::register();
+	}
+
+	/**
+	 * Recognises the webhook path even when no rewrite rule matched it.
+	 *
+	 * The endpoint depends on a rewrite rule, and there are two common ways for
+	 * it to be missing: a site on plain permalinks, where the request fell
+	 * through to the front page and answered Ko-fi with a 200 -- so the payment
+	 * was marked delivered and silently lost -- and multisite subsites after
+	 * network activation, whose stored rules never got the new one. Matching
+	 * the path directly makes the advertised URL work in both.
+	 *
+	 * @param mixed $query_vars Parsed query variables.
+	 * @return mixed
+	 */
+	public static function route_webhook_path( $query_vars ) {
+		if ( ! is_array( $query_vars ) || isset( $query_vars['kofi_webhook'] ) ) {
+			return $query_vars;
+		}
+
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Only compared against a fixed path, never stored or output.
+		$uri  = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+		$path = (string) wp_parse_url( (string) $uri, PHP_URL_PATH );
+		$home = '/' . trim( (string) wp_parse_url( home_url( '/' ), PHP_URL_PATH ), '/' );
+
+		if ( '/' !== $home ) {
+			if ( 0 !== strpos( $path, $home . '/' ) ) {
+				return $query_vars;
+			}
+			$path = substr( $path, strlen( $home ) );
+		}
+
+		if ( 'webhook-kofi' === trim( $path, '/' ) ) {
+			return array( 'kofi_webhook' => '1' );
+		}
+
+		return $query_vars;
 	}
 
 	/**
@@ -137,6 +180,7 @@ class Plugin {
 		// schema version here without ever passing through maybe_upgrade(), so
 		// the token has to be migrated on this path too.
 		VerificationToken::migrate();
+		PersonalData::anonymize_legacy_accounts();
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 	}
@@ -165,6 +209,7 @@ class Plugin {
 		// Runs on init, before the webhook is handled on template_redirect, so a
 		// site nobody has opened wp-admin on is migrated by Ko-fi's own request.
 		VerificationToken::migrate();
+		PersonalData::anonymize_legacy_accounts();
 
 		update_option( self::DB_VERSION_OPTION, self::DB_VERSION );
 
@@ -218,6 +263,41 @@ class Plugin {
 	 * Removes plugin options, rewrite rules, and the user logs table on uninstall.
 	 */
 	public static function uninstall(): void {
+		// Options and tables are per site. On a network the uninstall hook runs
+		// once, so walk every site -- otherwise every subsite kept its logs,
+		// donors' email addresses included, after the plugin was deleted.
+		if ( is_multisite() ) {
+			foreach ( get_sites(
+				array(
+					'fields' => 'ids',
+					'number' => 0,
+				)
+			) as $site_id ) {
+				switch_to_blog( (int) $site_id );
+				self::uninstall_site();
+				restore_current_blog();
+			}
+		} else {
+			self::uninstall_site();
+		}
+
+		// User meta is shared by the whole network: remove it once.
+		//
+		// The roles themselves are deliberately left alone: the site owner gave
+		// those out, and silently stripping people's access because a plugin was
+		// removed would be a much worse surprise than a stale meta row.
+		delete_metadata( 'user', 0, 'kofi_role_assigned_at', '', true );
+		delete_metadata( 'user', 0, 'kofi_donation_assigned_role', '', true );
+		delete_metadata( 'user', 0, Webhook::PREEXISTING_ROLE_META, '', true );
+		delete_metadata( 'user', 0, Webhook::CREATED_META, '', true );
+	}
+
+	/**
+	 * Removes one site's options, rewrite rule and tables.
+	 *
+	 * @return void
+	 */
+	private static function uninstall_site(): void {
 		// Remove options.
 		delete_option( 'members_for_kofi_options' );
 		delete_option( self::DB_VERSION_OPTION );
@@ -239,16 +319,6 @@ class Plugin {
 
 		// Remove the request logs table.
 		RequestLogger::drop_table();
-
-		// Remove the per-user tracking meta. The tables and the option were
-		// already being cleaned up, but these two keys were left on every
-		// supporter the plugin had ever touched.
-		//
-		// The roles themselves are deliberately left alone: the site owner gave
-		// those out, and silently stripping people's access because a plugin was
-		// removed would be a much worse surprise than a stale meta row.
-		delete_metadata( 'user', 0, 'kofi_role_assigned_at', '', true );
-		delete_metadata( 'user', 0, 'kofi_donation_assigned_role', '', true );
 	}
 
 	/**

@@ -146,4 +146,63 @@ class PluginTest extends TestCase {
 			'Expected kofi_members_cleanup_logs to be unscheduled after deactivation'
 		);
 	}
+
+	/**
+	 * Routes a fake request URI through the fallback.
+	 *
+	 * @param string $uri  Request URI.
+	 * @param array  $vars Query vars WordPress parsed.
+	 * @return array
+	 */
+	private function route( string $uri, array $vars = array( 'error' => '404' ) ): array {
+		$saved                  = $_SERVER['REQUEST_URI'] ?? null;
+		$_SERVER['REQUEST_URI'] = $uri;
+
+		try {
+			return Plugin::route_webhook_path( $vars );
+		} finally {
+			if ( null === $saved ) {
+				unset( $_SERVER['REQUEST_URI'] );
+			} else {
+				$_SERVER['REQUEST_URI'] = $saved;
+			}
+		}
+	}
+
+	/**
+	 * The webhook path is recognised with no rewrite rule behind it: plain
+	 * permalinks, or a subsite whose stored rules predate the plugin.
+	 */
+	public function test_the_webhook_path_is_routed_without_a_rewrite_rule(): void {
+		$this->assertSame( array( 'kofi_webhook' => '1' ), $this->route( '/webhook-kofi' ) );
+		$this->assertSame( array( 'kofi_webhook' => '1' ), $this->route( '/webhook-kofi/?x=1' ) );
+		$this->assertSame( array( 'error' => '404' ), $this->route( '/webhook-kofi-not' ) );
+		$this->assertSame( array( 'error' => '404' ), $this->route( '/blog/webhook-kofi' ) );
+		$this->assertSame( array( 'kofi_webhook' => '1' ), $this->route( '/whatever', array( 'kofi_webhook' => '1' ) ) );
+	}
+
+	/**
+	 * On a site in a subdirectory -- a multisite subsite -- the path is matched
+	 * below the site's own home path only.
+	 */
+	public function test_the_webhook_path_respects_a_subdirectory_home(): void {
+		$sub = static function ( $url ) {
+			return preg_replace( '#^(https?://[^/]+)#', '$1/site2', $url );
+		};
+		add_filter( 'home_url', $sub );
+
+		try {
+			$this->assertSame( array( 'kofi_webhook' => '1' ), $this->route( '/site2/webhook-kofi/' ) );
+			$this->assertSame( array( 'error' => '404' ), $this->route( '/webhook-kofi/' ) );
+		} finally {
+			remove_filter( 'home_url', $sub );
+		}
+	}
+
+	/**
+	 * The fallback is hooked.
+	 */
+	public function test_the_webhook_path_fallback_is_hooked(): void {
+		$this->assertNotFalse( has_filter( 'request', array( Plugin::class, 'route_webhook_path' ) ) );
+	}
 }

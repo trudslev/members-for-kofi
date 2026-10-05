@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.2.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.3.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -16,11 +16,13 @@ This is a WordPress plugin (v1.2.0) that integrates with Ko-fi webhooks to autom
 - **`src/Logging/UserLogger.php`**: Database-backed user activity logger (custom table `wp_members_for_kofi_user_logs`)
 - **`src/Logging/RequestLogger.php`**: Database-backed webhook request logger (custom table `wp_members_for_kofi_request_logs`) - logs all incoming webhook requests with success/failure status
 - **`src/Logging/DebugLogger.php`**: Lightweight debug logger to PHP error_log, only active when `WP_DEBUG` is true
+- **`src/Webhook/VerificationToken.php`**: All rules for the hashed verification token (see Database Tables)
+- **`src/Privacy/PersonalData.php`**: Personal-data exporter/eraser for both log tables, suggested privacy-policy text, and the one-off clean-up of donor accounts created before 1.3.0
 
 ### Data Flow
 
 1. Ko-fi webhook hits `https://your-site.com/webhook-kofi` (custom rewrite rule → query var `kofi_webhook=1`)
-2. `Webhook::handle()` validates verification token from `members_for_kofi_options['verification_token']`
+2. `Webhook::handle()` hashes the incoming token and compares it with `members_for_kofi_options['verification_token_sha256']`
 3. Payload parsed, user created/updated, role assigned based on `tier_role_map` or `default_role`
 4. User metadata `kofi_role_assigned_at` timestamp stored for expiry tracking
 5. Daily cron (`kofi_members_check_expired_roles`) removes roles past `role_expiry_days` threshold
@@ -70,7 +72,16 @@ This plugin follows these security standards and guidelines:
 
 - **Capability checks**: Use `current_user_can()` for ALL privileged operations
 - **Nonce verification**: Required for ALL form submissions and AJAX requests - use `wp_verify_nonce()`, `check_admin_referer()`
-- **Role restrictions**: NEVER allow `administrator` role assignment via webhook (`Webhook::DISALLOWED_ROLES`)
+- **Role restrictions**: NEVER allow `administrator` role assignment via webhook (`Webhook::DISALLOWED_ROLES`),
+  nor any role carrying a capability in `Webhook::DANGEROUS_CAPABILITIES` (custom roles with
+  `manage_options`, `edit_users`, plugin/theme management...). `Webhook::is_assignable_role()` is the
+  single rule; the settings sanitizer, the role dropdowns and `validate_role()` all call it.
+  `unfiltered_html` is deliberately not on the list: editors carry it, and tier → editor is legitimate
+- **Account creation never inherits the site's default role**: `Webhook::create_user()` passes
+  `'role' => ''` to `wp_insert_user()`. Left unset, WordPress applies *Settings → General → New User
+  Default Role*, which no plugin check sees -- with it set to administrator, a payment created an
+  administrator. New accounts get a random `kofi-…` login and slug and a display name from Ko-fi's
+  `from_name` only when `is_public`; never the email (themes print display names on author archives)
 - **Webhook authentication**: ALWAYS validate `verification_token` against stored value before processing
 - **Rate limiting**: The webhook endpoint sheds requests from an address that keeps failing
   (`Webhook::FAILURE_LIMIT` / `FAILURE_WINDOW`, filterable via
@@ -98,7 +109,8 @@ This plugin follows these security standards and guidelines:
 
 #### Data Protection
 
-- **Never log sensitive data**: Passwords, tokens, API keys must NEVER appear in logs
+- **Never log sensitive data**: Passwords, tokens, API keys must NEVER appear in logs. `DebugLogger`
+  context carries IDs, types and tiers -- never the payload, an email, a name or a message
 - **Secure token storage**: Verification tokens stored in WordPress options (encrypted database)
 - **User privacy**: Only log necessary data, implement log retention policies
 - **Sanitize log output**: Even log data must be sanitized before database insertion
@@ -261,7 +273,7 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 `make release` builds `vendor/` fresh with `--no-dev` into a staging directory
 rather than copying the working tree's, which carries the whole test toolchain.
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.2.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.3.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
 ## Key Files & Patterns
 
@@ -299,7 +311,7 @@ and out of `DebugLogger` output.
   leaves an empty or non-string token untouched, and leaves a hash + *different* plaintext untouched
   (`has_conflict()` then shows an admin notice). It runs from `maybe_upgrade()` **and** `activate()` --
   a deactivate/update/reactivate cycle never passes through `maybe_upgrade()`.
-- `expected_hash()` carries a **fallback, to be removed in 1.3.0**: a site still holding only
+- `expected_hash()` carries a **fallback, to be removed in 1.4.0** (kept through 1.3.0): a site still holding only
   plaintext is verified against it and migrated on the spot. When removing it, switch the many tests
   that seed a plaintext `verification_token` through `update_option()` to the hash key.
 - The settings field is write-only: never render the stored value, a blank submission keeps the
@@ -326,7 +338,7 @@ The upgrade path lives in `Plugin::maybe_upgrade()`, hooked on `init` (priority 
 guarded by the `members_for_kofi_db_version` option:
 
 ```php
-public const DB_VERSION = '4';
+public const DB_VERSION = '5';
 public const DB_VERSION_OPTION = 'members_for_kofi_db_version';
 ```
 
@@ -359,6 +371,42 @@ update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
 ```
 
 Cron job queries all users with this metadata and removes roles if timestamp exceeds expiry threshold.
+It re-reads the timestamp past the cache just before removing, so a renewal landing mid-run is kept.
+
+A role the user already held when the webhook first assigned it is recorded in
+`kofi_role_preexisting` (`Webhook::PREEXISTING_ROLE_META`). Expiry and tier changes stop tracking such a
+role but never remove it: someone else granted it. Accounts the plugin creates carry
+`kofi_created_by_plugin`.
+
+### Webhook Processing Rules
+
+- **Only support grants membership.** `Webhook::GRANTING_TYPES` is Donation and Subscription (a payload
+  with no `type` counts as granting); shop orders and commissions answer 200 and are logged as ignored.
+  Filterable via `members_for_kofi_granting_types`
+- **One request per donor email at a time.** `process()` takes a MySQL `GET_LOCK()` per email around
+  lookup/creation: WordPress checks email uniqueness in PHP with no unique key, and concurrent first
+  payments once created three accounts with the same login and email. If the lock cannot be had in
+  10 s the request proceeds -- a slow lock must never cost a payment
+- **Redelivered messages are ignored**, keyed on `message_id` + email for 7 days. Not on
+  `kofi_transaction_id`: Ko-fi's test button always sends the same placeholder one
+- **Ko-fi's "Send test" button creates nothing.** Its payload always carries the placeholder
+  `kofi_transaction_id` `Webhook::KOFI_TEST_TRANSACTION_ID` (real payments carry random ones, checked
+  against production). After authentication it is logged as `Ko-fi test received` and answered 200
+  with `"test": true`. Fixtures that stand for real payments must use a random transaction id.
+  Sites that pressed it before 1.3.0 have a `jo.example@example.com` account (`Webhook::KOFI_TEST_EMAIL`);
+  `AdminSettings::render_test_account_notice()` points administrators at it on the dashboard, Users
+  and settings screens. `admin_notices` passes callbacks an empty string, which must mean "current screen"
+- **Every decided outcome answers 200**, or Ko-fi retries a request that would be decided the same way
+- **The `/webhook-kofi` path is routed without its rewrite rule** (`Plugin::route_webhook_path()` on
+  the `request` filter). Plain permalinks used to answer Ko-fi with the front page and a 200 -- a
+  silently lost payment -- and multisite subsites 404'd after network activation. On plain permalinks
+  the settings page shows `/?kofi_webhook=1` (`AdminSettings::webhook_url()`)
+- **Behind a reverse proxy** `REMOTE_ADDR` is the proxy, so all clients share one failure bucket;
+  `members_for_kofi_client_ip` lets a site supply the real address. The default stays `REMOTE_ADDR`:
+  forwarding headers are client-controlled
+- A tier name with no mapping is written to the user log as `Unmapped tier: …`
+- The settings page warns when the plugin's cron events are more than a day overdue
+- Uninstall walks every site on multisite; user meta is network-wide and removed once
 
 ### Debug Logging
 

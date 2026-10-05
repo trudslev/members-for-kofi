@@ -606,4 +606,385 @@ class HardeningTest extends TestCase {
 		$this->assertStringNotContainsString( $hash, $contents );
 		$this->assertStringContainsString( '[REDACTED]', $contents );
 	}
+
+	// ------------------------------------------------------------------
+	// FMEA fixes (1.3.0)
+	// ------------------------------------------------------------------
+
+	/**
+	 * Sends a donation with the configured token.
+	 *
+	 * @param array $fields Payload fields.
+	 * @return \WP_REST_Response
+	 */
+	private function pay( array $fields ): \WP_REST_Response {
+		return ( new Webhook() )->handle( null, array_merge( array( 'verification_token' => 'tok' ), $fields ) );
+	}
+
+	/**
+	 * Counts user-log rows with an action for an email.
+	 *
+	 * @param string $email  Email.
+	 * @param string $action Action, or a LIKE pattern.
+	 * @return int
+	 */
+	private function user_log_count( string $email, string $action ): int {
+		global $wpdb;
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table, test-only read.
+		return (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM `{$wpdb->prefix}members_for_kofi_user_logs` WHERE email = %s AND action LIKE %s", $email, $action ) );
+	}
+
+	/**
+	 * A new account must not inherit the site's "New User Default Role".
+	 *
+	 * That was a bypass of every check on what a webhook may grant: with the
+	 * site default set to administrator, a payment created an administrator.
+	 */
+	public function test_a_new_account_never_inherits_the_site_default_role(): void {
+		$this->configure( 'tok', array( 'tier_role_map' => array( 'Gold' => 'author' ) ) );
+		$previous = get_option( 'default_role' );
+		update_option( 'default_role', 'administrator' );
+
+		try {
+			$this->assertSame(
+				200,
+				$this->pay(
+					array(
+						'email'     => 'inherit@example.com',
+						'tier_name' => 'Gold',
+					)
+				)->get_status()
+			);
+			$this->assertSame( array( 'author' ), get_user_by( 'email', 'inherit@example.com' )->roles );
+
+			// With no role to give at all, the account gets none -- not the site's.
+			$this->configure( 'tok', array( 'default_role' => '' ) );
+			$this->pay( array( 'email' => 'no-role@example.com' ) );
+			$this->assertSame( array(), get_user_by( 'email', 'no-role@example.com' )->roles );
+		} finally {
+			update_option( 'default_role', $previous );
+		}
+	}
+
+	/**
+	 * A new account carries no trace of the email in its public fields.
+	 */
+	public function test_a_new_account_does_not_publish_the_email(): void {
+		$this->configure( 'tok' );
+
+		$this->pay(
+			array(
+				'email'     => 'private.person@example.com',
+				'from_name' => 'Jo Public',
+				'is_public' => true,
+			)
+		);
+		$user = get_user_by( 'email', 'private.person@example.com' );
+
+		$this->assertStringStartsWith( 'kofi-', $user->user_login );
+		$this->assertSame( $user->user_login, $user->user_nicename );
+		$this->assertStringNotContainsString( 'private', $user->user_nicename );
+		$this->assertSame( 'Jo Public', $user->display_name );
+		$this->assertSame( 'Jo Public', get_user_meta( $user->ID, 'nickname', true ) );
+		$this->assertSame( '1', (string) get_user_meta( $user->ID, Webhook::CREATED_META, true ) );
+
+		// Donors sign in with their email, which WordPress accepts as a login.
+		wp_set_password( 'known-pass-123', $user->ID );
+		$this->assertInstanceOf( \WP_User::class, wp_authenticate_email_password( null, 'private.person@example.com', 'known-pass-123' ) );
+	}
+
+	/**
+	 * A private supporter's Ko-fi name is not published, and a name that is
+	 * itself an email address is never used.
+	 */
+	public function test_private_or_email_shaped_names_become_supporter(): void {
+		$this->configure( 'tok' );
+
+		$this->pay(
+			array(
+				'email'     => 'quiet@example.com',
+				'from_name' => 'Hidden Name',
+				'is_public' => false,
+			)
+		);
+		$this->pay(
+			array(
+				'email'     => 'shaped@example.com',
+				'from_name' => 'shaped@example.com',
+				'is_public' => true,
+			)
+		);
+
+		$this->assertSame( 'Supporter', get_user_by( 'email', 'quiet@example.com' )->display_name );
+		$this->assertSame( 'Supporter', get_user_by( 'email', 'shaped@example.com' )->display_name );
+	}
+
+	/**
+	 * A custom role with admin powers cannot be handed out, whatever it is
+	 * called. Editor stays assignable: it is a legitimate mapping.
+	 */
+	public function test_a_role_with_admin_capabilities_is_never_assigned(): void {
+		add_role(
+			'kofi_test_boss',
+			'Boss',
+			array(
+				'read'           => true,
+				'manage_options' => true,
+			)
+		);
+
+		try {
+			$this->assertFalse( Webhook::is_assignable_role( 'kofi_test_boss' ) );
+			$this->assertFalse( Webhook::is_assignable_role( 'administrator' ) );
+			$this->assertTrue( Webhook::is_assignable_role( 'editor' ) );
+
+			$this->configure( 'tok', array( 'tier_role_map' => array( 'Gold' => 'kofi_test_boss' ) ) );
+			$this->pay(
+				array(
+					'email'     => 'boss@example.com',
+					'tier_name' => 'Gold',
+				)
+			);
+			$this->assertNotContains( 'kofi_test_boss', get_user_by( 'email', 'boss@example.com' )->roles );
+
+			// A rejected save hands back what was stored, so store a clean state.
+			$this->configure( 'tok' );
+			$settings  = new AdminSettings();
+			$sanitized = $settings->sanitize_options(
+				array(
+					'verification_token' => 'tok',
+					'tier_role_map'      => array(
+						'tier' => array( 'Gold' ),
+						'role' => array( 'kofi_test_boss' ),
+					),
+					'default_role'       => 'kofi_test_boss',
+					'enable_expiry'      => true,
+					'role_expiry_days'   => 35,
+				)
+			);
+			$this->assertArrayNotHasKey( 'Gold', (array) ( $sanitized['tier_role_map'] ?? array() ) );
+			$this->assertNotSame( 'kofi_test_boss', $sanitized['default_role'] ?? '' );
+		} finally {
+			remove_role( 'kofi_test_boss' );
+			$GLOBALS['wp_settings_errors'] = array(); // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited -- Test isolation.
+		}
+	}
+
+	/**
+	 * Shop orders and commissions are purchases, not support: no account, no
+	 * role, still a 200 so Ko-fi does not retry, and a line in the user log.
+	 *
+	 * @dataProvider non_granting_types
+	 *
+	 * @param string $type Ko-fi event type.
+	 */
+	public function test_purchases_do_not_grant_membership( string $type ): void {
+		$this->configure( 'tok' );
+
+		$response = $this->pay(
+			array(
+				'email'    => 'buyer@example.com',
+				'type'     => $type,
+				'shipping' => array( 'street_address' => '1 Main St' ),
+			)
+		);
+
+		$this->assertSame( 200, $response->get_status() );
+		$this->assertFalse( get_user_by( 'email', 'buyer@example.com' ) );
+		$this->assertSame( 1, $this->user_log_count( 'buyer@example.com', 'Ignored: ' . $type ) );
+	}
+
+	/**
+	 * Ko-fi event types that are purchases.
+	 *
+	 * @return array
+	 */
+	public function non_granting_types(): array {
+		return array(
+			'shop order' => array( 'Shop Order' ),
+			'commission' => array( 'Commission' ),
+		);
+	}
+
+	/**
+	 * Donations, subscriptions and payloads without a type still grant, and a
+	 * site can opt shop orders back in.
+	 */
+	public function test_support_still_grants_and_the_types_are_filterable(): void {
+		$this->configure( 'tok' );
+
+		foreach ( array( 'Donation', 'Subscription', '' ) as $i => $type ) {
+			$this->pay(
+				array(
+					'email' => "support{$i}@example.com",
+					'type'  => $type,
+				)
+			);
+			$this->assertContains( 'subscriber', get_user_by( 'email', "support{$i}@example.com" )->roles, "Type '{$type}' must grant." );
+		}
+
+		$allow = static function ( array $types ): array {
+			$types[] = 'Shop Order';
+			return $types;
+		};
+		add_filter( 'members_for_kofi_granting_types', $allow );
+		try {
+			$this->pay(
+				array(
+					'email' => 'merch@example.com',
+					'type'  => 'Shop Order',
+				)
+			);
+		} finally {
+			remove_filter( 'members_for_kofi_granting_types', $allow );
+		}
+		$this->assertContains( 'subscriber', get_user_by( 'email', 'merch@example.com' )->roles );
+	}
+
+	/**
+	 * A shipping address never reaches the stored request payload.
+	 */
+	public function test_a_shipping_address_is_not_stored(): void {
+		global $wpdb;
+
+		( new RequestLogger() )->log_request(
+			array(
+				'email'    => 'ship@example.com',
+				'shipping' => array( 'street_address' => '1 Main St' ),
+			),
+			200,
+			true
+		);
+
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table, test-only read.
+		$payload = (string) $wpdb->get_var( "SELECT payload FROM `{$wpdb->prefix}members_for_kofi_request_logs` ORDER BY id DESC LIMIT 1" );
+
+		$this->assertStringNotContainsString( 'Main St', $payload );
+		$this->assertStringContainsString( '[REDACTED]', $payload );
+	}
+
+	/**
+	 * A redelivered Ko-fi message is processed once; a new message is not
+	 * mistaken for it, nor is the same message id for another donor.
+	 */
+	public function test_a_redelivered_message_is_processed_once(): void {
+		$this->configure( 'tok' );
+		$payment = array(
+			'email'      => 'once@example.com',
+			'message_id' => 'msg-' . wp_generate_password( 8, false, false ),
+			'amount'     => '5.00',
+		);
+
+		$this->assertSame( 200, $this->pay( $payment )->get_status() );
+		$this->assertSame( 200, $this->pay( $payment )->get_status() );
+		$this->assertSame( 1, $this->user_log_count( 'once@example.com', 'Donation received' ) );
+
+		$this->pay( array( 'message_id' => 'msg-other-' . wp_generate_password( 8, false, false ) ) + $payment );
+		$this->assertSame( 2, $this->user_log_count( 'once@example.com', 'Donation received' ) );
+
+		$this->pay( array( 'email' => 'twice@example.com' ) + $payment );
+		$this->assertSame( 1, $this->user_log_count( 'twice@example.com', 'Donation received' ) );
+	}
+
+	/**
+	 * A tier name with no mapping is recorded where the site owner looks.
+	 */
+	public function test_an_unmapped_tier_is_logged(): void {
+		$this->configure( 'tok', array( 'tier_role_map' => array( 'Gold' => 'author' ) ) );
+
+		$this->pay(
+			array(
+				'email'     => 'renamed@example.com',
+				'tier_name' => 'Gold Plus',
+			)
+		);
+		$this->pay(
+			array(
+				'email'     => 'mapped@example.com',
+				'tier_name' => 'gold',
+			)
+		);
+
+		$this->assertSame( 1, $this->user_log_count( 'renamed@example.com', 'Unmapped tier: Gold Plus' ) );
+		$this->assertSame( 0, $this->user_log_count( 'mapped@example.com', 'Unmapped tier%' ) );
+	}
+
+	/**
+	 * The string "false" is not a subscription payment.
+	 */
+	public function test_a_string_false_is_not_a_subscription(): void {
+		$this->configure( 'tok', array( 'only_subscriptions' => true ) );
+
+		$this->pay(
+			array(
+				'email'                   => 'stringy@example.com',
+				'is_subscription_payment' => 'false',
+			)
+		);
+
+		$this->assertFalse( get_user_by( 'email', 'stringy@example.com' ) );
+	}
+
+	/**
+	 * Failures are counted against the address the filter supplies, so a site
+	 * behind a proxy can stop all clients sharing one bucket.
+	 */
+	public function test_failures_are_counted_per_filtered_client_address(): void {
+		$this->configure( 'tok' );
+		$client = static function (): string {
+			return '203.0.113.9';
+		};
+		add_filter( 'members_for_kofi_client_ip', $client );
+
+		try {
+			( new Webhook() )->handle(
+				null,
+				array(
+					'verification_token' => 'wrong',
+					'email'              => 'x@example.com',
+				)
+			);
+			$this->assertSame( 1, (int) get_transient( Webhook::failure_transient_key( '203.0.113.9' ) ) );
+		} finally {
+			remove_filter( 'members_for_kofi_client_ip', $client );
+			Webhook::reset_failure_count( '203.0.113.9' );
+		}
+	}
+
+	/**
+	 * Ko-fi's test button is recorded but creates nothing; the token is still
+	 * checked; and a real transaction id is processed as before.
+	 */
+	public function test_the_kofi_test_button_creates_no_account(): void {
+		$this->configure( 'tok' );
+
+		$test = $this->pay(
+			array(
+				'email'               => 'jo.example@example.com',
+				'kofi_transaction_id' => Webhook::KOFI_TEST_TRANSACTION_ID,
+			)
+		);
+		$this->assertSame( 200, $test->get_status() );
+		$this->assertFalse( get_user_by( 'email', 'jo.example@example.com' ) );
+		$this->assertSame( 1, $this->user_log_count( 'jo.example@example.com', 'Ko-fi test received' ) );
+
+		$wrong = ( new Webhook() )->handle(
+			null,
+			array(
+				'verification_token'  => 'wrong',
+				'email'               => 'jo.example@example.com',
+				'kofi_transaction_id' => Webhook::KOFI_TEST_TRANSACTION_ID,
+			)
+		);
+		$this->assertSame( 401, $wrong->get_status() );
+
+		$this->pay(
+			array(
+				'email'               => 'real.payer@example.com',
+				'kofi_transaction_id' => '7c1e9a52-3b4d-4f86-a0c2-5d9e8b1f3a67',
+			)
+		);
+		$this->assertInstanceOf( \WP_User::class, get_user_by( 'email', 'real.payer@example.com' ) );
+	}
 }

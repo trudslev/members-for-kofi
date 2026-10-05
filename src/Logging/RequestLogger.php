@@ -63,6 +63,11 @@ class RequestLogger {
 		if ( isset( $payload_sanitized['verification_token'] ) ) {
 			$payload_sanitized['verification_token'] = '[REDACTED]';
 		}
+		// A shop order's postal address is no use for diagnosing a webhook,
+		// and is exactly the personal data a log should not accumulate.
+		if ( ! empty( $payload_sanitized['shipping'] ) ) {
+			$payload_sanitized['shipping'] = '[REDACTED]';
+		}
 		$payload_json = (string) wp_json_encode( $payload_sanitized );
 
 		if ( strlen( $payload_json ) > self::MAX_PAYLOAD_LENGTH ) {

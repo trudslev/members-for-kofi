@@ -24,6 +24,7 @@ defined( 'ABSPATH' ) || exit;
 
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Webhook\Webhook;
 
 /**
  * Class RoleExpiryChecker
@@ -91,10 +92,26 @@ class RoleExpiryChecker {
 			$expiry_time   = strtotime( "+$expiry_days days", $assigned_time );
 
 			if ( time() > $expiry_time ) {
+				// A renewal may have landed since the list was read. Read the
+				// timestamp again, past the cache, so a member who just paid is
+				// not stripped for a month until their next payment.
+				wp_cache_delete( $user->ID, 'user_meta' );
+				$fresh = (int) get_user_meta( $user->ID, $expiration_meta_key, true );
+				if ( ! $fresh || time() <= strtotime( "+$expiry_days days", $fresh ) ) {
+					continue;
+				}
+
 				$roles_to_remove = get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
+				$preexisting     = (string) get_user_meta( $user->ID, Webhook::PREEXISTING_ROLE_META, true );
 
 				if ( $roles_to_remove ) {
 					foreach ( (array) $roles_to_remove as $role ) {
+						// Someone else granted this role before the donor paid for
+						// it: stop tracking it, but it is not the plugin's to take.
+						if ( $preexisting === $role ) {
+							continue;
+						}
+
 						// Use the global namespace for WP_User.
 						$wp_user = new \WP_User( $user->ID );
 						$wp_user->remove_role( $role );
@@ -106,6 +123,7 @@ class RoleExpiryChecker {
 					// Clean up metadata.
 					delete_user_meta( $user->ID, $expiration_meta_key );
 					delete_user_meta( $user->ID, 'kofi_donation_assigned_role' );
+					delete_user_meta( $user->ID, Webhook::PREEXISTING_ROLE_META );
 				}
 			}
 		}

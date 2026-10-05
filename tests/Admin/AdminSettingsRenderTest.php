@@ -287,4 +287,141 @@ class AdminSettingsRenderTest extends TestCase {
 		$this->assertStringContainsString( 'Verification Token is required.', $output );
 		$this->assertStringContainsString( 'notice-error', $output );
 	}
+
+	/**
+	 * The URL given to Ko-fi works in the site's permalink mode.
+	 */
+	public function test_the_webhook_url_follows_the_permalink_mode(): void {
+		$structure = get_option( 'permalink_structure' );
+
+		try {
+			update_option( 'permalink_structure', '' );
+			$this->assertSame( home_url( '/?kofi_webhook=1' ), AdminSettings::webhook_url() );
+			$this->assertStringContainsString( 'kofi_webhook=1', $this->capture_render( array( $this->settings, 'render_verification_token_field' ) ) );
+
+			update_option( 'permalink_structure', '/%postname%/' );
+			$this->assertSame( home_url( '/webhook-kofi/' ), AdminSettings::webhook_url() );
+		} finally {
+			update_option( 'permalink_structure', $structure );
+		}
+	}
+
+	/**
+	 * An overdue scheduled task is reported; an on-time one is not.
+	 */
+	public function test_overdue_scheduled_tasks_are_reported(): void {
+		$hook = 'kofi_members_check_expired_roles';
+		$was  = wp_next_scheduled( $hook );
+
+		try {
+			wp_clear_scheduled_hook( $hook );
+			wp_schedule_event( time() + HOUR_IN_SECONDS, 'daily', $hook );
+			$this->assertSame( '', $this->capture_render( array( $this->settings, 'render_cron_warning' ) ) );
+
+			wp_clear_scheduled_hook( $hook );
+			wp_schedule_event( time() - 3 * DAY_IN_SECONDS, 'daily', $hook );
+			$this->assertStringContainsString( 'Scheduled tasks are not running', $this->capture_render( array( $this->settings, 'render_cron_warning' ) ) );
+		} finally {
+			wp_clear_scheduled_hook( $hook );
+			wp_schedule_event( false !== $was ? $was : time(), 'daily', $hook );
+		}
+	}
+
+	/**
+	 * An account left by Ko-fi's test button is pointed out to administrators
+	 * on the screens where they would act on it, and only while it exists.
+	 */
+	public function test_a_leftover_kofi_test_account_is_pointed_out(): void {
+		$previous = get_current_user_id();
+		$test_id  = $this->create_user(
+			array(
+				'user_email' => \MembersForKofi\Webhook\Webhook::KOFI_TEST_EMAIL,
+				'role'       => 'subscriber',
+			)
+		);
+
+		try {
+			wp_set_current_user( $this->create_user( array( 'role' => 'administrator' ) ) );
+
+			$notice = $this->capture_render(
+				static function () {
+					AdminSettings::render_test_account_notice( 'dashboard' );
+				}
+			);
+			$this->assertStringContainsString( 'Send test', $notice );
+			$this->assertStringContainsString( 'Subscriber', $notice );
+			$this->assertStringContainsString( 'user_id=' . $test_id, $notice );
+
+			$this->assertSame(
+				'',
+				$this->capture_render(
+					static function () {
+						AdminSettings::render_test_account_notice( 'edit-post' );
+					}
+				),
+				'Not on unrelated screens.'
+			);
+
+			wp_set_current_user( $this->create_user( array( 'role' => 'editor' ) ) );
+			$this->assertSame(
+				'',
+				$this->capture_render(
+					static function () {
+						AdminSettings::render_test_account_notice( 'dashboard' );
+					}
+				),
+				'Only for those who can delete users.'
+			);
+
+			wp_set_current_user( $this->create_user( array( 'role' => 'administrator' ) ) );
+			wp_delete_user( $test_id );
+			$this->assertSame(
+				'',
+				$this->capture_render(
+					static function () {
+						AdminSettings::render_test_account_notice( 'users' );
+					}
+				),
+				'Gone once the account is deleted.'
+			);
+		} finally {
+			wp_set_current_user( $previous );
+		}
+	}
+
+	/**
+	 * The notice is hooked.
+	 */
+	public function test_the_test_account_notice_is_hooked(): void {
+		$this->assertNotFalse( has_action( 'admin_notices', array( AdminSettings::class, 'render_test_account_notice' ) ) );
+	}
+
+	/**
+	 * The notice works when WordPress itself fires admin_notices, which
+	 * passes callbacks an empty string rather than nothing: the notice once
+	 * read that as a screen called '' and never appeared on a real page.
+	 */
+	public function test_the_test_account_notice_appears_when_wordpress_fires_it(): void {
+		require_once ABSPATH . 'wp-admin/includes/class-wp-screen.php';
+		require_once ABSPATH . 'wp-admin/includes/screen.php';
+
+		$previous = get_current_user_id();
+		$this->create_user( array( 'user_email' => \MembersForKofi\Webhook\Webhook::KOFI_TEST_EMAIL ) );
+
+		try {
+			wp_set_current_user( $this->create_user( array( 'role' => 'administrator' ) ) );
+			set_current_screen( 'dashboard' );
+
+			$output = $this->capture_render(
+				static function () {
+					do_action( 'admin_notices' );
+				}
+			);
+
+			$this->assertStringContainsString( 'Send test', $output );
+		} finally {
+			set_current_screen( 'front' );
+			wp_set_current_user( $previous );
+		}
+	}
 }

@@ -392,10 +392,12 @@ class SecurityTest extends TestCase {
 			$contents,
 			'Verification token must never appear in the error log.'
 		);
-		$this->assertStringContainsString(
-			'[REDACTED]',
+		// Since 1.3.0 the payload is not logged at all -- only its type, tier
+		// and subscription flag -- so the donor's address must be absent too.
+		$this->assertStringNotContainsString(
+			'log-redaction@example.com',
 			$contents,
-			'Expected the verification token to be redacted in logged context.'
+			'The donor email must never appear in the error log.'
 		);
 	}
 }

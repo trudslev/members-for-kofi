@@ -573,6 +573,11 @@ class DonationWebhookTest extends IntegrationTestCase {
 	 * reality: they all send `tier_name` as a non-empty string, where Ko-fi
 	 * sends null, and none carry the Discord or transaction fields at all.
 	 *
+	 * One field is changed: the transaction id. Ko-fi's test button always
+	 * sends the placeholder 00000000-1111-2222-3333-444444444444, which the
+	 * plugin now recognises and does not turn into an account, so this
+	 * fixture carries a random one, as a real payment does.
+	 *
 	 * @param array $overrides Fields to replace.
 	 * @return array
 	 */
@@ -587,12 +592,12 @@ class DonationWebhookTest extends IntegrationTestCase {
 				'from_name'                     => 'Jo Example',
 				'message'                       => 'Good luck with the integration!',
 				'amount'                        => '3.00',
-				'url'                           => 'https://ko-fi.com/Home/CoffeeShop?txid=00000000-1111-2222-3333-444444444444',
+				'url'                           => 'https://ko-fi.com/Home/CoffeeShop?txid=7c1e9a52-3b4d-4f86-a0c2-5d9e8b1f3a67',
 				'email'                         => 'replaced-by-caller@example.com',
 				'currency'                      => 'USD',
 				'is_subscription_payment'       => true,
 				'is_first_subscription_payment' => true,
-				'kofi_transaction_id'           => '00000000-1111-2222-3333-444444444444',
+				'kofi_transaction_id'           => '7c1e9a52-3b4d-4f86-a0c2-5d9e8b1f3a67',
 				'shop_items'                    => null,
 				'tier_name'                     => null,
 				'shipping'                      => null,
@@ -734,5 +739,43 @@ class DonationWebhookTest extends IntegrationTestCase {
 			$this->roles_for( $email ),
 			'Bronze is mapped to contributor in the test environment'
 		);
+	}
+
+	/**
+	 * Ko-fi's "Send test" button, verbatim: answered 200, logged, and no
+	 * account created -- it used to leave a "Jo Example" member behind.
+	 */
+	public function test_kofi_test_button_creates_no_account(): void {
+		$email   = $this->donor_email( 'kofi-test-button' );
+		$payload = $this->real_kofi_payload(
+			array(
+				'email'               => $email,
+				'kofi_transaction_id' => '00000000-1111-2222-3333-444444444444',
+			)
+		);
+
+		$response = $this->post_donation( $payload );
+
+		$this->assertSame( 200, $response['status'] );
+		$this->assertSame( true, $response['json']['test'] ?? null );
+		$this->assertSame( array(), $this->roles_for( $email ) );
+		$this->assertSame( '', self::wp( 'user list --search=' . escapeshellarg( $email ) . ' --search-columns=user_email --field=ID' ) );
+	}
+
+	/**
+	 * The test still checks the token: that is what it is for.
+	 */
+	public function test_kofi_test_button_with_the_wrong_token_is_refused(): void {
+		$response = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'               => $this->donor_email( 'kofi-test-wrong' ),
+					'kofi_transaction_id' => '00000000-1111-2222-3333-444444444444',
+					'verification_token'  => 'not-the-token',
+				)
+			)
+		);
+
+		$this->assertSame( 401, $response['status'] );
 	}
 }
