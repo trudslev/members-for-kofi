@@ -275,6 +275,29 @@ rather than copying the working tree's, which carries the whole test toolchain.
 
 Version extracted from `members-for-kofi.php` header (`* Version: 1.3.1`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
+#### Release order: dev site → production → WordPress.org (MANDATORY)
+
+Publishing to WordPress.org is the **last** step, never the first. Every site that updates
+gets the release at once, so a fault found after publishing has already reached all of them.
+
+1. **Dev site.** It runs the working tree, so it has been running the release all along.
+2. **Production, from the tested package.** After commit, tag and push, build the zip with
+   `make release OUT_DIR=<dir>` and install that exact zip on production -- not from
+   WordPress.org. Back up first: `wp option get members_for_kofi_options --format=json` into a
+   private location (it can hold the token). Then watch it: an uncached page, a wrong-token
+   webhook probe (expect a 401), and the MySQL processlist for long-running queries.
+3. **WordPress.org, last.** Only once production has run the release cleanly: `make deploy-svn`,
+   check that SVN trunk matches what production runs, then `make commit-svn`, and check that
+   the published zip matches the tag.
+4. **GitHub release**, with the WordPress.org package attached.
+
+**Why:** 1.3.0 was published to WordPress.org first and production was then updated from
+it. Its upgrade step never finished on production and jammed the site for about 12 minutes;
+in that order, every site updating from WordPress.org was exposed at the same moment. The dev
+site did not catch it -- half the data and almost no traffic -- so dev passing is necessary,
+not sufficient: upgrade code that runs on `init` must also be timed against production-sized
+data before release (see Database Schema Changes).
+
 ## Key Files & Patterns
 
 ### Custom Rewrite Rules
