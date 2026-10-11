@@ -214,10 +214,29 @@ make test-integration
 # Tear down / wipe
 make test-env-down
 make test-env-reset
+
+# Anything still running?
+make test-env-status
 ```
 
 `make test` runs inside the WordPress container with core loaded. `make test-integration` runs on the
 host and drives the site over HTTP at `http://localhost:8101`. Both boot the environment first.
+
+**Nothing is left running.** The test targets (`test`, `test-case`, `test-integration`, `test-all`,
+`tested-up-to`) go through `bin/with-test-env.sh`: if the test containers were not running, they are
+stopped again when the command ends, also on failure or Ctrl-C. If you started them yourself with
+`make test-env-up` (or set `KEEP_TEST_ENV=1`) they stay up for fast iteration -- then stop them with
+`make test-env-down` when you are done. `make test-env-status` lists anything still running.
+
+- Targets that only read files (`wp-version`, `pot`, the "Tested up to" check in `release`) use
+  `WPCLI_NO_SITE` (`docker compose run --no-deps`). A plain `run wpcli` starts the WordPress and
+  database containers as dependencies and leaves them running; that is how `make release` used to
+  leave two containers up after every release
+- When adding a target that needs the running site, wrap it in `$(WITH_TEST_ENV)` with an
+  underscore inner target, as the existing ones do. Never add `test-env-up` as a prerequisite
+- `make test-env-pull` removes the images a newer pull superseded
+- Any throwaway environment created for a rehearsal (a separate compose project) must be torn
+  down with `down -v` before the work is called done
 
 ### Code Quality
 

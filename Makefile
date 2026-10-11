@@ -13,12 +13,33 @@ TEST_COMPOSE:=docker compose -f docker-compose.test.yml
 WP_TEST_PORT?=8101
 PLUGIN_PATH_IN_CONTAINER:=/var/www/html/wp-content/plugins/members-for-kofi
 
+# Runs a command against the test site and stops the containers afterwards if
+# it was the one that started them. Every target that needs the running site
+# goes through this, so nothing is left running after a test run or a release.
+# `make test-env-up` first, or KEEP_TEST_ENV=1, keeps them up between runs.
+WITH_TEST_ENV:=bash bin/with-test-env.sh
+# For targets that only read files from the test site's volume: runs WP-CLI
+# without starting the WordPress and database containers it "depends on".
+# A plain `run` starts both and leaves them running.
+WPCLI_NO_SITE:=$(TEST_COMPOSE) run --rm --no-deps -T wpcli wp
+
 # Boots a throwaway site running the newest WordPress and provisions it
 # (installs WP, activates the plugin, sets permalinks and the test token).
+# Each pull of a newer image leaves the previous one behind, untagged, at
+# roughly 800 MB apiece. Remove the ones this pull superseded. Not forced: an
+# image that another tag or a container still uses is refused by Docker and
+# simply stays.
 .PHONY: test-env-pull
 test-env-pull:
 	@echo "Pulling newest WordPress image..."
-	$(TEST_COMPOSE) pull --quiet wordpress wpcli db
+	@old=$$(docker image ls -q wordpress:latest wordpress:cli mysql:lts 2>/dev/null | sort -u); \
+	$(TEST_COMPOSE) pull --quiet wordpress wpcli db || exit 1; \
+	new=$$(docker image ls -q wordpress:latest wordpress:cli mysql:lts 2>/dev/null | sort -u); \
+	for id in $$old; do \
+		if ! echo "$$new" | grep -qx "$$id"; then \
+			if docker image rm "$$id" >/dev/null 2>&1; then echo "Removed superseded image $$id"; fi; \
+		fi; \
+	done
 
 .PHONY: test-env-up
 test-env-up: vendor test-env-pull
@@ -30,6 +51,15 @@ test-env-up: vendor test-env-pull
 test-env-down:
 	$(TEST_COMPOSE) down
 
+# Lists anything this project has left running, in any of its compose projects.
+.PHONY: test-env-status
+test-env-status:
+	@left=$$(for project in members-for-kofi kofi-plugin-check; do \
+		docker ps --format '{{.Names}}  ({{.Status}})' --filter label=com.docker.compose.project=$$project; \
+	done); \
+	if [ -n "$$left" ]; then echo "Still running:"; echo "$$left"; echo "Stop with: make test-env-down"; \
+	else echo "No test containers running."; fi
+
 # Full wipe: discards the WordPress install and database.
 .PHONY: test-env-reset
 test-env-reset:
@@ -39,24 +69,41 @@ test-env-reset:
 vendor:
 	@[ -d vendor ] || composer install
 
+# The public test targets start the site if needed and stop it again if they
+# started it (see WITH_TEST_ENV). The underscore targets do the work and assume
+# the site is running; they are not meant to be called directly.
 .PHONY: test
-test: test-env-up
+test: vendor
+	@$(WITH_TEST_ENV) $(MAKE) --no-print-directory _test
+
+.PHONY: _test
+_test:
 	@echo "Running test suite inside the WordPress container..."
 	$(TEST_COMPOSE) exec -T -w $(PLUGIN_PATH_IN_CONTAINER) wordpress ./vendor/bin/phpunit
 
 .PHONY: test-case
-test-case: test-env-up
+test-case: vendor
+	@$(WITH_TEST_ENV) $(MAKE) --no-print-directory _test-case
+
+.PHONY: _test-case
+_test-case:
 	@echo "Running tests matching '$(TEST)'..."
 	$(TEST_COMPOSE) exec -T -w $(PLUGIN_PATH_IN_CONTAINER) wordpress ./vendor/bin/phpunit --filter '$(TEST)'
 
 # Drives the local site over real HTTP, exactly as Ko-fi would.
 .PHONY: test-integration
-test-integration: test-env-up
+test-integration: vendor
+	@$(WITH_TEST_ENV) $(MAKE) --no-print-directory _test-integration
+
+.PHONY: _test-integration
+_test-integration:
 	@echo "Running HTTP integration tests against http://localhost:$(WP_TEST_PORT)..."
 	WP_TEST_SITE_URL=http://localhost:$(WP_TEST_PORT) ./vendor/bin/phpunit --configuration phpunit-integration.xml
 
+# One start and one stop around both suites.
 .PHONY: test-all
-test-all: test test-integration
+test-all: vendor
+	@$(WITH_TEST_ENV) $(MAKE) --no-print-directory _test _test-integration
 
 .PHONY: test-shell
 test-shell:
@@ -65,15 +112,19 @@ test-shell:
 # Reports the WordPress version the test environment is actually running.
 .PHONY: wp-version
 wp-version:
-	@$(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n'
+	@$(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n'
 	@echo
 
 # Syncs readme.txt's "Tested up to:" with the version we just tested against.
 # WordPress.org reads only major.minor there (7.1 covers 7.1.2), so the patch
 # level is dropped.
 .PHONY: tested-up-to
-tested-up-to: test-env-up
-	@version=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
+tested-up-to: vendor
+	@$(WITH_TEST_ENV) $(MAKE) --no-print-directory _tested-up-to
+
+.PHONY: _tested-up-to
+_tested-up-to:
+	@version=$$($(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
 	if [ -z "$$version" ]; then echo "ERROR: could not determine WordPress version from the test environment."; exit 1; fi; \
 	current=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
 	if [ "$$current" = "$$version" ]; then \
@@ -89,8 +140,8 @@ tested-up-to: test-env-up
 # a release: strings added since the last run are otherwise untranslatable, and
 # the header carries a stale version and licence.
 .PHONY: pot
-pot: test-env-up
-	$(TEST_COMPOSE) run --rm -T wpcli wp i18n make-pot \
+pot:
+	$(WPCLI_NO_SITE) i18n make-pot \
 	  $(PLUGIN_PATH_IN_CONTAINER) \
 	  $(PLUGIN_PATH_IN_CONTAINER)/languages/members-for-kofi.pot \
 	  --exclude=vendor,tests,node_modules,dist,bin,reports \
@@ -146,7 +197,7 @@ release: .releaseignore
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \
 	fi
 	# Ensure "Tested up to" reflects the WordPress version we actually tested against
-	@tested=$$($(TEST_COMPOSE) run --rm -T wpcli wp core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
+	@tested=$$($(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
 	declared=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
 	if [ -n "$$tested" ] && [ "$$tested" != "$$declared" ]; then \
 		echo "WARNING: readme.txt says 'Tested up to: $$declared' but the test environment runs $$tested. Run 'make tested-up-to'."; \
@@ -215,9 +266,11 @@ help:
 	@echo "  test-shell           Shell inside the WordPress container"
 	@echo ""
 	@echo "Test environment (newest WordPress, disposable)"
-	@echo "  test-env-up          Boot and provision the test site"
+	@echo "  (test targets stop the site again if they started it; KEEP_TEST_ENV=1 keeps it)"
+	@echo "  test-env-up          Boot and provision the test site, and leave it running"
 	@echo "  test-env-down        Stop it"
-	@echo "  test-env-reset       Wipe the site and database, then rebuild"
+	@echo "  test-env-status      Show any test containers still running"
+	@echo "  test-env-reset       Wipe the site and database, then rebuild (leaves it running)"
 	@echo "  wp-version           WordPress version currently under test"
 	@echo "  tested-up-to         Sync readme.txt 'Tested up to' with that version"
 	@echo ""
