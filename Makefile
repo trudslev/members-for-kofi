@@ -51,7 +51,20 @@ test-env-up: vendor test-env-pull
 test-env-down:
 	$(TEST_COMPOSE) down
 
-# Lists anything this project has left running, in any of its compose projects.
+# Removes everything the test site leaves on the machine: containers, network,
+# volumes, and the three images only this project's tests use (about 1.9 GB;
+# the next run downloads them again). Images are not forced: one that another
+# container or tag still uses is refused by Docker and stays.
+.PHONY: test-env-clean
+test-env-clean:
+	@$(TEST_COMPOSE) down -v >/dev/null 2>&1 || true
+	@for image in wordpress:latest wordpress:cli mysql:lts; do \
+		if docker image rm "$$image" >/dev/null 2>&1; then echo "Removed image $$image"; fi; \
+	done
+	@echo "Test site removed: containers, network, volumes and unused images."
+
+# Lists anything this project has left behind, in any of its compose projects:
+# running containers, and volumes (which `test-env-down` keeps).
 .PHONY: test-env-status
 test-env-status:
 	@left=$$(for project in members-for-kofi kofi-plugin-check; do \
@@ -59,6 +72,11 @@ test-env-status:
 	done); \
 	if [ -n "$$left" ]; then echo "Still running:"; echo "$$left"; echo "Stop with: make test-env-down"; \
 	else echo "No test containers running."; fi
+	@volumes=$$(for project in members-for-kofi kofi-plugin-check; do \
+		docker volume ls -q --filter label=com.docker.compose.project=$$project; \
+	done); \
+	if [ -n "$$volumes" ]; then echo "Volumes left behind:"; echo "$$volumes"; echo "Remove with: make test-env-clean"; \
+	else echo "No test volumes left."; fi
 
 # Full wipe: discards the WordPress install and database.
 .PHONY: test-env-reset
@@ -268,8 +286,9 @@ help:
 	@echo "Test environment (newest WordPress, disposable)"
 	@echo "  (test targets stop the site again if they started it; KEEP_TEST_ENV=1 keeps it)"
 	@echo "  test-env-up          Boot and provision the test site, and leave it running"
-	@echo "  test-env-down        Stop it"
-	@echo "  test-env-status      Show any test containers still running"
+	@echo "  test-env-down        Stop it (keeps its volumes; test-env-clean removes them)"
+	@echo "  test-env-status      Show test containers still running and volumes left behind"
+	@echo "  test-env-clean       Remove containers, volumes and the test images"
 	@echo "  test-env-reset       Wipe the site and database, then rebuild (leaves it running)"
 	@echo "  wp-version           WordPress version currently under test"
 	@echo "  tested-up-to         Sync readme.txt 'Tested up to' with that version"

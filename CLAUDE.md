@@ -168,8 +168,8 @@ Before merging any code, verify:
 
 Tests run against a **real install of the newest WordPress**, never against a remote site. The
 `wordpress:latest` image is pulled on every `make test-env-up`, so the suite tracks core releases
-automatically. Nothing is pinned to `dev.foodgeek.dk`. Core lives in a persistent volume the image
-never refreshes on its own, so `bin/test-env-init.sh` copies core over from the image whenever the
+automatically. Nothing is pinned to `dev.foodgeek.dk`. When the site's volume outlives a run (it does
+after `make test-env-up`), core lives in that volume and the image never refreshes it on its own, so `bin/test-env-init.sh` copies core over from the image whenever the
 two versions differ — without that, the suite silently stays on the version the volume was created with.
 
 - **Environment**: `docker-compose.test.yml` (WordPress + MySQL + WP-CLI), provisioned by
@@ -226,7 +226,13 @@ host and drives the site over HTTP at `http://localhost:8101`. Both boot the env
 `tested-up-to`) go through `bin/with-test-env.sh`: if the test containers were not running, they are
 stopped again when the command ends, also on failure or Ctrl-C. If you started them yourself with
 `make test-env-up` (or set `KEEP_TEST_ENV=1`) they stay up for fast iteration -- then stop them with
-`make test-env-down` when you are done. `make test-env-status` lists anything still running.
+`make test-env-down` when you are done. `make test-env-status` lists anything still running, and
+any volumes left behind.
+
+Volumes follow the same rule: a test target that had to create the site's volumes removes them
+again (`down -v`), so a run from a clean machine leaves nothing; volumes that already existed are
+kept. `make test-env-down` keeps volumes (that is what makes the next start fast);
+`make test-env-clean` removes containers, volumes and the three test images.
 
 - Targets that only read files (`wp-version`, `pot`, the "Tested up to" check in `release`) use
   `WPCLI_NO_SITE` (`docker compose run --no-deps`). A plain `run wpcli` starts the WordPress and
