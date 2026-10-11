@@ -237,6 +237,11 @@ stopped again when the command ends, also on failure or Ctrl-C. If you started t
 - `make test-env-pull` removes the images a newer pull superseded
 - Any throwaway environment created for a rehearsal (a separate compose project) must be torn
   down with `down -v` before the work is called done
+- **Publish test ports on loopback only: `"127.0.0.1:8101:80"`, never `"8101:80"`.** Without an
+  address Docker publishes on every interface, and its NAT rules bypass the host firewall (ufw).
+  Until 2026-10-11 the test site -- `admin`/`admin`, with this repository mounted read-write --
+  answered on the server's public address whenever it was up. The same applies to
+  `docker-compose.site.yml` and to any compose file written for a rehearsal
 
 ### Code Quality
 
