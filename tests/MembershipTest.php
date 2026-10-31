@@ -432,4 +432,42 @@ class MembershipTest extends TestCase {
 		PersonalData::erase( 'since-ended@example.com' );
 		$this->assertSame( '', get_user_meta( $ended->ID, Membership::MEMBER_SINCE_META, true ) );
 	}
+
+	/**
+	 * The cancel hint is shown to supporters by other plugins, so it must
+	 * come out in the site's language. The Danish translation ships with the
+	 * plugin and is loaded by Plugin::load_textdomain().
+	 */
+	public function test_the_cancel_hint_is_translated_into_danish(): void {
+		$this->configure();
+		$user   = $this->pay( 'dansk@example.com' );
+		$danish = static function () {
+			return 'da_DK';
+		};
+
+		// As on a Danish page: the site's locale is Danish, not just the
+		// plugin's. WordPress keeps translations per locale, so switching only
+		// the plugin would load the file but never use it.
+		add_filter( 'determine_locale', $danish );
+		add_filter( 'locale', $danish );
+		unload_textdomain( 'members-for-kofi' );
+
+		try {
+			Plugin::load_textdomain();
+			$hint = members_for_kofi_get_membership( $user->ID )['cancel_hint'];
+		} finally {
+			remove_filter( 'determine_locale', $danish );
+			remove_filter( 'locale', $danish );
+			unload_textdomain( 'members-for-kofi' );
+		}
+
+		$this->assertSame( 'Log ind på Ko-fi, og gå til Account settings og Subscriptions. Betaler du med PayPal, kan du også opsige det i PayPal.', $hint );
+	}
+
+	/**
+	 * Translations are loaded on init.
+	 */
+	public function test_translations_are_loaded_on_init(): void {
+		$this->assertNotFalse( has_action( 'init', array( Plugin::class, 'load_textdomain' ) ) );
+	}
 }

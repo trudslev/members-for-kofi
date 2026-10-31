@@ -1,0 +1,16 @@
+# Danish translation of Members for Ko-fi.
+# This file is distributed under the same license as the Members for Ko-fi plugin.
+msgid ""
+msgstr ""
+"Project-Id-Version: Members for Ko-fi 1.4.0\n"
+"Language: da_DK\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Domain: members-for-kofi\n"
+
+#. Shown to supporters by other plugins, e.g. on an account page, as members_for_kofi_get_membership()['cancel_hint'].
+#: src/Membership.php
+msgid "Sign in to Ko-fi, then go to Account settings and Subscriptions. If you pay with PayPal, you can also cancel there."
+msgstr "Log ind på Ko-fi, og gå til Account settings og Subscriptions. Betaler du med PayPal, kan du også opsige det i PayPal."

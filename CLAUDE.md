@@ -235,7 +235,14 @@ again (`down -v`), so a run from a clean machine leaves nothing; volumes that al
 kept. `make test-env-down` keeps volumes (that is what makes the next start fast);
 `make test-env-clean` removes containers, volumes and the three test images.
 
-- Targets that only read files (`wp-version`, `pot`, the "Tested up to" check in `release`) use
+- **Translations:** bundled ones live in `languages/` (`members-for-kofi-<locale>.po`, compiled with
+  `make mo`) and are loaded by `Plugin::load_textdomain()` on `init`; WordPress never loads a plugin's
+  own files by itself. A language pack from translate.wordpress.org still wins where one exists.
+  Danish (`da_DK`) ships for the strings other plugins show supporters, such as `cancel_hint`
+- `pot` and `mo` run WP-CLI against this checkout alone (`WPCLI_FILES`); `wp-version` and the
+  "Tested up to" check in `release` read the site's version only if its volume exists. Anything
+  run through the compose `wpcli` service mounts that volume and would create it as a side effect
+- Targets that only read files (`wp-version`, the "Tested up to" check in `release`) use
   `WPCLI_NO_SITE` (`docker compose run --no-deps`). A plain `run wpcli` starts the WordPress and
   database containers as dependencies and leaves them running; that is how `make release` used to
   leave two containers up after every release

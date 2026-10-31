@@ -104,12 +104,27 @@ class Plugin {
 		);
 		add_filter( 'query_vars', array( $this, 'initialize_query_vars' ) );
 		add_filter( 'request', array( self::class, 'route_webhook_path' ) );
+		add_action( 'init', array( self::class, 'load_textdomain' ) );
 
 		PersonalData::register();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			\WP_CLI::add_command( 'members-for-kofi member-since', Cli\MemberSinceCommand::class );
 		}
+	}
+
+	/**
+	 * Loads the translations shipped in the plugin's languages/ folder.
+	 *
+	 * WordPress loads language packs from translate.wordpress.org by itself,
+	 * but never a plugin's own files: without this, the Danish translation
+	 * bundled with the plugin was ignored and the text stayed English. A
+	 * language pack, where one exists, still takes precedence.
+	 *
+	 * @return void
+	 */
+	public static function load_textdomain(): void {
+		load_plugin_textdomain( 'members-for-kofi', false, dirname( plugin_basename( MEMBERS_FOR_KOFI_PLUGIN_FILE ) ) . '/languages' );
 	}
 
 	/**

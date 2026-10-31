@@ -22,6 +22,13 @@ WITH_TEST_ENV:=bash bin/with-test-env.sh
 # without starting the WordPress and database containers it "depends on".
 # A plain `run` starts both and leaves them running.
 WPCLI_NO_SITE:=$(TEST_COMPOSE) run --rm --no-deps -T wpcli wp
+# The compose run above mounts the test site's WordPress volume, and creating
+# it as a side effect would leave it behind. So: commands that need only the
+# plugin's own files (i18n) run WP-CLI against this checkout alone, and reads
+# of the site's version happen only when that volume already exists.
+WPCLI_FILES:=docker run --rm -u 33:33 -v $(CURDIR):$(PLUGIN_PATH_IN_CONTAINER) -w $(PLUGIN_PATH_IN_CONTAINER) wordpress:cli wp
+WP_TEST_VOLUME:=members-for-kofi_wp_test_data
+HAS_TEST_SITE:=docker volume inspect $(WP_TEST_VOLUME) >/dev/null 2>&1
 
 # Boots a throwaway site running the newest WordPress and provisions it
 # (installs WP, activates the plugin, sets permalinks and the test token).
@@ -130,8 +137,8 @@ test-shell:
 # Reports the WordPress version the test environment is actually running.
 .PHONY: wp-version
 wp-version:
-	@$(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n'
-	@echo
+	@if $(HAS_TEST_SITE); then $(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n'; echo; \
+	else echo "No test site yet (it is created by the first test run, or make test-env-up)."; fi
 
 # Syncs readme.txt's "Tested up to:" with the version we just tested against.
 # WordPress.org reads only major.minor there (7.1 covers 7.1.2), so the patch
@@ -159,12 +166,18 @@ _tested-up-to:
 # the header carries a stale version and licence.
 .PHONY: pot
 pot:
-	$(WPCLI_NO_SITE) i18n make-pot \
+	$(WPCLI_FILES) i18n make-pot \
 	  $(PLUGIN_PATH_IN_CONTAINER) \
 	  $(PLUGIN_PATH_IN_CONTAINER)/languages/members-for-kofi.pot \
 	  --exclude=vendor,tests,node_modules,dist,bin,reports \
 	  --domain=members-for-kofi
 	@echo "Strings: $$(grep -c '^msgid' languages/members-for-kofi.pot) in languages/members-for-kofi.pot"
+
+# Compiles the bundled translations (languages/*.po) into the .mo files
+# WordPress loads. Run it after editing a .po file.
+.PHONY: mo
+mo:
+	$(WPCLI_FILES) i18n make-mo languages
 
 PLUGIN_SLUG:=members-for-kofi
 MAIN_FILE:=members-for-kofi.php
@@ -215,7 +228,7 @@ release: .releaseignore
 		echo "WARNING: Stable tag mismatch in readme.txt (expected $(VERSION))"; \
 	fi
 	# Ensure "Tested up to" reflects the WordPress version we actually tested against
-	@tested=$$($(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
+	@tested=$$($(HAS_TEST_SITE) && $(WPCLI_NO_SITE) core version 2>/dev/null | tr -d '\r\n' | cut -d. -f1,2); \
 	declared=$$(grep -E '^Tested up to:' readme.txt | sed -E 's/^Tested up to:[[:space:]]*//'); \
 	if [ -n "$$tested" ] && [ "$$tested" != "$$declared" ]; then \
 		echo "WARNING: readme.txt says 'Tested up to: $$declared' but the test environment runs $$tested. Run 'make tested-up-to'."; \
