@@ -58,6 +58,21 @@ stop_if_started_here() {
 }
 trap stop_if_started_here EXIT
 
+# Starting the stack needs about 1.5 GB (its containers are capped at 768 MB,
+# 512 MB and 256 MB). This server shares its memory with production; when it
+# was already short, the test stack once tipped it into swapping until it froze.
+# So do not start it then. TEST_ENV_MIN_FREE_MB overrides the threshold.
+if [ "$STARTED_HERE" = 1 ]; then
+  min_free_mb=${TEST_ENV_MIN_FREE_MB:-1536}
+  available_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
+  if [ -n "$available_mb" ] && [ "$available_mb" -lt "$min_free_mb" ]; then
+    STARTED_HERE=0 # Nothing was started, so there is nothing to stop.
+    echo "Not starting the test site: only ${available_mb} MB of memory is available, and it needs ${min_free_mb} MB." >&2
+    echo "Free some memory first (close idle sessions or programs), or set TEST_ENV_MIN_FREE_MB to override." >&2
+    exit 1
+  fi
+fi
+
 # Always (re)provision: it pulls the newest WordPress and resets the plugin
 # options the suites expect, whether or not the containers were already up.
 make --no-print-directory test-env-up || exit 1

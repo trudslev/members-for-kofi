@@ -244,6 +244,12 @@ kept. `make test-env-down` keeps volumes (that is what makes the next start fast
 - `make test-env-pull` removes the images a newer pull superseded
 - Any throwaway environment created for a rehearsal (a separate compose project) must be torn
   down with `down -v` before the work is called done
+- **The test stack is memory-capped** (`mem_limit`/`memswap_limit`: WordPress 768 MB -- PHPUnit runs
+  inside it -- MySQL 512 MB with a lean configuration, WP-CLI 256 MB), and `bin/with-test-env.sh`
+  refuses to start it with less than 1.5 GB available (`TEST_ENV_MIN_FREE_MB` overrides). On
+  2026-10-31 the uncapped stack tipped this shared server, already short of memory, into swapping
+  until it froze and had to be rebooted. A full `make test-all` peaks around 270 MB per container.
+  Never remove the caps; raise them only with a measured reason
 - **Publish test ports on loopback only: `"127.0.0.1:8101:80"`, never `"8101:80"`.** Without an
   address Docker publishes on every interface, and its NAT rules bypass the host firewall (ufw).
   Until 2026-10-11 the test site -- `admin`/`admin`, with this repository mounted read-write --
