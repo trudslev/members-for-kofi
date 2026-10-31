@@ -448,7 +448,9 @@ Cron job queries all users with this metadata and removes roles if timestamp exc
 Before it deletes the tracking meta it calls `Membership::record_end()`, which keeps `kofi_last_assigned_role`,
 `kofi_last_payment_at` and `kofi_membership_ended_at`: without them an ended membership is indistinguishable
 from one that never existed, and `members_for_kofi_get_membership()` could not report it. A new payment
-(`Membership::record_payment()`) drops that record and stores `kofi_last_payment_subscription`. All four
+(`Membership::record_payment()`) drops that record and stores `kofi_last_payment_subscription`; the first
+granting payment also sets `kofi_member_since`, which renewals, endings and rejoins never move (backfill:
+`wp members-for-kofi member-since set <user-id> <date> [--force]`, `src/Cli/MemberSinceCommand.php`). All five
 keys are in `Membership::meta_keys()`, which uninstall removes; the eraser deletes the ended-membership
 record but keeps a live membership (and says so), since deleting it would end paid access.
 It re-reads the timestamp past the cache just before removing, so a renewal landing mid-run is kept.

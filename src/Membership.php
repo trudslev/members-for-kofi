@@ -71,6 +71,16 @@ class Membership {
 	public const SUBSCRIPTION_META = 'kofi_last_payment_subscription';
 
 	/**
+	 * When the user first became a member: the first payment that granted a
+	 * role. Set once and never moved by renewals; it also survives the end of
+	 * a membership, so someone who lapses and rejoins keeps their original
+	 * date, the way Ko-fi's own supporter export shows it.
+	 *
+	 * @var string
+	 */
+	public const MEMBER_SINCE_META = 'kofi_member_since';
+
+	/**
 	 * Where a supporter manages their Ko-fi account and subscriptions.
 	 *
 	 * @var string
@@ -93,6 +103,9 @@ class Membership {
 	 *                    - subscription:    True for a subscription payment,
 	 *                                       false for a one-off donation, null
 	 *                                       when unknown (paid before 1.4.0).
+	 *                    - member_since:    Unix time of the first payment that
+	 *                                       granted a role, or null if unknown
+	 *                                       (first paid before 1.4.0).
 	 *                    - last_payment_at: Unix time of the last payment.
 	 *                    - expires_at:      Unix time access lapses (or
 	 *                                       lapsed) without a new payment;
@@ -163,7 +176,43 @@ class Membership {
 	 */
 	public static function record_payment( int $user_id, bool $subscription ): void {
 		update_user_meta( $user_id, self::SUBSCRIPTION_META, $subscription ? '1' : '0' );
+
+		if ( '' === (string) get_user_meta( $user_id, self::MEMBER_SINCE_META, true ) ) {
+			update_user_meta( $user_id, self::MEMBER_SINCE_META, time() );
+		}
+
 		self::forget_end( $user_id );
+	}
+
+	/**
+	 * Sets when a user became a member, for memberships that began before
+	 * this plugin recorded it (for example from Ko-fi's supporter export).
+	 *
+	 * @param int  $user_id   User ID.
+	 * @param int  $timestamp Unix time.
+	 * @param bool $force     Replace a date that is already recorded.
+	 * @return true|\WP_Error
+	 */
+	public static function set_member_since( int $user_id, int $timestamp, bool $force = false ) {
+		if ( ! get_userdata( $user_id ) ) {
+			return new \WP_Error( 'members_for_kofi_no_user', __( 'No such user.', 'members-for-kofi' ) );
+		}
+
+		if ( null === self::get( $user_id ) ) {
+			return new \WP_Error( 'members_for_kofi_not_a_member', __( 'This user has no Ko-fi membership recorded by this plugin.', 'members-for-kofi' ) );
+		}
+
+		if ( $timestamp <= 0 || $timestamp > time() ) {
+			return new \WP_Error( 'members_for_kofi_bad_date', __( 'The date must be in the past.', 'members-for-kofi' ) );
+		}
+
+		if ( ! $force && '' !== (string) get_user_meta( $user_id, self::MEMBER_SINCE_META, true ) ) {
+			return new \WP_Error( 'members_for_kofi_already_set', __( 'A member-since date is already recorded. Use --force to replace it.', 'members-for-kofi' ) );
+		}
+
+		update_user_meta( $user_id, self::MEMBER_SINCE_META, $timestamp );
+
+		return true;
 	}
 
 	/**
@@ -188,7 +237,7 @@ class Membership {
 	 * @return array<string>
 	 */
 	public static function meta_keys(): array {
-		return array( self::LAST_ROLE_META, self::LAST_PAYMENT_META, self::ENDED_META, self::SUBSCRIPTION_META );
+		return array( self::LAST_ROLE_META, self::LAST_PAYMENT_META, self::ENDED_META, self::SUBSCRIPTION_META, self::MEMBER_SINCE_META );
 	}
 
 	/**
@@ -256,12 +305,14 @@ class Membership {
 	 */
 	private static function describe( \WP_User $user, array $fields ): array {
 		$subscription = get_user_meta( $user->ID, self::SUBSCRIPTION_META, true );
+		$since        = (int) get_user_meta( $user->ID, self::MEMBER_SINCE_META, true );
 
 		return array(
 			'status'          => $fields['status'],
 			'role'            => $fields['role'],
 			'managed'         => $fields['managed'],
 			'subscription'    => '' === $subscription ? null : '1' === (string) $subscription,
+			'member_since'    => $since > 0 ? $since : null,
 			'last_payment_at' => $fields['last_payment_at'],
 			'expires_at'      => $fields['expires_at'],
 			'manage_url'      => self::KOFI_ACCOUNT_URL,

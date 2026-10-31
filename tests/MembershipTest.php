@@ -129,7 +129,7 @@ class MembershipTest extends TestCase {
 		$membership = members_for_kofi_get_membership( $user->ID );
 
 		$this->assertSame(
-			array( 'status', 'role', 'managed', 'subscription', 'last_payment_at', 'expires_at', 'manage_url', 'cancel_url', 'cancel_hint' ),
+			array( 'status', 'role', 'managed', 'subscription', 'member_since', 'last_payment_at', 'expires_at', 'manage_url', 'cancel_url', 'cancel_hint' ),
 			array_keys( $membership )
 		);
 		$this->assertSame( 'active', $membership['status'] );
@@ -328,5 +328,108 @@ class MembershipTest extends TestCase {
 		$this->assertTrue( $result['items_retained'] );
 		$this->assertNotEmpty( $result['messages'] );
 		$this->assertSame( 'active', members_for_kofi_get_membership( $active->ID )['status'] );
+	}
+
+	/**
+	 * The first payment that grants a role sets member_since.
+	 */
+	public function test_the_first_payment_sets_member_since(): void {
+		$this->configure();
+		$before = time();
+		$user   = $this->pay( 'since@example.com' );
+
+		$since = members_for_kofi_get_membership( $user->ID )['member_since'];
+
+		$this->assertGreaterThanOrEqual( $before, $since );
+		$this->assertLessThanOrEqual( time(), $since );
+	}
+
+	/**
+	 * Renewals do not move it.
+	 */
+	public function test_renewals_keep_member_since(): void {
+		$this->configure();
+		$user = $this->pay( 'renew@example.com' );
+		update_user_meta( $user->ID, Membership::MEMBER_SINCE_META, 1600000000 );
+
+		$this->pay( 'renew@example.com' );
+
+		$this->assertSame( 1600000000, members_for_kofi_get_membership( $user->ID )['member_since'] );
+	}
+
+	/**
+	 * It survives the end of a membership, and someone who rejoins keeps
+	 * their original date.
+	 */
+	public function test_an_ended_membership_and_a_rejoin_keep_the_original_date(): void {
+		$this->configure();
+		$user = $this->pay( 'rejoin@example.com' );
+		update_user_meta( $user->ID, Membership::MEMBER_SINCE_META, 1600000000 );
+		$this->paid_days_ago( $user->ID, 31 );
+		( new RoleExpiryChecker( new UserLogger() ) )->check_and_remove_expired_roles();
+
+		$this->assertSame( 1600000000, members_for_kofi_get_membership( $user->ID )['member_since'], 'Kept after it ended.' );
+
+		$this->pay( 'rejoin@example.com' );
+		$this->assertSame( 1600000000, members_for_kofi_get_membership( $user->ID )['member_since'], 'Kept on rejoining.' );
+	}
+
+	/**
+	 * A membership from before this was recorded reports it as unknown.
+	 */
+	public function test_member_since_is_null_when_unknown(): void {
+		$this->configure();
+		$user = $this->pay( 'old-member@example.com' );
+		delete_user_meta( $user->ID, Membership::MEMBER_SINCE_META );
+
+		$this->assertNull( members_for_kofi_get_membership( $user->ID )['member_since'] );
+	}
+
+	/**
+	 * The backfill sets the date, and refuses anything it should not do.
+	 */
+	public function test_setting_member_since_validates_its_input(): void {
+		$this->configure();
+		$member = $this->pay( 'backfill@example.com' );
+		delete_user_meta( $member->ID, Membership::MEMBER_SINCE_META );
+
+		$this->assertTrue( Membership::set_member_since( $member->ID, 1600000000 ) );
+		$this->assertSame( 1600000000, members_for_kofi_get_membership( $member->ID )['member_since'] );
+
+		$this->assertSame( 'members_for_kofi_already_set', Membership::set_member_since( $member->ID, 1500000000 )->get_error_code() );
+		$this->assertSame( 1600000000, members_for_kofi_get_membership( $member->ID )['member_since'], 'Not replaced without force.' );
+		$this->assertTrue( Membership::set_member_since( $member->ID, 1500000000, true ) );
+		$this->assertSame( 1500000000, members_for_kofi_get_membership( $member->ID )['member_since'] );
+
+		$this->assertSame( 'members_for_kofi_bad_date', Membership::set_member_since( $member->ID, time() + DAY_IN_SECONDS, true )->get_error_code() );
+		$this->assertSame( 'members_for_kofi_no_user', Membership::set_member_since( 999999999, 1600000000 )->get_error_code() );
+		$this->assertSame( 'members_for_kofi_not_a_member', Membership::set_member_since( $this->create_user(), 1600000000 )->get_error_code() );
+	}
+
+	/**
+	 * The WP-CLI command reads Ko-fi's export format as UTC.
+	 */
+	public function test_dates_are_read_as_utc(): void {
+		$this->assertSame( 1709662800, \MembersForKofi\Cli\MemberSinceCommand::parse_utc( '2024-03-05 18:20:00' ) );
+		$this->assertSame( 1709596800, \MembersForKofi\Cli\MemberSinceCommand::parse_utc( '2024-03-05' ) );
+		$this->assertNull( \MembersForKofi\Cli\MemberSinceCommand::parse_utc( 'not a date' ) );
+		$this->assertNull( \MembersForKofi\Cli\MemberSinceCommand::parse_utc( '' ) );
+	}
+
+	/**
+	 * Erasure keeps member_since with a live membership, and removes it once
+	 * the membership has ended.
+	 */
+	public function test_erasure_keeps_member_since_only_with_a_live_membership(): void {
+		$this->configure();
+		$active = $this->pay( 'since-active@example.com' );
+		PersonalData::erase( 'since-active@example.com' );
+		$this->assertNotNull( members_for_kofi_get_membership( $active->ID )['member_since'] );
+
+		$ended = $this->pay( 'since-ended@example.com' );
+		$this->paid_days_ago( $ended->ID, 31 );
+		( new RoleExpiryChecker( new UserLogger() ) )->check_and_remove_expired_roles();
+		PersonalData::erase( 'since-ended@example.com' );
+		$this->assertSame( '', get_user_meta( $ended->ID, Membership::MEMBER_SINCE_META, true ) );
 	}
 }

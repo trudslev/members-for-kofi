@@ -119,6 +119,7 @@ class PersonalData {
 							'status'          => $membership['status'],
 							'role'            => $membership['role'],
 							'subscription'    => null === $membership['subscription'] ? '' : ( $membership['subscription'] ? 'yes' : 'no' ),
+							'member_since'    => $membership['member_since'] ? gmdate( 'Y-m-d H:i:s', $membership['member_since'] ) . ' UTC' : '',
 							'last_payment_at' => $membership['last_payment_at'] ? gmdate( 'Y-m-d H:i:s', $membership['last_payment_at'] ) . ' UTC' : '',
 							'expires_at'      => $membership['expires_at'] ? gmdate( 'Y-m-d H:i:s', $membership['expires_at'] ) . ' UTC' : '',
 						)
@@ -213,7 +214,15 @@ class PersonalData {
 				++$removed;
 			}
 
+			// With no live membership, when they first joined is history too.
+			if ( '' === (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true )
+				&& '' !== (string) get_user_meta( $user->ID, Membership::MEMBER_SINCE_META, true ) ) {
+				delete_user_meta( $user->ID, Membership::MEMBER_SINCE_META );
+				++$removed;
+			}
+
 			if ( '' !== (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true ) ) {
+				// Part of the live membership: kept with it.
 				$retained   = true;
 				$messages[] = __( 'An active Ko-fi membership was kept, so the person keeps the access they pay for. It is removed when the membership ends.', 'members-for-kofi' );
 			}

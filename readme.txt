@@ -99,12 +99,13 @@ Yes. Since 1.4.0, `members_for_kofi_get_membership( $user_id )` returns `null` i
 * `role`: the role the membership grants.
 * `managed`: `false` if the user already had that role before paying for it. The plugin then never removes it.
 * `subscription`: `true` for a subscription payment, `false` for a one-off donation, `null` if unknown (payments made before 1.4.0).
+* `member_since`: Unix time of the first payment that gave the role. It stays the same through renewals, and someone who lets their membership lapse and later rejoins keeps their original date. `null` if unknown (memberships that began before 1.4.0).
 * `last_payment_at`: Unix time of the last payment.
 * `expires_at`: Unix time access lapses (or lapsed) without a new payment, or `null` when expiry is turned off.
 * `manage_url` and `cancel_url`: where the supporter manages or cancels on Ko-fi.
 * `cancel_hint`: short instructions for cancelling.
 
-A membership that has ended is still reported, with status `'none'`, so an account page can say when it ended. Check that the function exists before calling it, in case this plugin is inactive. The whole array passes through the `members_for_kofi_get_membership` filter, for example to change the links or the wording.
+A membership that has ended is still reported, with status `'none'`, so an account page can say when it ended. For memberships that began before 1.4.0, the real start date can be filled in with WP-CLI, for example from the SinceDateUTC column of Ko-fi's supporter export: `wp members-for-kofi member-since set <user-id> "2024-03-05 18:20:00"` (read as UTC; add `--force` to replace a recorded date). Check that the function exists before calling it, in case this plugin is inactive. The whole array passes through the `members_for_kofi_get_membership` filter, for example to change the links or the wording.
 
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.

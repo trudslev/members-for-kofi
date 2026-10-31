@@ -106,6 +106,10 @@ class Plugin {
 		add_filter( 'request', array( self::class, 'route_webhook_path' ) );
 
 		PersonalData::register();
+
+		if ( defined( 'WP_CLI' ) && WP_CLI ) {
+			\WP_CLI::add_command( 'members-for-kofi member-since', Cli\MemberSinceCommand::class );
+		}
 	}
 
 	/**

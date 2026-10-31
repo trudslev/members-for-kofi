@@ -806,4 +806,40 @@ class DonationWebhookTest extends IntegrationTestCase {
 		$this->assertTrue( $membership['subscription'], 'The real payload is a subscription payment.' );
 		$this->assertSame( 'https://ko-fi.com/account/', $membership['cancel_url'] );
 	}
+
+	/**
+	 * The member-since backfill command works on a real site through WP-CLI.
+	 */
+	public function test_the_member_since_command_sets_and_reports_the_date(): void {
+		$email = $this->donor_email( 'member-since-cli' );
+		$this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'               => $email,
+					'kofi_transaction_id' => 'c3d9a1e7-2f4b-4e8a-9c6d-1b5f7e3a9d20',
+				)
+			)
+		);
+		$id = (int) self::wp( 'user get ' . escapeshellarg( $email ) . ' --field=ID' );
+
+		$this->assertStringContainsString( 'already recorded', self::wp_with_errors( 'members-for-kofi member-since set ' . $id . ' "2024-03-05 18:20:00"' ), 'The first payment already set it.' );
+		$this->assertStringContainsString( 'Success', self::wp( 'members-for-kofi member-since set ' . $id . ' "2024-03-05 18:20:00" --force' ) );
+		$this->assertSame( '2024-03-05 18:20:00 UTC', self::wp( 'members-for-kofi member-since get ' . $id ) );
+	}
+
+	/**
+	 * Runs WP-CLI and returns its error output too.
+	 *
+	 * @param string $args Arguments to pass to `wp`.
+	 * @return string
+	 */
+	private static function wp_with_errors( string $args ): string {
+		$command = sprintf(
+			'docker compose -f %s run --rm -T wpcli wp %s 2>&1',
+			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
+			$args
+		);
+
+		return trim( (string) shell_exec( $command ) );
+	}
 }

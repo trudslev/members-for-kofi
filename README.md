@@ -97,6 +97,7 @@ plugin never assigned the user a role. Otherwise:
 | `role` | string | Role slug the membership grants |
 | `managed` | bool | `false` when the user held the role before paying for it, so the plugin never removes it |
 | `subscription` | bool\|null | Last payment was a subscription (`true`) or a one-off donation (`false`); `null` if unknown (paid before 1.4.0) |
+| `member_since` | int\|null | Unix time of the first payment that granted the role; kept through renewals and through a lapse and rejoin; `null` if unknown (began before 1.4.0) |
 | `last_payment_at` | int\|null | Unix time of the last payment |
 | `expires_at` | int\|null | Unix time access lapses, or lapsed, without a new payment; `null` when expiry is off |
 | `manage_url` | string | Where the supporter manages Ko-fi (default `https://ko-fi.com/account/`) |
@@ -104,7 +105,16 @@ plugin never assigned the user a role. Otherwise:
 | `cancel_hint` | string | How to cancel, in words (translatable) |
 
 An ended membership is still reported, with status `'none'`, from a small record
-the expiry job keeps, so an account page can say when it ended. The result passes
+the expiry job keeps, so an account page can say when it ended.
+
+For memberships that began before 1.4.0, set the real start date with WP-CLI, for
+example from the `SinceDateUTC` column of Ko-fi's supporter export. Dates are read
+as UTC; an existing date is only replaced with `--force`:
+
+```bash
+wp members-for-kofi member-since set 42 "2024-03-05 18:20:00"
+wp members-for-kofi member-since get 42
+``` The result passes
 through the `members_for_kofi_get_membership` filter (`$membership`, `$user_id`):
 
 ```php

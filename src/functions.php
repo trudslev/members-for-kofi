@@ -41,6 +41,9 @@ if ( ! function_exists( 'members_for_kofi_get_membership' ) ) {
 	 *                                                 the plugin will not remove it
 	 *                    - subscription    (bool|null) Last payment was a
 	 *                                                 subscription; null if unknown
+	 *                    - member_since    (int|null) Unix time of the first payment
+	 *                                                 that granted a role; kept
+	 *                                                 through renewals and rejoins
 	 *                    - last_payment_at (int|null) Unix time of the last payment
 	 *                    - expires_at      (int|null) Unix time access lapses or
 	 *                                                 lapsed; null if expiry is off
