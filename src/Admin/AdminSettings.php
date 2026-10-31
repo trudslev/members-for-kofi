@@ -178,9 +178,12 @@ class AdminSettings {
 		$submitted_token = isset( $options['verification_token'] ) && is_string( $options['verification_token'] )
 			? sanitize_text_field( $options['verification_token'] )
 			: '';
-		$token_hash      = '' !== $submitted_token
-			? VerificationToken::hash( $submitted_token )
-			: VerificationToken::stored_hash( $stored );
+		// A blank save also converts a plaintext token left in the settings by
+		// a restore from before 1.2.0, which webhooks no longer accept.
+		$token_hash = '' !== $submitted_token ? VerificationToken::hash( $submitted_token ) : VerificationToken::stored_hash( $stored );
+		if ( '' === $token_hash ) {
+			$token_hash = VerificationToken::legacy_hash( $stored );
+		}
 		if ( '' === $token_hash ) {
 			$errors[] = __( 'Verification Token is required.', 'members-for-kofi' );
 		}

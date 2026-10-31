@@ -70,24 +70,39 @@ class VerificationToken {
 	}
 
 	/**
-	 * The hash stored on this site, without touching the database.
+	 * The hash stored on this site.
 	 *
-	 * A plaintext token left over from before 1.2.0 counts as configured: its
-	 * hash is what migrate() would store.
+	 * Only a hash counts. A plaintext token is converted by migrate() when the
+	 * plugin upgrades or is activated; one that turns up afterwards (settings
+	 * restored from a backup older than 1.2.0) is not a configured token: the
+	 * administrator re-enters it. Until 1.4.0 the webhook fell back to such a
+	 * plaintext and migrated it on the spot.
 	 *
 	 * @param mixed $options The plugin options.
 	 * @return string The hash, or '' when no token is configured.
 	 */
 	public static function stored_hash( $options ): string {
-		if ( ! is_array( $options ) ) {
+		if ( ! is_array( $options ) || ! self::is_valid_hash( $options[ self::HASH_KEY ] ?? null ) ) {
 			return '';
 		}
 
-		if ( self::is_valid_hash( $options[ self::HASH_KEY ] ?? null ) ) {
-			return $options[ self::HASH_KEY ];
-		}
+		return $options[ self::HASH_KEY ];
+	}
 
-		$legacy = $options[ self::LEGACY_KEY ] ?? null;
+	/**
+	 * The hash of a leftover plaintext token, if one is stored without a hash.
+	 *
+	 * Used only when the settings are saved, which converts it: an
+	 * administrator saving the page recovers a site whose settings were
+	 * restored from before 1.2.0, and the conversion's own write is not
+	 * undone by the settings sanitizer when it runs in an admin request.
+	 * Webhooks never accept a plaintext token.
+	 *
+	 * @param mixed $options The plugin options.
+	 * @return string The hash, or '' when there is no such token.
+	 */
+	public static function legacy_hash( $options ): string {
+		$legacy = is_array( $options ) ? ( $options[ self::LEGACY_KEY ] ?? null ) : null;
 
 		return is_string( $legacy ) && '' !== $legacy ? self::hash( $legacy ) : '';
 	}
@@ -95,24 +110,11 @@ class VerificationToken {
 	/**
 	 * The hash an incoming token must match.
 	 *
-	 * Fallback, to be removed in 1.4.0: when a site still holds only a plaintext
-	 * token -- restored from an old backup, written by another code path, or
-	 * reached before the upgrade on init ran -- it is verified against that
-	 * plaintext and migrated on the spot. Once this is gone, tests that seed a
-	 * plaintext `verification_token` through update_option() must switch to the
-	 * hash key.
-	 *
 	 * @param mixed $options The plugin options.
 	 * @return string The hash, or '' when no token is configured.
 	 */
 	public static function expected_hash( $options ): string {
-		$hash = self::stored_hash( $options );
-
-		if ( '' !== $hash && ! self::is_valid_hash( $options[ self::HASH_KEY ] ?? null ) ) {
-			self::migrate();
-		}
-
-		return $hash;
+		return self::stored_hash( $options );
 	}
 
 	/**

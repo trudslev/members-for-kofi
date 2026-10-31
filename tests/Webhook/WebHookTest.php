@@ -53,9 +53,9 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(),
-				'only_subscriptions' => false,
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(),
+				'only_subscriptions'        => false,
 			)
 		);
 	}
@@ -154,9 +154,9 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(),
-				'only_subscriptions' => true,
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(),
+				'only_subscriptions'        => true,
 			)
 		);
 
@@ -214,9 +214,9 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array( 'Gold' => 'subscriber' ),
-				'only_subscriptions' => false,
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array( 'Gold' => 'subscriber' ),
+				'only_subscriptions'        => false,
 			)
 		);
 
@@ -247,9 +247,9 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(), // No mapping.
-				'only_subscriptions' => false,
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(), // No mapping.
+				'only_subscriptions'        => false,
 			)
 		);
 
@@ -281,10 +281,10 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(), // No matching tier.
-				'default_role'       => 'contributor',
-				'only_subscriptions' => false,
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(), // No matching tier.
+				'default_role'              => 'contributor',
+				'only_subscriptions'        => false,
 			)
 		);
 
@@ -318,12 +318,12 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
 				),
-				'only_subscriptions' => false,
+				'only_subscriptions'        => false,
 			)
 		);
 
@@ -361,13 +361,13 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(
 					'tier' => array( 'Gold', 'Silver' ),
 					'role' => array( 'editor', 'author' ),
 				),
-				'default_role'       => 'subscriber',
-				'only_subscriptions' => false,
+				'default_role'              => 'subscriber',
+				'only_subscriptions'        => false,
 			)
 		);
 
@@ -399,13 +399,13 @@ class WebhookTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'fallback-token',
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', 'fallback-token' ),
+				'tier_role_map'             => array(
 					'tier' => array( 'Gold' ),
 					'role' => array( 'editor' ),
 				),
-				'default_role'       => 'subscriber',
-				'only_subscriptions' => false,
+				'default_role'              => 'subscriber',
+				'only_subscriptions'        => false,
 			)
 		);
 

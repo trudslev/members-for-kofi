@@ -57,15 +57,15 @@ class WebhookIntegrationTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => $this->valid_token,
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', $this->valid_token ),
+				'tier_role_map'             => array(
 					'tier' => array( 'Gold', 'Silver', 'Bronze' ),
 					'role' => array( 'editor', 'author', 'contributor' ),
 				),
-				'default_role'       => 'subscriber',
-				'only_subscriptions' => false,
-				'enable_expiry'      => true,
-				'role_expiry_days'   => 35,
+				'default_role'              => 'subscriber',
+				'only_subscriptions'        => false,
+				'enable_expiry'             => true,
+				'role_expiry_days'          => 35,
 			)
 		);
 	}
@@ -285,9 +285,9 @@ class WebhookIntegrationTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => $this->valid_token,
-				'tier_role_map'      => array(),
-				'only_subscriptions' => true,
+				'verification_token_sha256' => hash( 'sha256', $this->valid_token ),
+				'tier_role_map'             => array(),
+				'only_subscriptions'        => true,
 			)
 		);
 
@@ -316,9 +316,9 @@ class WebhookIntegrationTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => $this->valid_token,
-				'tier_role_map'      => array(),
-				'only_subscriptions' => true,
+				'verification_token_sha256' => hash( 'sha256', $this->valid_token ),
+				'tier_role_map'             => array(),
+				'only_subscriptions'        => true,
 			)
 		);
 

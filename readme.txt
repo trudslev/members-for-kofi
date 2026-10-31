@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.3.1
+Stable tag: 1.4.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -131,6 +131,13 @@ their WordPress user and clear the logs from the Logs tab.
 
 == Changelog ==
 
+= 1.4.0 =
+* Feature: Other plugins and themes can now read a supporter's membership with `members_for_kofi_get_membership()`: whether it is active, the role, when it expires or ended, the last payment, and links and wording for managing or cancelling it on Ko-fi. Memberships that have ended are still reported, so an account page can say when.
+* Feature: The plugin now records when someone first became a member. The date stays the same through renewals, and through a lapse and a later return. For memberships that began before this version, the date can be filled in with WP-CLI: `wp members-for-kofi member-since set <user-id> <date>`.
+* Feature: Complete Danish translation. The plugin's own bundled translations are now loaded; before, only language packs from translate.wordpress.org were.
+* Privacy: Membership dates are included in WordPress's Export Personal Data tool. Erase Personal Data removes the record of a membership that has ended, and keeps a live one so the supporter does not lose what they paid for.
+* Change: Webhooks now accept only the hashed verification token introduced in 1.2.0. Sites updating from an older version are still converted automatically. Only a site whose settings were restored from a backup made before 1.2.0 is affected: Ko-fi payments are refused until you save the plugin's settings page once (or enter the token again).
+
 = 1.3.1 =
 * Fix: Updating to 1.3.0 could make a site very slow or unresponsive. A one-time clean-up of supporter accounts used a database query that could take many minutes, and it was started again by every visitor until it finished. The clean-up now takes a fraction of a second, and only one visitor's request ever runs an update at a time, so the rest of the site keeps working.
 * If your site was affected, this update finishes the clean-up that 1.3.0 could not.
@@ -190,6 +197,9 @@ their WordPress user and clear the logs from the Logs tab.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.4.0 =
+Adds a membership API for other plugins, "member since" dates and a Danish translation. If you restored this plugin's settings from a backup made before version 1.2.0, save the settings page once after updating.
 
 = 1.3.1 =
 Important fix: updating to 1.3.0 could make a site slow or unresponsive. Update to 1.3.1 straight away; it completes 1.3.0's clean-up quickly.

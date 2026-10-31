@@ -290,8 +290,9 @@ class AdminSettingsTest extends TestCase {
 	}
 
 	/**
-	 * A site still holding a plaintext token (the fallback case) is migrated by
-	 * the next save, even if the field is left blank.
+	 * A plaintext token left in the settings (restored from before 1.2.0) is
+	 * converted by the next save, even if the field is left blank. Webhooks do
+	 * not accept it in the meantime; saving the settings is the recovery.
 	 */
 	public function test_a_blank_save_hashes_a_still_plaintext_token(): void {
 		$this->write_options_raw( array( 'verification_token' => 'legacy-token' ) );

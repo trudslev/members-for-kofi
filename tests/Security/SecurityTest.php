@@ -44,16 +44,16 @@ class SecurityTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'test-token-123',
-				'only_subscriptions' => false,
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', 'test-token-123' ),
+				'only_subscriptions'        => false,
+				'tier_role_map'             => array(
 					'Gold'   => 'editor',
 					'Silver' => 'author',
 					'Bronze' => 'contributor',
 				),
-				'default_role'       => 'subscriber',
-				'enable_expiry'      => false,
-				'role_expiry_days'   => 35,
+				'default_role'              => 'subscriber',
+				'enable_expiry'             => false,
+				'role_expiry_days'          => 35,
 			)
 		);
 	}
@@ -209,11 +209,11 @@ class SecurityTest extends TestCase {
 		update_option(
 			'members_for_kofi_options',
 			array(
-				'verification_token' => 'test-token-123',
-				'tier_role_map'      => array(
+				'verification_token_sha256' => hash( 'sha256', 'test-token-123' ),
+				'tier_role_map'             => array(
 					'VIP' => 'administrator', // This should never be possible, but testing defense in depth.
 				),
-				'default_role'       => 'subscriber',
+				'default_role'              => 'subscriber',
 			)
 		);
 

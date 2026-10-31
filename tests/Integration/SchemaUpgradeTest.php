@@ -422,17 +422,17 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 	}
 
 	/**
-	 * The fallback over real HTTP: the schema version is already current, so
-	 * the upgrade on init does nothing, and the webhook itself has to verify
-	 * against the plaintext and migrate it.
+	 * A site still on an older schema converts its plaintext token on the
+	 * first request, so Ko-fi's donation goes through without the
+	 * administrator doing anything.
 	 */
-	public function test_a_plaintext_token_left_behind_is_verified_and_migrated_by_the_webhook(): void {
+	public function test_an_older_schema_converts_a_plaintext_token_on_the_first_request(): void {
 		$this->simulate_plaintext_token_install( '4' );
 
 		$status = $this->post_donation(
 			array(
 				'verification_token'      => $this->token,
-				'email'                   => $this->donor_email( 'fallback' ),
+				'email'                   => $this->donor_email( 'older-schema' ),
 				'tier_name'               => 'Gold',
 				'amount'                  => '5.00',
 				'is_subscription_payment' => false,
@@ -444,27 +444,31 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 	}
 
 	/**
-	 * A wrong token on a not-yet-migrated site is still refused, and the
-	 * right one still works afterwards.
+	 * Over real HTTP: a plaintext token left behind after the upgrade has
+	 * run (settings restored from before 1.2.0) is not accepted any more --
+	 * the plaintext fallback went in 1.4.0 -- and the request leaves the
+	 * stored settings alone, right token or wrong.
 	 */
-	public function test_a_wrong_token_is_refused_on_a_plaintext_install(): void {
-		$this->simulate_plaintext_token_install( '4' );
+	public function test_a_plaintext_token_left_after_the_upgrade_is_refused(): void {
+		$this->simulate_plaintext_token_install( '6' );
+		$before = self::read_options();
 
 		$wrong = $this->post_donation(
 			array(
 				'verification_token' => 'not-the-token',
-				'email'              => $this->donor_email( 'fallback-wrong' ),
+				'email'              => $this->donor_email( 'leftover-wrong' ),
 			)
 		);
 		$right = $this->post_donation(
 			array(
 				'verification_token' => $this->token,
-				'email'              => $this->donor_email( 'fallback-right' ),
+				'email'              => $this->donor_email( 'leftover-right' ),
 			)
 		);
 
 		$this->assertSame( 401, $wrong );
-		$this->assertSame( 200, $right );
+		$this->assertSame( 401, $right, 'Only a hashed token is a configured token.' );
+		$this->assertSame( $before, self::read_options(), 'A webhook must not change the stored settings.' );
 	}
 
 	/**

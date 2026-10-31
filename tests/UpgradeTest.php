@@ -459,39 +459,43 @@ class UpgradeTest extends TestCase {
 	}
 
 	/**
-	 * The fallback: a site whose options still hold plaintext although the
-	 * schema version says it is current -- a restored backup, another code
-	 * path, or a request that beat init -- verifies and migrates on the spot.
+	 * A plaintext token left in the settings after the upgrade has run -- a
+	 * backup from before 1.2.0 restored over migrated settings -- is not a
+	 * configured token. Until 1.4.0 the webhook fell back to it; now it is
+	 * refused, the request log says why, and the stored settings are left
+	 * exactly as they were: never destroy a token that cannot be replaced.
 	 */
-	public function test_the_webhook_verifies_and_migrates_a_plaintext_token_without_the_upgrade(): void {
+	public function test_a_plaintext_token_left_after_the_upgrade_is_not_accepted(): void {
+		global $wpdb;
+
 		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
 		$this->write_options_raw( $this->legacy_options() );
 
-		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
+		$this->assertSame( 401, $this->donate( 'legacy-token' )->get_status() );
 
-		$options = $this->stored_options();
-		$this->assertSame( hash( 'sha256', 'legacy-token' ), $options['verification_token_sha256'] );
-		$this->assertArrayNotHasKey( 'verification_token', $options );
+		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Plugin-owned table, test-only read.
+		$this->assertSame( 'Unauthorized: no token configured', $wpdb->get_var( "SELECT error FROM {$wpdb->prefix}members_for_kofi_request_logs ORDER BY id DESC LIMIT 1" ) );
+		$this->assertSame( $this->legacy_options(), $this->stored_options(), 'Nothing is migrated or deleted by a webhook.' );
 	}
 
 	/**
-	 * A wrong token is still rejected on the fallback path, and a rejected
-	 * request still migrates the site (the stored token is not in doubt).
+	 * The upgrade itself still converts a plaintext token, so sites updating
+	 * from 1.1.x keep working without re-entering anything.
 	 */
-	public function test_the_fallback_rejects_a_wrong_token(): void {
-		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
-		$this->write_options_raw( $this->legacy_options() );
+	public function test_the_upgrade_still_converts_a_plaintext_token_after_the_fallback_is_gone(): void {
+		$this->simulate_plaintext_token_install();
 
-		$this->assertSame( 401, $this->donate( 'not-the-token' )->get_status() );
+		Plugin::maybe_upgrade();
+
 		$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
 	}
 
 	/**
-	 * If the migration's write fails, the donation must still go through and
-	 * the plaintext must still be there -- nothing destroyed, nothing lost.
+	 * If the conversion's write fails, nothing is lost: the plaintext token
+	 * is still there for the next attempt or for the administrator.
 	 */
-	public function test_a_failed_migration_write_neither_breaks_the_webhook_nor_loses_the_token(): void {
-		update_option( Plugin::DB_VERSION_OPTION, Plugin::DB_VERSION );
+	public function test_a_failed_migration_write_loses_nothing(): void {
+		update_option( Plugin::DB_VERSION_OPTION, '3' );
 		$this->write_options_raw( $this->legacy_options() );
 
 		// Returning the old value makes update_option() write nothing.
@@ -502,7 +506,6 @@ class UpgradeTest extends TestCase {
 		add_filter( 'pre_update_option_members_for_kofi_options', $refuse, 10, 2 );
 
 		try {
-			$this->assertSame( 200, $this->donate( 'legacy-token' )->get_status() );
 			$this->assertFalse( VerificationToken::migrate() );
 		} finally {
 			remove_filter( 'pre_update_option_members_for_kofi_options', $refuse, 10 );

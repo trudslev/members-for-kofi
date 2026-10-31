@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.3.1) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.4.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -238,7 +238,9 @@ kept. `make test-env-down` keeps volumes (that is what makes the next start fast
 - **Translations:** bundled ones live in `languages/` (`members-for-kofi-<locale>.po`, compiled with
   `make mo`) and are loaded by `Plugin::load_textdomain()` on `init`; WordPress never loads a plugin's
   own files by itself. A language pack from translate.wordpress.org still wins where one exists.
-  Danish (`da_DK`) ships for the strings other plugins show supporters, such as `cancel_hint`
+  Danish (`da_DK`) is complete, and `TranslationTest` fails if any bundled translation misses a string
+  from the template: a half-translated file ships a mix of languages to every site. Adding strings means
+  translating them before release
 - `pot` and `mo` run WP-CLI against this checkout alone (`WPCLI_FILES`); `wp-version` and the
   "Tested up to" check in `release` read the site's version only if its volume exists. Anything
   run through the compose `wpcli` service mounts that volume and would create it as a side effect
@@ -317,7 +319,7 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 `make release` builds `vendor/` fresh with `--no-dev` into a staging directory
 rather than copying the working tree's, which carries the whole test toolchain.
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.3.1`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.4.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
 #### Release order: dev site → production → WordPress.org (MANDATORY)
 
@@ -378,9 +380,11 @@ and out of `DebugLogger` output.
   leaves an empty or non-string token untouched, and leaves a hash + *different* plaintext untouched
   (`has_conflict()` then shows an admin notice). It runs from `maybe_upgrade()` **and** `activate()` --
   a deactivate/update/reactivate cycle never passes through `maybe_upgrade()`.
-- `expected_hash()` carries a **fallback, to be removed in 1.4.0** (kept through 1.3.0): a site still holding only
-  plaintext is verified against it and migrated on the spot. When removing it, switch the many tests
-  that seed a plaintext `verification_token` through `update_option()` to the hash key.
+- Only the hash is a configured token. The plaintext fallback in `expected_hash()` was removed in
+  1.4.0: a plaintext token left after the upgrade (settings restored from before 1.2.0) gets
+  `401 Unauthorized: no token configured` and is never touched by the webhook. Saving the settings
+  page converts it (`legacy_hash()`), even with the field left blank. Test fixtures seed
+  `verification_token_sha256`, never a plaintext `verification_token`, unless they test the migration
 - The settings field is write-only: never render the stored value, a blank submission keeps the
   saved token, and a submitted `verification_token_sha256` is ignored. The page shows an
   8-character fingerprint so two sites can be compared.
