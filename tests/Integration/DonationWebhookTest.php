@@ -778,4 +778,32 @@ class DonationWebhookTest extends IntegrationTestCase {
 
 		$this->assertSame( 401, $response['status'] );
 	}
+
+	/**
+	 * The public membership API answers on a real site for a donor made by
+	 * a real HTTP donation: the function is loaded outside the test suite,
+	 * and reports what the webhook recorded.
+	 */
+	public function test_the_membership_api_reports_a_real_donation(): void {
+		$email = $this->donor_email( 'membership-api' );
+
+		$response = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'               => $email,
+					'kofi_transaction_id' => '5b8e2f14-6c3a-4d97-b1e0-9a7c4f2d8e61',
+				)
+			)
+		);
+		$this->assertSame( 200, $response['status'] );
+
+		$id         = (int) self::wp( 'user get ' . escapeshellarg( $email ) . ' --field=ID' );
+		$json       = self::wp( 'eval ' . escapeshellarg( 'echo wp_json_encode( members_for_kofi_get_membership( ' . $id . ' ) );' ) );
+		$membership = json_decode( $json, true );
+
+		$this->assertIsArray( $membership, 'members_for_kofi_get_membership() must be callable on the site: ' . $json );
+		$this->assertSame( 'active', $membership['status'] );
+		$this->assertTrue( $membership['subscription'], 'The real payload is a subscription payment.' );
+		$this->assertSame( 'https://ko-fi.com/account/', $membership['cancel_url'] );
+	}
 }

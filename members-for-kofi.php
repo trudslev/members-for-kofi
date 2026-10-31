@@ -41,6 +41,9 @@ define( 'MEMBERS_FOR_KOFI_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 // Load Composer autoloader.
 require_once MEMBERS_FOR_KOFI_PLUGIN_DIR . '/vendor/autoload.php';
 
+// Public functions for other plugins and themes (members_for_kofi_get_membership()).
+require_once MEMBERS_FOR_KOFI_PLUGIN_DIR . '/src/functions.php';
+
 use MembersForKofi\Plugin;
 
 // Register activation and deactivation hooks.

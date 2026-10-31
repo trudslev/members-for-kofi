@@ -22,6 +22,7 @@ namespace MembersForKofi\Privacy;
 
 defined( 'ABSPATH' ) || exit;
 
+use MembersForKofi\Membership;
 use MembersForKofi\Webhook\Webhook;
 
 /**
@@ -104,6 +105,28 @@ class PersonalData {
 		$data             = array();
 		$in_request_phase = $page > $user_pages;
 
+		// The membership itself, once, on the first page.
+		$member = 1 === $page ? get_user_by( 'email', $email ) : false;
+		if ( $member ) {
+			$membership = Membership::get( $member->ID );
+			if ( null !== $membership ) {
+				$data[] = array(
+					'group_id'    => 'members-for-kofi-membership',
+					'group_label' => __( 'Ko-fi membership', 'members-for-kofi' ),
+					'item_id'     => 'members-for-kofi-membership-' . $member->ID,
+					'data'        => self::pairs(
+						array(
+							'status'          => $membership['status'],
+							'role'            => $membership['role'],
+							'subscription'    => null === $membership['subscription'] ? '' : ( $membership['subscription'] ? 'yes' : 'no' ),
+							'last_payment_at' => $membership['last_payment_at'] ? gmdate( 'Y-m-d H:i:s', $membership['last_payment_at'] ) . ' UTC' : '',
+							'expires_at'      => $membership['expires_at'] ? gmdate( 'Y-m-d H:i:s', $membership['expires_at'] ) . ' UTC' : '',
+						)
+					),
+				);
+			}
+		}
+
 		if ( ! $in_request_phase ) {
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
@@ -178,10 +201,28 @@ class PersonalData {
 		delete_transient( 'members_for_kofi_total_logs' );
 		delete_transient( 'members_for_kofi_total_request_logs' );
 
+		// The record of a membership that ended is history, and goes. A
+		// membership still being tracked is kept: deleting it would end access
+		// the person is paying for, and the expiry job removes it when it ends.
+		$retained = false;
+		$messages = array();
+		$user     = get_user_by( 'email', $email );
+
+		if ( $user ) {
+			if ( Membership::forget_end( $user->ID ) ) {
+				++$removed;
+			}
+
+			if ( '' !== (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true ) ) {
+				$retained   = true;
+				$messages[] = __( 'An active Ko-fi membership was kept, so the person keeps the access they pay for. It is removed when the membership ends.', 'members-for-kofi' );
+			}
+		}
+
 		return array(
 			'items_removed'  => $removed > 0,
-			'items_retained' => false,
-			'messages'       => array(),
+			'items_retained' => $retained,
+			'messages'       => $messages,
 			'done'           => true,
 		);
 	}

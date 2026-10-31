@@ -24,6 +24,7 @@ defined( 'ABSPATH' ) || exit;
 
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
+use MembersForKofi\Membership;
 use MembersForKofi\Webhook\Webhook;
 
 /**
@@ -105,6 +106,16 @@ class RoleExpiryChecker {
 				$preexisting     = (string) get_user_meta( $user->ID, Webhook::PREEXISTING_ROLE_META, true );
 
 				if ( $roles_to_remove ) {
+					// Keep a short record of the membership that is ending: the
+					// tracking meta goes below, and without this an ended
+					// membership looks like one that never existed.
+					Membership::record_end(
+						$user->ID,
+						(string) ( is_array( $roles_to_remove ) ? reset( $roles_to_remove ) : $roles_to_remove ),
+						$fresh,
+						(int) strtotime( "+$expiry_days days", $fresh )
+					);
+
 					foreach ( (array) $roles_to_remove as $role ) {
 						// Someone else granted this role before the donor paid for
 						// it: stop tracking it, but it is not the plugin's to take.

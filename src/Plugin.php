@@ -371,6 +371,9 @@ class Plugin {
 		delete_metadata( 'user', 0, 'kofi_donation_assigned_role', '', true );
 		delete_metadata( 'user', 0, Webhook::PREEXISTING_ROLE_META, '', true );
 		delete_metadata( 'user', 0, Webhook::CREATED_META, '', true );
+		foreach ( Membership::meta_keys() as $meta_key ) {
+			delete_metadata( 'user', 0, $meta_key, '', true );
+		}
 	}
 
 	/**

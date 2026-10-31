@@ -91,6 +91,21 @@ replacing it. New accounts get whatever WordPress assigns new users (usually
 Subscriber), and the plugin's role is added on top. When the role expires, only
 the plugin's role is removed, which leaves the account intact.
 
+= Can another plugin or theme show a user's Ko-fi membership? =
+
+Yes. Since 1.4.0, `members_for_kofi_get_membership( $user_id )` returns `null` if this plugin never gave the user a role, or an array describing the membership:
+
+* `status`: `'active'` while the membership has not lapsed and the user holds the role, otherwise `'none'`.
+* `role`: the role the membership grants.
+* `managed`: `false` if the user already had that role before paying for it. The plugin then never removes it.
+* `subscription`: `true` for a subscription payment, `false` for a one-off donation, `null` if unknown (payments made before 1.4.0).
+* `last_payment_at`: Unix time of the last payment.
+* `expires_at`: Unix time access lapses (or lapsed) without a new payment, or `null` when expiry is turned off.
+* `manage_url` and `cancel_url`: where the supporter manages or cancels on Ko-fi.
+* `cancel_hint`: short instructions for cancelling.
+
+A membership that has ended is still reported, with status `'none'`, so an account page can say when it ended. Check that the function exists before calling it, in case this plugin is inactive. The whole array passes through the `members_for_kofi_get_membership` filter, for example to change the links or the wording.
+
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.
 

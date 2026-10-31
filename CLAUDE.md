@@ -17,6 +17,7 @@ This is a WordPress plugin (v1.3.1) that integrates with Ko-fi webhooks to autom
 - **`src/Logging/RequestLogger.php`**: Database-backed webhook request logger (custom table `wp_members_for_kofi_request_logs`) - logs all incoming webhook requests with success/failure status
 - **`src/Logging/DebugLogger.php`**: Lightweight debug logger to PHP error_log, only active when `WP_DEBUG` is true
 - **`src/Webhook/VerificationToken.php`**: All rules for the hashed verification token (see Database Tables)
+- **`src/Membership.php`** + **`src/functions.php`**: the public API, `members_for_kofi_get_membership( int $user_id ): ?array` (since 1.4.0), loaded by the main plugin file. Generic by design -- other plugins build on it, so no site-specific names, wording or filters
 - **`src/Privacy/PersonalData.php`**: Personal-data exporter/eraser for both log tables, suggested privacy-policy text, and the one-off clean-up of donor accounts created before 1.3.0
 
 ### Data Flow
@@ -438,6 +439,12 @@ update_user_meta( $user->ID, 'kofi_donation_assigned_role', $role );
 ```
 
 Cron job queries all users with this metadata and removes roles if timestamp exceeds expiry threshold.
+Before it deletes the tracking meta it calls `Membership::record_end()`, which keeps `kofi_last_assigned_role`,
+`kofi_last_payment_at` and `kofi_membership_ended_at`: without them an ended membership is indistinguishable
+from one that never existed, and `members_for_kofi_get_membership()` could not report it. A new payment
+(`Membership::record_payment()`) drops that record and stores `kofi_last_payment_subscription`. All four
+keys are in `Membership::meta_keys()`, which uninstall removes; the eraser deletes the ended-membership
+record but keeps a live membership (and says so), since deleting it would end paid access.
 It re-reads the timestamp past the cache just before removing, so a renewal landing mid-run is kept.
 
 A role the user already held when the webhook first assigned it is recorded in

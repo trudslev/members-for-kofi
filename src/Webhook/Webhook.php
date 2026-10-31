@@ -26,6 +26,7 @@ use WP_User;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
+use MembersForKofi\Membership;
 
 use get_option;
 
@@ -546,6 +547,7 @@ class Webhook {
 
 			if ( $role ) {
 				$this->assign_role( $user, $role, $email, $user_logger );
+				Membership::record_payment( $user->ID, $this->is_true( $body['is_subscription_payment'] ?? false ) );
 			} else {
 				DebugLogger::info( 'No matching tier or default role for user', array( 'tier' => $tier_name ) );
 			}

@@ -77,6 +77,43 @@ If the Request log is empty after a test, the request never reached WordPress. O
 
 If a test returns `Unauthorized` or `Missing verification token`, the token in the plugin settings no longer matches the one on Ko-fi's webhook page. Regenerating it on Ko-fi does not update WordPress, and real payments are rejected exactly the same way.
 
+## For Developers: Reading a Membership
+
+Other plugins and themes can ask for a user's Ko-fi membership, for example to
+show it on an account page:
+
+```php
+if ( function_exists( 'members_for_kofi_get_membership' ) ) {
+	$membership = members_for_kofi_get_membership( get_current_user_id() );
+}
+```
+
+`members_for_kofi_get_membership( int $user_id ): ?array` returns `null` when the
+plugin never assigned the user a role. Otherwise:
+
+| Key | Type | Meaning |
+|---|---|---|
+| `status` | string | `'active'` while the membership has not lapsed and the role is held; `'none'` after expiry or removal |
+| `role` | string | Role slug the membership grants |
+| `managed` | bool | `false` when the user held the role before paying for it, so the plugin never removes it |
+| `subscription` | bool\|null | Last payment was a subscription (`true`) or a one-off donation (`false`); `null` if unknown (paid before 1.4.0) |
+| `last_payment_at` | int\|null | Unix time of the last payment |
+| `expires_at` | int\|null | Unix time access lapses, or lapsed, without a new payment; `null` when expiry is off |
+| `manage_url` | string | Where the supporter manages Ko-fi (default `https://ko-fi.com/account/`) |
+| `cancel_url` | string | Where they cancel a subscription (same default) |
+| `cancel_hint` | string | How to cancel, in words (translatable) |
+
+An ended membership is still reported, with status `'none'`, from a small record
+the expiry job keeps, so an account page can say when it ended. The result passes
+through the `members_for_kofi_get_membership` filter (`$membership`, `$user_id`):
+
+```php
+add_filter( 'members_for_kofi_get_membership', function ( $membership, $user_id ) {
+	$membership['cancel_url'] = 'https://example.com/help/cancel';
+	return $membership;
+}, 10, 2 );
+```
+
 ## Security
 
 This plugin follows WordPress security best practices and implements multiple layers of protection:
