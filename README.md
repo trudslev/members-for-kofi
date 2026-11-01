@@ -114,14 +114,25 @@ as UTC; an existing date is only replaced with `--force`:
 ```bash
 wp members-for-kofi member-since set 42 "2024-03-05 18:20:00"
 wp members-for-kofi member-since get 42
-``` The result passes
-through the `members_for_kofi_get_membership` filter (`$membership`, `$user_id`):
+```
+
+The result passes through the `members_for_kofi_get_membership` filter (`$membership`, `$user_id`):
 
 ```php
 add_filter( 'members_for_kofi_get_membership', function ( $membership, $user_id ) {
 	$membership['cancel_url'] = 'https://example.com/help/cancel';
 	return $membership;
 }, 10, 2 );
+```
+
+A member can change their email address on the site: the addresses they used
+before are remembered (`kofi_email_alias` user meta), because Ko-fi keeps
+sending the one the supporter gave Ko-fi. Check for it with:
+
+```php
+if ( function_exists( 'members_for_kofi_supports_email_change' ) && members_for_kofi_supports_email_change() ) {
+	// Safe to let Ko-fi members change their email here.
+}
 ```
 
 ## Security
@@ -244,6 +255,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.5.0**: A supporter who changes their email address on the site keeps their membership: the old address is remembered, so Ko-fi's payments (which keep using it) reach the same account instead of creating a new one. `members_for_kofi_supports_email_change()` tells other plugins this is safe. Previous addresses are covered by the personal-data export and erase tools.
 - **1.4.0**: Other plugins and themes can read a supporter's membership with `members_for_kofi_get_membership()`, including when they first became a member (backfill older members with `wp members-for-kofi member-since set`). Adds a complete Danish translation, and the plugin's bundled translations now load. Webhooks accept only the hashed token from 1.2.0; a site whose settings were restored from a pre-1.2.0 backup must save the settings page once.
 - **1.3.1**: Fixes 1.3.0 making some sites slow or unresponsive after updating: its one-time clean-up of supporter accounts now takes a fraction of a second, and only one request runs an update at a time.
 - **1.3.0**: Security, privacy and reliability fixes. New supporter accounts no longer get the site's default role or show the supporter's email address; existing accounts are cleaned up automatically. The plugin's logs work with WordPress's personal data tools. The webhook works with plain permalinks and on multisite sub-sites, simultaneous or repeated payments no longer create duplicates, and roles you granted yourself are never removed. Shop orders, commissions and Ko-fi's test button no longer create memberships.

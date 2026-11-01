@@ -828,6 +828,57 @@ class DonationWebhookTest extends IntegrationTestCase {
 	}
 
 	/**
+	 * Over real HTTP: a member changes their email on the site, Ko-fi keeps
+	 * sending the old one, and the renewal reaches the same account instead
+	 * of creating a second one.
+	 */
+	public function test_a_renewal_after_an_email_change_reaches_the_same_account(): void {
+		$old = $this->donor_email( 'email-change-old' );
+		$new = $this->donor_email( 'email-change-new' );
+
+		$first = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'               => $old,
+					'message_id'          => self::uuid(),
+					'kofi_transaction_id' => self::uuid(),
+				)
+			)
+		);
+		$this->assertSame( 200, $first['status'] );
+		$id = (int) self::wp( 'user get ' . escapeshellarg( $old ) . ' --field=ID' );
+
+		self::wp( 'user update ' . $id . ' --user_email=' . escapeshellarg( $new ) );
+
+		$renewal = $this->post_donation(
+			$this->real_kofi_payload(
+				array(
+					'email'                         => $old,
+					'message_id'                    => self::uuid(),
+					'kofi_transaction_id'           => self::uuid(),
+					'is_first_subscription_payment' => false,
+				)
+			)
+		);
+		$this->assertSame( 200, $renewal['status'] );
+
+		$this->assertSame( '', self::wp( 'user list --search=' . escapeshellarg( $old ) . ' --search-columns=user_email --field=ID' ), 'No second account under the old address.' );
+		$this->assertSame( 'true', self::wp( 'eval ' . escapeshellarg( 'echo members_for_kofi_supports_email_change() ? "true" : "false";' ) ) );
+		$this->assertSame( 'active', json_decode( self::wp( 'eval ' . escapeshellarg( 'echo wp_json_encode( members_for_kofi_get_membership( ' . $id . ' ) );' ) ), true )['status'] );
+	}
+
+	/**
+	 * A random UUID, as Ko-fi uses for message and transaction ids.
+	 *
+	 * @return string
+	 */
+	private static function uuid(): string {
+		$hex = bin2hex( random_bytes( 16 ) );
+
+		return sprintf( '%s-%s-4%s-a%s-%s', substr( $hex, 0, 8 ), substr( $hex, 8, 4 ), substr( $hex, 13, 3 ), substr( $hex, 17, 3 ), substr( $hex, 20, 12 ) );
+	}
+
+	/**
 	 * Runs WP-CLI and returns its error output too.
 	 *
 	 * @param string $args Arguments to pass to `wp`.

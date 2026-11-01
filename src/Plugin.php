@@ -107,6 +107,7 @@ class Plugin {
 		add_action( 'init', array( self::class, 'load_textdomain' ) );
 
 		PersonalData::register();
+		EmailAliases::register();
 
 		if ( defined( 'WP_CLI' ) && WP_CLI ) {
 			\WP_CLI::add_command( 'members-for-kofi member-since', Cli\MemberSinceCommand::class );
@@ -393,6 +394,7 @@ class Plugin {
 		foreach ( Membership::meta_keys() as $meta_key ) {
 			delete_metadata( 'user', 0, $meta_key, '', true );
 		}
+		delete_metadata( 'user', 0, EmailAliases::META, '', true );
 	}
 
 	/**

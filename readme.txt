@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.4.0
+Stable tag: 1.5.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -107,6 +107,12 @@ Yes. Since 1.4.0, `members_for_kofi_get_membership( $user_id )` returns `null` i
 
 A membership that has ended is still reported, with status `'none'`, so an account page can say when it ended. For memberships that began before 1.4.0, the real start date can be filled in with WP-CLI, for example from the SinceDateUTC column of Ko-fi's supporter export: `wp members-for-kofi member-since set <user-id> "2024-03-05 18:20:00"` (read as UTC; add `--force` to replace a recorded date). Check that the function exists before calling it, in case this plugin is inactive. The whole array passes through the `members_for_kofi_get_membership` filter, for example to change the links or the wording.
 
+= What happens if a supporter changes their email address? =
+
+Since 1.5.0 their membership carries on. Ko-fi keeps sending the address the supporter gave Ko-fi, so the plugin remembers the addresses a member used before and matches payments to them. Before 1.5.0, the next payment created a second account under the old address, and the real account's role expired. Members who changed their address before updating are not covered, because the old address was never recorded: ask them to use the same address on Ko-fi and on the site.
+
+Other plugins can check for this with `function_exists( 'members_for_kofi_supports_email_change' ) && members_for_kofi_supports_email_change()`.
+
 = Does this plugin delete data on deactivation? =
 No, the plugin does not delete any data on deactivation. However, you can manually delete data by uninstalling the plugin.
 
@@ -119,10 +125,9 @@ Two tables of its own:
 
 Both are removed when you uninstall the plugin, along with its settings. Deactivating keeps them.
 
-The plugin does **not** currently register handlers for WordPress's privacy
-export and erase tools, so a data request under GDPR or similar will not pick
-these tables up automatically. If you need to remove a supporter's data, delete
-their WordPress user and clear the logs from the Logs tab.
+On a supporter's account it keeps what their membership needs: the role it gave and when, when they first joined, the last payment, and the email addresses they used before changing theirs, so Ko-fi's payments still reach the account.
+
+All of it is covered by WordPress's Export Personal Data and Erase Personal Data tools (Tools menu). Erasing keeps what a live membership needs, and says so; it is removed when the membership ends.
 
 == Screenshots ==
 
@@ -130,6 +135,11 @@ their WordPress user and clear the logs from the Logs tab.
 2. **Logs**: user activity with the action taken for each donation. The Log Type selector switches to the webhook request log, and the list can be searched, paged and cleared.
 
 == Changelog ==
+
+= 1.5.0 =
+* Fix: A supporter who changed their email address on the site kept paying through Ko-fi under the old one, and the next payment created a second account while the real account's role expired. The plugin now remembers the addresses a member used before, so payments keep reaching the same account. If an old address now belongs to someone else, it goes to them, and the user log notes it.
+* Feature: `members_for_kofi_supports_email_change()` lets other plugins, such as an account page, check that changing the email address is safe.
+* Privacy: Previous email addresses, and the log entries recorded under them, are included in Export Personal Data and Erase Personal Data. They are kept while a membership is live, because they link its payments, and removed when it ends or the plugin is uninstalled.
 
 = 1.4.0 =
 * Feature: Other plugins and themes can now read a supporter's membership with `members_for_kofi_get_membership()`: whether it is active, the role, when it expires or ended, the last payment, and links and wording for managing or cancelling it on Ko-fi. Memberships that have ended are still reported, so an account page can say when.
@@ -197,6 +207,9 @@ their WordPress user and clear the logs from the Logs tab.
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.5.0 =
+Fixes a supporter who changes their email address on the site getting a second account on their next Ko-fi payment.
 
 = 1.4.0 =
 Adds a membership API for other plugins, "member since" dates and a Danish translation. If you restored this plugin's settings from a backup made before version 1.2.0, save the settings page once after updating.

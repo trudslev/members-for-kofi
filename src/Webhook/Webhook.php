@@ -26,6 +26,7 @@ use WP_User;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
+use MembersForKofi\EmailAliases;
 use MembersForKofi\Membership;
 
 use get_option;
@@ -495,14 +496,14 @@ class Webhook {
 		// understood, and anything else makes Ko-fi retry a request that would
 		// be decided the same way again.
 		if ( ! $this->grants_membership( $type ) ) {
-			$user = get_user_by( 'email', $email );
+			$user = EmailAliases::find_user( $email );
 			$user_logger->log_action( $user ? $user->ID : 0, $email, $this->log_label( 'Ignored', $type ) );
 			return new \WP_REST_Response( array( 'success' => true ), 200 );
 		}
 
 		if ( ! empty( $options['only_subscriptions'] ) && ! $this->is_true( $body['is_subscription_payment'] ?? false ) ) {
 			DebugLogger::info( 'Ignoring non-subscription payment due to only_subscriptions setting' );
-			$user = get_user_by( 'email', $email );
+			$user = EmailAliases::find_user( $email );
 			$user_logger->log_action( $user ? $user->ID : 0, $email, 'Ignored non-subscription payment' );
 			return new \WP_REST_Response( array( 'success' => true ), 200 );
 		}
@@ -521,8 +522,16 @@ class Webhook {
 			}
 
 			// Read inside the lock: a request that waited may find the account
-			// the one before it just created.
-			$user = get_user_by( 'email', $email );
+			// the one before it just created. Ko-fi keeps sending the address the
+			// supporter gave it, so a member who has since changed their email
+			// here is found by the address they had before.
+			$user = EmailAliases::find_user( $email );
+			if ( $user && 0 !== strcasecmp( $user->user_email, $email ) ) {
+				$user_logger->log_action( $user->ID, $email, 'Matched by previous email' );
+			} elseif ( $user && EmailAliases::owners( $email, $user->ID ) ) {
+				// Someone else used this address before; its current owner wins.
+				$user_logger->log_action( $user->ID, $email, 'Email is also a previous address of another member' );
+			}
 
 			if ( ! $user ) {
 				$user_id = $this->create_user( $email, $this->display_name_for( $body ) );

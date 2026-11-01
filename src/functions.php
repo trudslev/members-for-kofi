@@ -57,3 +57,20 @@ if ( ! function_exists( 'members_for_kofi_get_membership' ) ) {
 		return \MembersForKofi\Membership::get( $user_id );
 	}
 }
+
+if ( ! function_exists( 'members_for_kofi_supports_email_change' ) ) {
+	/**
+	 * Whether a member can change their email on this site safely.
+	 *
+	 * True since 1.5.0: the old address is remembered, so Ko-fi payments,
+	 * which keep using the address given to Ko-fi, still reach the same
+	 * account. Before that a payment to the old address created a new one.
+	 *
+	 * @since 1.5.0
+	 *
+	 * @return bool
+	 */
+	function members_for_kofi_supports_email_change(): bool {
+		return true;
+	}
+}

@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a WordPress plugin (v1.4.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
+This is a WordPress plugin (v1.5.0) that integrates with Ko-fi webhooks to automatically manage WordPress users and roles based on donation tiers. The plugin receives webhook payloads from Ko-fi, creates/updates WordPress users, assigns roles based on tier mappings, and manages role expiration. Features include automatic log cleanup, dual log viewing (User/Request), and organized admin settings.
 
 ## Architecture
 
@@ -18,6 +18,12 @@ This is a WordPress plugin (v1.4.0) that integrates with Ko-fi webhooks to autom
 - **`src/Logging/DebugLogger.php`**: Lightweight debug logger to PHP error_log, only active when `WP_DEBUG` is true
 - **`src/Webhook/VerificationToken.php`**: All rules for the hashed verification token (see Database Tables)
 - **`src/Membership.php`** + **`src/functions.php`**: the public API, `members_for_kofi_get_membership( int $user_id ): ?array` (since 1.4.0), loaded by the main plugin file. Generic by design -- other plugins build on it, so no site-specific names, wording or filters
+- **`src/EmailAliases.php`**: remembers the previous addresses of a member who changes their email
+  (`kofi_email_alias`, one row each, lower-cased, on `profile_update`, only for users the plugin knows)
+  and `find_user()`: current email first, then the member who most recently gave that address up.
+  Ko-fi identifies supporters only by email and keeps sending the old one; before 1.5.0 the next payment
+  created a second account. Every user lookup in the webhook goes through `find_user()`, never
+  `get_user_by( 'email' )`. `members_for_kofi_supports_email_change()` reports it to other plugins
 - **`src/Privacy/PersonalData.php`**: Personal-data exporter/eraser for both log tables, suggested privacy-policy text, and the one-off clean-up of donor accounts created before 1.3.0
 
 ### Data Flow
@@ -319,7 +325,7 @@ make commit-svn WPORG_USER=username WPORG_PASS=password
 `make release` builds `vendor/` fresh with `--no-dev` into a staging directory
 rather than copying the working tree's, which carries the whole test toolchain.
 
-Version extracted from `members-for-kofi.php` header (`* Version: 1.4.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
+Version extracted from `members-for-kofi.php` header (`* Version: 1.5.0`). Production release uses `composer install --no-dev --optimize-autoloader` inside SVN trunk.
 
 #### Release order: dev site → production → WordPress.org (MANDATORY)
 

@@ -22,6 +22,7 @@ namespace MembersForKofi\Privacy;
 
 defined( 'ABSPATH' ) || exit;
 
+use MembersForKofi\EmailAliases;
 use MembersForKofi\Membership;
 use MembersForKofi\Webhook\Webhook;
 
@@ -99,7 +100,10 @@ class PersonalData {
 		$request_table = esc_sql( $wpdb->prefix . 'members_for_kofi_request_logs' );
 
 		// phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- The plugin's own tables; names come from $wpdb->prefix, values are placeholders.
-		$user_rows  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM `{$user_table}` WHERE email = %s", $email ) );
+		// Payments that reached the account under an address it used before
+		// are logged with that address, and belong to the same person.
+		$emails     = self::emails_of( $email );
+		$user_rows  = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM `{$user_table}` WHERE email IN (" . implode( ',', array_fill( 0, count( $emails ), '%s' ) ) . ')', $emails ) );
 		$user_pages = (int) ceil( $user_rows / self::PAGE_SIZE );
 
 		$data             = array();
@@ -122,6 +126,7 @@ class PersonalData {
 							'member_since'    => $membership['member_since'] ? gmdate( 'Y-m-d H:i:s', $membership['member_since'] ) . ' UTC' : '',
 							'last_payment_at' => $membership['last_payment_at'] ? gmdate( 'Y-m-d H:i:s', $membership['last_payment_at'] ) . ' UTC' : '',
 							'expires_at'      => $membership['expires_at'] ? gmdate( 'Y-m-d H:i:s', $membership['expires_at'] ) . ' UTC' : '',
+							'previous_emails' => implode( ', ', EmailAliases::of( $member->ID ) ),
 						)
 					),
 				);
@@ -131,10 +136,8 @@ class PersonalData {
 		if ( ! $in_request_phase ) {
 			$rows = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT id, action, role, amount, currency, timestamp FROM `{$user_table}` WHERE email = %s ORDER BY id LIMIT %d OFFSET %d",
-					$email,
-					self::PAGE_SIZE,
-					( $page - 1 ) * self::PAGE_SIZE
+					"SELECT id, action, role, amount, currency, timestamp FROM `{$user_table}` WHERE email IN (" . implode( ',', array_fill( 0, count( $emails ), '%s' ) ) . ') ORDER BY id LIMIT %d OFFSET %d',
+					array_merge( $emails, array( self::PAGE_SIZE, ( $page - 1 ) * self::PAGE_SIZE ) )
 				),
 				ARRAY_A
 			);
@@ -151,10 +154,8 @@ class PersonalData {
 			$request_page = $page - $user_pages;
 			$rows         = $wpdb->get_results(
 				$wpdb->prepare(
-					"SELECT id, tier_name, amount, currency, is_subscription, payload, status_code, error, timestamp FROM `{$request_table}` WHERE email = %s ORDER BY id LIMIT %d OFFSET %d",
-					$email,
-					self::PAGE_SIZE,
-					( $request_page - 1 ) * self::PAGE_SIZE
+					"SELECT id, tier_name, amount, currency, is_subscription, payload, status_code, error, timestamp FROM `{$request_table}` WHERE email IN (" . implode( ',', array_fill( 0, count( $emails ), '%s' ) ) . ') ORDER BY id LIMIT %d OFFSET %d',
+					array_merge( $emails, array( self::PAGE_SIZE, ( $request_page - 1 ) * self::PAGE_SIZE ) )
 				),
 				ARRAY_A
 			);
@@ -194,9 +195,20 @@ class PersonalData {
 
 		$removed = 0;
 
-		foreach ( array( 'members_for_kofi_user_logs', 'members_for_kofi_request_logs' ) as $table ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Deleting from the plugin's own table.
-			$removed += (int) $wpdb->delete( $wpdb->prefix . $table, array( 'email' => $email ), array( '%s' ) );
+		foreach ( self::emails_of( $email ) as $address ) {
+			foreach ( array( 'members_for_kofi_user_logs', 'members_for_kofi_request_logs' ) as $table ) {
+				// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Deleting from the plugin's own table.
+				$removed += (int) $wpdb->delete( $wpdb->prefix . $table, array( 'email' => $address ), array( '%s' ) );
+			}
+		}
+
+		// The address as someone's previous one. Kept while that membership is
+		// live: it is what links Ko-fi's payments to the account.
+		foreach ( EmailAliases::owners( $email ) as $owner ) {
+			if ( '' === (string) get_user_meta( $owner, 'kofi_donation_assigned_role', true )
+				&& delete_user_meta( $owner, EmailAliases::META, strtolower( $email ) ) ) {
+				++$removed;
+			}
 		}
 
 		delete_transient( 'members_for_kofi_total_logs' );
@@ -214,11 +226,17 @@ class PersonalData {
 				++$removed;
 			}
 
-			// With no live membership, when they first joined is history too.
-			if ( '' === (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true )
-				&& '' !== (string) get_user_meta( $user->ID, Membership::MEMBER_SINCE_META, true ) ) {
-				delete_user_meta( $user->ID, Membership::MEMBER_SINCE_META );
-				++$removed;
+			// With no live membership, when they first joined is history too,
+			// and so are the addresses they used before.
+			if ( '' === (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true ) ) {
+				if ( '' !== (string) get_user_meta( $user->ID, Membership::MEMBER_SINCE_META, true ) ) {
+					delete_user_meta( $user->ID, Membership::MEMBER_SINCE_META );
+					++$removed;
+				}
+				if ( EmailAliases::of( $user->ID ) ) {
+					delete_user_meta( $user->ID, EmailAliases::META );
+					++$removed;
+				}
 			}
 
 			if ( '' !== (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true ) ) {
@@ -234,6 +252,18 @@ class PersonalData {
 			'messages'       => $messages,
 			'done'           => true,
 		);
+	}
+
+	/**
+	 * An address plus the addresses its account used before.
+	 *
+	 * @param string $email Email address.
+	 * @return string[]
+	 */
+	private static function emails_of( string $email ): array {
+		$user = get_user_by( 'email', $email );
+
+		return array_values( array_unique( array_merge( array( $email ), $user ? EmailAliases::of( $user->ID ) : array() ) ) );
 	}
 
 	/**

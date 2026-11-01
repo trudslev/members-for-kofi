@@ -2,23 +2,23 @@
 # This file is distributed under the GPL-3.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Members for Ko-fi 1.4.0\n"
+"Project-Id-Version: Members for Ko-fi 1.5.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/members-for-kofi\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-10-31T10:30:47+00:00\n"
+"POT-Creation-Date: 2026-11-01T01:56:41+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: members-for-kofi\n"
 
 #. Plugin Name of the plugin
 #: members-for-kofi.php
-#: src/Plugin.php:434
-#: src/Plugin.php:435
-#: src/Privacy/PersonalData.php:333
+#: src/Plugin.php:436
+#: src/Plugin.php:437
+#: src/Privacy/PersonalData.php:363
 msgid "Members for Ko-fi"
 msgstr ""
 
@@ -382,37 +382,37 @@ msgstr ""
 msgid "Sign in to Ko-fi, then go to Account settings and Subscriptions. If you pay with PayPal, you can also cancel there."
 msgstr ""
 
-#: src/Privacy/PersonalData.php:64
-#: src/Privacy/PersonalData.php:79
+#: src/Privacy/PersonalData.php:65
+#: src/Privacy/PersonalData.php:80
 msgid "Members for Ko-fi logs"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:115
+#: src/Privacy/PersonalData.php:119
 msgid "Ko-fi membership"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:145
+#: src/Privacy/PersonalData.php:148
 msgid "Ko-fi membership activity"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:165
+#: src/Privacy/PersonalData.php:166
 msgid "Ko-fi webhook requests"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:227
+#: src/Privacy/PersonalData.php:245
 msgid "An active Ko-fi membership was kept, so the person keeps the access they pay for. It is removed when the membership ends."
 msgstr ""
 
-#: src/Privacy/PersonalData.php:294
-#: src/Webhook/Webhook.php:753
-#: src/Webhook/Webhook.php:772
+#: src/Privacy/PersonalData.php:324
+#: src/Webhook/Webhook.php:762
+#: src/Webhook/Webhook.php:781
 msgid "Supporter"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:335
+#: src/Privacy/PersonalData.php:365
 msgid "When you support us on Ko-fi, Ko-fi sends this site your email address, the name and message you entered, the amount, and your membership tier. We use your email address to create or find your account here and give it the access your support pays for."
 msgstr ""
 
-#: src/Privacy/PersonalData.php:336
+#: src/Privacy/PersonalData.php:366
 msgid "A record of each payment and of the access granted or removed is kept for the number of days set by the site owner, then deleted automatically when log cleanup is enabled. You can ask for a copy of this data, or for it to be erased, through the site's personal data request process."
 msgstr ""
