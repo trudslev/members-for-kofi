@@ -135,6 +135,87 @@ if ( function_exists( 'members_for_kofi_supports_email_change' ) && members_for_
 }
 ```
 
+## For Developers: Hooks
+
+Since 1.6.0 other plugins can steer what a payment does, and act on it. With
+nothing hooked, the plugin behaves exactly as before.
+
+A few rules hold for every hook below:
+
+- They run only for an authenticated payment, after Ko-fi's "Send test" (which
+  never reaches them), ignored event types and the subscriptions-only setting.
+- `$body` is Ko-fi's payload with the verification token removed.
+- A callback that throws is skipped: a filter falls back to its default, and the
+  failure goes to the debug log. A faulty callback cannot turn a payment into an
+  error, which Ko-fi would retry indefinitely.
+- Ko-fi gets a 200 whatever the filters decide. The one exception is
+  `members_for_kofi_new_user_args` returning arguments `wp_insert_user()`
+  rejects: as with any failure to create an account, Ko-fi gets a 500.
+- Everything from `members_for_kofi_create_account` onwards runs while the
+  plugin holds a per-email lock, so callbacks must be fast and must never call
+  Ko-fi.
+
+### Filters
+
+| Filter | Arguments | Return |
+|---|---|---|
+| `members_for_kofi_process_payment` | `bool $process, string $email, array $body` | `false` ignores the payment ("Ignored by filter" in the user log) |
+| `members_for_kofi_create_account` | `bool $create, string $email, array $body` | `false` creates no account ("Account not created"). Asked only when no account matches the email, current or previous |
+| `members_for_kofi_role` | `string $role, string $tier_name, WP_User $user, array $body` | The role to grant, or `''` to grant none |
+| `members_for_kofi_new_user_args` | `array $args, string $email, array $body` | Arguments for `wp_insert_user()` |
+| `members_for_kofi_granting_types` | `array $types` | Ko-fi event types that grant membership (default `Donation`, `Subscription`) |
+| `members_for_kofi_client_ip` | `string $ip` | Address failed requests are counted against (default `REMOTE_ADDR`) |
+| `members_for_kofi_webhook_failure_limit` | `int $limit` | Failures from one address before requests are shed (default 30; 0 disables) |
+
+Limits the filters cannot get past:
+
+- `members_for_kofi_role` is checked like a configured role. Administrator, any
+  role with site-running capabilities and unknown roles are refused. The
+  configured role is kept instead, and "Role from filter refused" goes to the
+  user log.
+- `members_for_kofi_new_user_args` cannot set `role` or `user_email`. Both are
+  put back after the filter: roles come only from the tier mapping, and the
+  email is how the next payment finds the account.
+- A payment refused by `members_for_kofi_create_account` is not marked as
+  delivered. If Ko-fi delivers the same message again after the block is
+  lifted, it is processed normally.
+
+Keeping a deleted member from being re-created by their next payment:
+
+```php
+add_filter( 'members_for_kofi_create_account', function ( $create, $email ) {
+	$blocked = (array) get_option( 'my_plugin_deleted_members', array() );
+
+	return in_array( strtolower( $email ), $blocked, true ) ? false : $create;
+}, 10, 2 );
+```
+
+Granting a different role for yearly supporters:
+
+```php
+add_filter( 'members_for_kofi_role', function ( $role, $tier_name ) {
+	return 'Gold (yearly)' === $tier_name ? 'gold_member' : $role;
+}, 10, 2 );
+```
+
+### Actions
+
+| Action | Arguments | Fires |
+|---|---|---|
+| `members_for_kofi_user_created` | `int $user_id, string $email, array $body` | After the webhook creates an account |
+| `members_for_kofi_role_assigned` | `int $user_id, string $role, array $body` | After a payment grants a role, renewals included |
+| `members_for_kofi_role_removed` | `int $user_id, string $role, string $reason` | After the plugin removes a role it granted. `$reason` is `'tier_change'` or `'expired'` |
+| `members_for_kofi_donation_logged` | `int $user_id, string $email, float $amount, string $currency, array $body` | After every processed payment, whether or not it granted a role |
+
+A role the user already held before paying is never removed, so it fires no
+`members_for_kofi_role_removed`.
+
+```php
+add_action( 'members_for_kofi_user_created', function ( $user_id ) {
+	wp_send_new_user_notifications( $user_id, 'user' );
+} );
+```
+
 ## Security
 
 This plugin follows WordPress security best practices and implements multiple layers of protection:
@@ -255,6 +336,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.6.0**: Filters and actions for other plugins (see "For Developers: Hooks"): skip a payment, refuse to create an account, change the role, adjust new accounts, and react when an account is created, a role is assigned or removed, or a payment is logged. Filtered roles get the same checks as configured ones, and a faulty callback can never turn a payment into an error.
 - **1.5.0**: A supporter who changes their email address on the site keeps their membership: the old address is remembered, so Ko-fi's payments (which keep using it) reach the same account instead of creating a new one. `members_for_kofi_supports_email_change()` tells other plugins this is safe. Previous addresses are covered by the personal-data export and erase tools.
 - **1.4.0**: Other plugins and themes can read a supporter's membership with `members_for_kofi_get_membership()`, including when they first became a member (backfill older members with `wp members-for-kofi member-since set`). Adds a complete Danish translation, and the plugin's bundled translations now load. Webhooks accept only the hashed token from 1.2.0; a site whose settings were restored from a pre-1.2.0 backup must save the settings page once.
 - **1.3.1**: Fixes 1.3.0 making some sites slow or unresponsive after updating: its one-time clean-up of supporter accounts now takes a fraction of a second, and only one request runs an update at a time.

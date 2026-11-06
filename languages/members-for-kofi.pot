@@ -9,7 +9,7 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-01T01:56:41+00:00\n"
+"POT-Creation-Date: 2026-11-06T12:50:00+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: members-for-kofi\n"
@@ -404,8 +404,8 @@ msgid "An active Ko-fi membership was kept, so the person keeps the access they 
 msgstr ""
 
 #: src/Privacy/PersonalData.php:324
-#: src/Webhook/Webhook.php:762
-#: src/Webhook/Webhook.php:781
+#: src/Webhook/Webhook.php:911
+#: src/Webhook/Webhook.php:931
 msgid "Supporter"
 msgstr ""
 

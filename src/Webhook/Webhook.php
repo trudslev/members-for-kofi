@@ -27,6 +27,7 @@ use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Logging\RequestLogger;
 use MembersForKofi\EmailAliases;
+use MembersForKofi\Hooks;
 use MembersForKofi\Membership;
 
 use get_option;
@@ -508,6 +509,28 @@ class Webhook {
 			return new \WP_REST_Response( array( 'success' => true ), 200 );
 		}
 
+		$hook_body = Hooks::payload( $body );
+
+		/**
+		 * Filters whether a payment is processed at all.
+		 *
+		 * Runs for an authenticated payment the plugin would otherwise act on:
+		 * after Ko-fi's test button, the email check, ignored event types and
+		 * the subscriptions-only setting. False answers Ko-fi 200 and does
+		 * nothing else.
+		 *
+		 * @since 1.6.0
+		 *
+		 * @param bool   $process Whether to process the payment. Default true.
+		 * @param string $email   Donor email from Ko-fi.
+		 * @param array  $body    Ko-fi payload, without the verification token.
+		 */
+		if ( ! Hooks::filter( 'members_for_kofi_process_payment', true, $email, $hook_body ) ) {
+			$user = EmailAliases::find_user( $email );
+			$user_logger->log_action( $user ? $user->ID : 0, $email, 'Ignored by filter' );
+			return new \WP_REST_Response( array( 'success' => true ), 200 );
+		}
+
 		// Two deliveries for the same new email used to race: WordPress checks
 		// that an email is unused in PHP, with no unique key behind it, so
 		// simultaneous requests could each create an account -- the same login
@@ -534,7 +557,30 @@ class Webhook {
 			}
 
 			if ( ! $user ) {
-				$user_id = $this->create_user( $email, $this->display_name_for( $body ) );
+				/**
+				 * Filters whether an account is created for a donor who has none.
+				 *
+				 * Only asked when no account matches the email, current or
+				 * previous. False answers Ko-fi 200, logs "Account not created"
+				 * and stops. The message is not marked as delivered, so a
+				 * redelivery after the refusal is lifted is processed normally.
+				 *
+				 * Runs inside the per-email lock: keep it fast, and never call
+				 * Ko-fi from it.
+				 *
+				 * @since 1.6.0
+				 *
+				 * @param bool   $create Whether to create the account. Default true.
+				 * @param string $email  Donor email from Ko-fi.
+				 * @param array  $body   Ko-fi payload, without the verification token.
+				 */
+				if ( ! Hooks::filter( 'members_for_kofi_create_account', true, $email, $hook_body ) ) {
+					DebugLogger::info( 'Account creation refused by filter' );
+					$user_logger->log_action( 0, $email, 'Account not created' );
+					return new \WP_REST_Response( array( 'success' => true ), 200 );
+				}
+
+				$user_id = $this->create_user( $email, $this->display_name_for( $body ), $hook_body );
 				if ( is_wp_error( $user_id ) ) {
 					DebugLogger::error( 'User creation failed', array( 'error' => $user_id->get_error_message() ) );
 					return new \WP_REST_Response( array( 'error' => 'User creation failed' ), 500 );
@@ -544,9 +590,20 @@ class Webhook {
 				DebugLogger::info( 'New user created', array( 'user_id' => $user_id ) );
 
 				$user_logger->log_action( $user_id, $email, 'User created' );
+
+				/**
+				 * Fires after the webhook creates an account.
+				 *
+				 * @since 1.6.0
+				 *
+				 * @param int    $user_id New user's ID.
+				 * @param string $email   Donor email from Ko-fi.
+				 * @param array  $body    Ko-fi payload, without the verification token.
+				 */
+				Hooks::action( 'members_for_kofi_user_created', (int) $user_id, $email, $hook_body );
 			}
 
-			$role = $this->resolve_role_from_tier( $tier_name, $options );
+			$role = $this->filter_role( (string) $this->resolve_role_from_tier( $tier_name, $options ), $tier_name, $user, $email, $hook_body, $user_logger );
 
 			if ( '' !== $tier_name && ! $this->tier_is_mapped( $tier_name, $options ) ) {
 				// A tier renamed on Ko-fi stops matching its mapping without a
@@ -555,7 +612,7 @@ class Webhook {
 			}
 
 			if ( $role ) {
-				$this->assign_role( $user, $role, $email, $user_logger );
+				$this->assign_role( $user, $role, $email, $user_logger, $hook_body );
 				Membership::record_payment( $user->ID, $this->is_true( $body['is_subscription_payment'] ?? false ) );
 			} else {
 				DebugLogger::info( 'No matching tier or default role for user', array( 'tier' => $tier_name ) );
@@ -563,6 +620,19 @@ class Webhook {
 
 			$user_logger->log_donation( $user->ID, $email, $amount, $currency );
 			DebugLogger::info( 'Donation logged', array( 'user_id' => $user->ID ) );
+
+			/**
+			 * Fires after a payment is logged, whether or not it earned a role.
+			 *
+			 * @since 1.6.0
+			 *
+			 * @param int    $user_id  Donor's user ID.
+			 * @param string $email    Donor email from Ko-fi.
+			 * @param float  $amount   Amount paid.
+			 * @param string $currency Currency code.
+			 * @param array  $body     Ko-fi payload, without the verification token.
+			 */
+			Hooks::action( 'members_for_kofi_donation_logged', (int) $user->ID, $email, $amount, $currency, $hook_body );
 
 			if ( '' !== $delivery_key ) {
 				set_transient( $delivery_key, 1, self::DUPLICATE_WINDOW );
@@ -587,9 +657,10 @@ class Webhook {
 	 * @param string     $role        Role to assign.
 	 * @param string     $email       Email for the log.
 	 * @param UserLogger $user_logger Logger.
+	 * @param array      $hook_body   Payload for hook callbacks, without the token.
 	 * @return void
 	 */
-	private function assign_role( \WP_User $user, string $role, string $email, UserLogger $user_logger ): void {
+	private function assign_role( \WP_User $user, string $role, string $email, UserLogger $user_logger, array $hook_body = array() ): void {
 		$previous_role = (string) get_user_meta( $user->ID, 'kofi_donation_assigned_role', true );
 		$preexisting   = (string) get_user_meta( $user->ID, self::PREEXISTING_ROLE_META, true );
 
@@ -598,6 +669,18 @@ class Webhook {
 			&& $preexisting !== $previous_role ) {
 			$user->remove_role( $previous_role );
 			$user_logger->log_role_removal( $user->ID, $email, $previous_role );
+
+			/**
+			 * Fires after the plugin removes a role it granted.
+			 *
+			 * @since 1.6.0
+			 *
+			 * @param int    $user_id User's ID.
+			 * @param string $role    Role removed.
+			 * @param string $reason  'tier_change' when a payment for another tier
+			 *                        replaced it, 'expired' when the membership ran out.
+			 */
+			Hooks::action( 'members_for_kofi_role_removed', (int) $user->ID, $previous_role, 'tier_change' );
 		}
 
 		if ( $previous_role !== $role ) {
@@ -620,6 +703,72 @@ class Webhook {
 		);
 
 		$user_logger->log_role_assignment( $user->ID, $email, $role );
+
+		/**
+		 * Fires after a payment gives a user their role, renewals included.
+		 *
+		 * @since 1.6.0
+		 *
+		 * @param int    $user_id User's ID.
+		 * @param string $role    Role assigned.
+		 * @param array  $body    Ko-fi payload, without the verification token.
+		 */
+		Hooks::action( 'members_for_kofi_role_assigned', (int) $user->ID, $role, $hook_body );
+	}
+
+	/**
+	 * Lets a site change the role a payment earns.
+	 *
+	 * Whatever a callback returns passes the same checks as a configured role:
+	 * never administrator, never a role with site-running capabilities, never
+	 * a role that does not exist. A refused or malformed answer keeps the
+	 * configured role and is recorded in the user log.
+	 *
+	 * @param string     $role        Role from the settings, or '' for none.
+	 * @param string     $tier_name   Tier name from Ko-fi.
+	 * @param \WP_User   $user        Donor's account.
+	 * @param string     $email       Donor email, for the log.
+	 * @param array      $hook_body   Payload for callbacks, without the token.
+	 * @param UserLogger $user_logger Logger.
+	 * @return string Role to assign, or '' for none.
+	 */
+	private function filter_role( string $role, string $tier_name, \WP_User $user, string $email, array $hook_body, UserLogger $user_logger ): string {
+		/**
+		 * Filters the role a payment earns.
+		 *
+		 * Return '' to withhold the role. Administrator, roles with
+		 * site-running capabilities and unknown roles are refused, and the
+		 * configured role is used instead.
+		 *
+		 * Runs inside the per-email lock: keep it fast, and never call Ko-fi
+		 * from it.
+		 *
+		 * @since 1.6.0
+		 *
+		 * @param string   $role      Role from the tier mapping or default role, or ''.
+		 * @param string   $tier_name Tier name from Ko-fi, or ''.
+		 * @param \WP_User $user      Donor's account.
+		 * @param array    $body      Ko-fi payload, without the verification token.
+		 */
+		$filtered = Hooks::filter( 'members_for_kofi_role', $role, $tier_name, $user, $hook_body );
+
+		if ( ! is_string( $filtered ) ) {
+			DebugLogger::warning( 'members_for_kofi_role returned a non-string; keeping the configured role' );
+			return $role;
+		}
+
+		if ( '' === $filtered || $filtered === $role ) {
+			return $filtered;
+		}
+
+		$valid = $this->validate_role( $filtered );
+
+		if ( null === $valid ) {
+			$user_logger->log_action( $user->ID, $email, $this->log_label( 'Role from filter refused', sanitize_key( $filtered ) ) );
+			return $role;
+		}
+
+		return $valid;
 	}
 
 	/**
@@ -774,23 +923,44 @@ class Webhook {
 	 *
 	 * @param string $email        The email address of the user to create.
 	 * @param string $display_name Public name for the account.
+	 * @param array  $hook_body    Payload for hook callbacks, without the token.
 	 * @return int|\WP_Error The user ID on success, or a WP_Error object on failure.
 	 */
-	protected function create_user( $email, string $display_name = '' ) {
+	protected function create_user( $email, string $display_name = '', array $hook_body = array() ) {
 		$login = self::generate_login();
 		$name  = '' !== $display_name ? $display_name : __( 'Supporter', 'members-for-kofi' );
 
-		return wp_insert_user(
-			array(
-				'user_login'    => $login,
-				'user_nicename' => $login,
-				'user_email'    => $email,
-				'user_pass'     => wp_generate_password( 24 ),
-				'display_name'  => $name,
-				'nickname'      => $name,
-				'role'          => '',
-			)
+		$defaults = array(
+			'user_login'    => $login,
+			'user_nicename' => $login,
+			'user_email'    => $email,
+			'user_pass'     => wp_generate_password( 24 ),
+			'display_name'  => $name,
+			'nickname'      => $name,
+			'role'          => '',
 		);
+
+		/**
+		 * Filters the arguments a new supporter account is created with.
+		 *
+		 * Anything wp_insert_user() accepts, except two keys that are put back
+		 * after the filter: `role` stays empty, since roles come only from the
+		 * tier mapping, and `user_email` stays Ko-fi's, since it is how the
+		 * next payment finds the account.
+		 *
+		 * @since 1.6.0
+		 *
+		 * @param array  $args  Arguments for wp_insert_user().
+		 * @param string $email Donor email from Ko-fi.
+		 * @param array  $body  Ko-fi payload, without the verification token.
+		 */
+		$args = Hooks::filter( 'members_for_kofi_new_user_args', $defaults, $email, $hook_body );
+		$args = is_array( $args ) ? $args : $defaults;
+
+		$args['role']       = '';
+		$args['user_email'] = $email;
+
+		return wp_insert_user( $args );
 	}
 
 	/**

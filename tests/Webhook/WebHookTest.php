@@ -187,9 +187,10 @@ class WebhookTest extends TestCase {
 			 *
 			 * @param string $email        The email address of the user to create.
 			 * @param string $display_name Unused.
+			 * @param array  $hook_body    Unused.
 			 * @return mixed|\WP_Error The created user object or a WP_Error on failure.
 			 */
-			protected function create_user( $email, string $display_name = '' ) {
+			protected function create_user( $email, string $display_name = '', array $hook_body = array() ) {
 				return new \WP_Error( 'fail', 'Simulated failure' );
 			}
 		};

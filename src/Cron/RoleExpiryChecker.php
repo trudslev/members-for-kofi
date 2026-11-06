@@ -22,6 +22,7 @@ namespace MembersForKofi\Cron;
 
 defined( 'ABSPATH' ) || exit;
 
+use MembersForKofi\Hooks;
 use MembersForKofi\Logging\DebugLogger;
 use MembersForKofi\Logging\UserLogger;
 use MembersForKofi\Membership;
@@ -129,6 +130,9 @@ class RoleExpiryChecker {
 
 						// Log role removal using the injected UserLogger.
 						$this->user_logger->log_role_removal( $user->ID, $user->user_email, $role );
+
+						// Documented with the tier-change removal in Webhook::assign_role().
+						Hooks::action( 'members_for_kofi_role_removed', (int) $user->ID, (string) $role, 'expired' );
 					}
 
 					// Clean up metadata.

@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.5.0
+Stable tag: 1.6.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -107,6 +107,10 @@ Yes. Since 1.4.0, `members_for_kofi_get_membership( $user_id )` returns `null` i
 
 A membership that has ended is still reported, with status `'none'`, so an account page can say when it ended. For memberships that began before 1.4.0, the real start date can be filled in with WP-CLI, for example from the SinceDateUTC column of Ko-fi's supporter export: `wp members-for-kofi member-since set <user-id> "2024-03-05 18:20:00"` (read as UTC; add `--force` to replace a recorded date). Check that the function exists before calling it, in case this plugin is inactive. The whole array passes through the `members_for_kofi_get_membership` filter, for example to change the links or the wording.
 
+= Can another plugin change what a payment does? =
+
+Yes. Since 1.6.0 the webhook has filters to skip a payment (`members_for_kofi_process_payment`), refuse to create an account (`members_for_kofi_create_account`, for example to keep a member who deleted their account from being re-created), change the role (`members_for_kofi_role`) and adjust a new account (`members_for_kofi_new_user_args`). It also has actions for an account created, a role assigned or removed, and a payment logged. A filter can never grant administrator or another role with site-running powers, and a broken callback never turns a payment into an error. The README on GitHub lists every hook with its arguments and examples.
+
 = What happens if a supporter changes their email address? =
 
 Since 1.5.0 their membership carries on. Ko-fi keeps sending the address the supporter gave Ko-fi, so the plugin remembers the addresses a member used before and matches payments to them. Before 1.5.0, the next payment created a second account under the old address, and the real account's role expired. Members who changed their address before updating are not covered, because the old address was never recorded: ask them to use the same address on Ko-fi and on the site.
@@ -135,6 +139,11 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 2. **Logs**: user activity with the action taken for each donation. The Log Type selector switches to the webhook request log, and the list can be searched, paged and cleared.
 
 == Changelog ==
+
+= 1.6.0 =
+* Feature: Other plugins can now steer what a Ko-fi payment does. Filters can skip a payment, refuse to create an account (for example to keep a member who deleted their account from being re-created by their next payment), change or withhold the role, and adjust a new account. Actions report an account created, a role assigned or removed (with the reason: tier change or expiry), and a payment logged. Nothing changes on a site that uses none of them.
+* Security: A role chosen by a filter passes the same checks as one chosen in the settings, so administrator and roles with site-running powers can never be granted, and a filter cannot set a new account's role or email address. Hooks never see the verification token.
+* Reliability: A broken callback in another plugin can no longer turn a payment into an error that Ko-fi keeps retrying: the plugin carries on without it and notes it in the debug log. A payment refused by a filter is answered as received.
 
 = 1.5.0 =
 * Fix: A supporter who changed their email address on the site kept paying through Ko-fi under the old one, and the next payment created a second account while the real account's role expired. The plugin now remembers the addresses a member used before, so payments keep reaching the same account. If an old address now belongs to someone else, it goes to them, and the user log notes it.
@@ -207,6 +216,9 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.6.0 =
+Adds filters and actions so other plugins can decide whether a payment creates an account, which role it grants, and act when accounts and roles change. No change for sites that do not use them.
 
 = 1.5.0 =
 Fixes a supporter who changes their email address on the site getting a second account on their next Ko-fi payment.
