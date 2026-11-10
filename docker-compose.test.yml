@@ -23,11 +23,11 @@ services:
     # its working directory, which would copy WordPress into the mounted plugin.
     networks:
       - wptestnet
-    # Memory caps (swap included, so memswap_limit equals mem_limit). This
-    # server shares its memory with production and many other services;
-    # uncapped, the test stack once pushed it into swapping until it froze and
-    # had to be rebooted. With caps, a test run that needs too much fails on
-    # its own. PHPUnit runs inside this container, so its cap covers the suite.
+    # Memory caps (swap included, so memswap_limit equals mem_limit). The
+    # machine running the tests may share its memory with other services, and
+    # an uncapped test stack can push it into swap until it stops responding.
+    # With caps, a test run that needs too much fails on its own. PHPUnit runs
+    # inside this container, so its cap covers the suite.
     mem_limit: 768m
     memswap_limit: 768m
 

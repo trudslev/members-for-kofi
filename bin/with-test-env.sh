@@ -59,9 +59,9 @@ stop_if_started_here() {
 trap stop_if_started_here EXIT
 
 # Starting the stack needs about 1.5 GB (its containers are capped at 768 MB,
-# 512 MB and 256 MB). This server shares its memory with production; when it
-# was already short, the test stack once tipped it into swapping until it froze.
-# So do not start it then. TEST_ENV_MIN_FREE_MB overrides the threshold.
+# 512 MB and 256 MB). On a machine that is already short of memory, starting it
+# can tip the whole machine into swap, so refuse instead.
+# TEST_ENV_MIN_FREE_MB overrides the threshold.
 if [ "$STARTED_HERE" = 1 ]; then
   min_free_mb=${TEST_ENV_MIN_FREE_MB:-1536}
   available_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
