@@ -20,7 +20,7 @@ requests to two custom tables. Work happens on `develop`.
   `src/Cli/`: WP-CLI commands
 
 Rules for each area are in `.claude/rules/` (webhook, token, database-schema, membership,
-php-security, test-environment, translations, release). They load automatically when you open
+php-security, test-environment, translations). They load automatically when you open
 matching files; read the relevant one first when starting work in an area from scratch.
 
 ## Non-negotiable
@@ -44,7 +44,8 @@ Security comes first; evaluate every change against these before writing it.
   every PHP file, none of `eval`/`exec`/`system`/`unserialize` on untrusted data
 - **Any database schema change needs an upgrade path** through `Plugin::maybe_upgrade()` with a
   `DB_VERSION` bump: `activate()` never runs on updates. Read `.claude/rules/database-schema.md` first
-- Upgrade code runs on `init` and must stay cheap and single-flight (1.3.0's jammed production)
+- Upgrade code runs on `init` and must stay cheap and single-flight: a slow 1.3.0 upgrade once jammed
+  a large site for ~12 minutes
 - New translatable strings are translated in every bundled `.po` before release (Danish is complete)
 
 ## Testing
@@ -73,7 +74,8 @@ make test-env-status         # anything still running?
   froze this shared server on 2026-10-31. Never remove the caps
 - Publish test ports on loopback only (`"127.0.0.1:8101:80"`): Docker's NAT bypasses the firewall
 
-## Releasing
+## Packaging
 
-Order is mandatory: **dev site → production (the tested zip) → WordPress.org → GitHub release.**
-Never publish to WordPress.org first. Details: `.claude/rules/release.md`.
+`make release` builds the plugin zip: dev files are excluded via `.releaseignore`, and `vendor/` is
+built fresh with `--no-dev` in a staging directory rather than copied from the working tree, which
+carries the whole test toolchain.

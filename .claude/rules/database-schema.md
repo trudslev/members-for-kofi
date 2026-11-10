@@ -47,7 +47,7 @@ The upgrade path is `Plugin::maybe_upgrade()` on `init` (priority 5), guarded by
 
 It runs on `init`, so a slow step is restarted by every request until it finishes. 1.3.0's account
 clean-up used `get_users()` with three OR'd meta `EXISTS` clauses (three usermeta self-joins); it
-never finished on foodgeek.io, 42 copies piled up and the site jammed for ~12 minutes. Since 1.3.1:
+never finished on a large production site, 42 copies piled up and the site jammed for ~12 minutes. Since 1.3.1:
 
 - `maybe_upgrade()` takes a non-blocking `GET_LOCK()` (`Plugin::upgrade_lock_name()`). Other requests
   skip the upgrade instead of waiting, and only the request that finished records the version. Lock
