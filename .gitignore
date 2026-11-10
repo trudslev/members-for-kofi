@@ -35,8 +35,10 @@ Desktop.ini
 *.sublime-workspace
 release/*
 reports/
-# Claude Code local settings (agent permissions, session-specific)
-.claude/
+# Claude Code: local settings and private skills stay untracked;
+# the shared, path-scoped project rules are committed.
+.claude/*
+!.claude/rules/
 
 # Personal working preferences (not shared with contributors)
 CLAUDE.local.md
