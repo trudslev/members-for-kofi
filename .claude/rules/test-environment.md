@@ -34,12 +34,12 @@ paths:
   dependencies and leaves them running; `make release` used to leave two containers up that way
 - **Memory caps** (`mem_limit`/`memswap_limit`): WordPress 768 MB (PHPUnit runs inside it), MySQL
   512 MB with a lean configuration, WP-CLI 256 MB. `with-test-env.sh` refuses to start with less
-  than 1.5 GB available (`TEST_ENV_MIN_FREE_MB` overrides). On 2026-10-31 the uncapped stack tipped
-  this shared server into swapping until it froze and had to be rebooted. A full `make test-all`
-  peaks around 270 MB per container. Never remove the caps; raise them only with a measured reason
+  than 1.5 GB available (`TEST_ENV_MIN_FREE_MB` overrides), so the stack cannot push a machine it
+  shares with other services into swap. A full `make test-all` peaks around 270 MB per container.
+  Never remove the caps; raise them only with a measured reason
 - **Publish ports on loopback only: `"127.0.0.1:8101:80"`, never `"8101:80"`.** Docker otherwise
-  publishes on every interface and its NAT rules bypass ufw. Until 2026-10-11 the test site
-  (`admin`/`admin`, this repository mounted read-write) answered on the public address. Same for
+  publishes on every interface and its NAT rules bypass the host firewall, which would expose a
+  site whose login is `admin`/`admin` and which mounts this repository read-write. Same for
   `docker-compose.site.yml` and any rehearsal compose file
 - A throwaway compose project made for a rehearsal is torn down with `down -v` before work is done
 - `docker-compose.site.yml` is the manual QA site: `make site-up`, `site-shell`, `site-down`,

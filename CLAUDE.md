@@ -70,9 +70,9 @@ make test-env-status         # anything still running?
 - Security-sensitive code needs tests: token bypass, injection, authorization, role limits
 - **Nothing is left running.** Test targets stop what they started. If you ran `make test-env-up`,
   run `make test-env-down` when done, and tear down any rehearsal compose project with `down -v`
-- The test stack is memory-capped and refuses to start with under 1.5 GB free: an uncapped stack
-  froze this shared server on 2026-10-31. Never remove the caps
-- Publish test ports on loopback only (`"127.0.0.1:8101:80"`): Docker's NAT bypasses the firewall
+- The test stack is memory-capped and refuses to start with under 1.5 GB free. Never remove the caps
+- Publish test ports on loopback only (`"127.0.0.1:8101:80"`): Docker's NAT bypasses the host
+  firewall, and the test site's login is `admin`/`admin`
 
 ## Packaging
 
