@@ -81,7 +81,7 @@ jobs:
 
       - name: Container logs on failure
         if: failure()
-        run: docker compose -f docker-compose.test.yml logs --tail=200
+        run: docker compose -f docker-compose.test.yml --profile http logs --tail=200
 
       - name: Tear down
         if: always()

@@ -308,6 +308,20 @@ make test-env-reset               # wipe the site and database and start over
 make wp-version                   # the WordPress version currently under test
 ```
 
+Each run starts a fresh site in memory and removes it again afterwards, so it
+leaves nothing on your machine but the Docker images (about 1.3 GB). WordPress
+core is downloaded with WP-CLI, not taken from an image, so the suite follows new
+WordPress releases on its own. To test against something else:
+
+```bash
+make test WP_VERSION=6.8          # an older WordPress
+make test PHP_VERSION=8.4         # another PHP (any wordpress:cli-phpX.Y image)
+make test DB_IMAGE=mysql:8.4      # MySQL instead of the default MariaDB 11.4
+```
+
+`make test` needs only a database and WP-CLI; the web server is started only
+for the suites that drive the site over HTTP.
+
 The integration suite is the only one that exercises raw request body parsing,
 so anything touching that path needs a test there — a unit test that hands
 `Webhook::handle()` a ready-made array skips the parsing entirely.

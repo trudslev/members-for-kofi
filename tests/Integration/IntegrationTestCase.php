@@ -106,7 +106,7 @@ abstract class IntegrationTestCase extends TestCase {
 	 */
 	protected static function wp( string $args ): string {
 		$command = sprintf(
-			'docker compose -f %s run --rm -T wpcli wp %s 2>/dev/null',
+			'docker compose -f %s exec -T wpcli wp %s 2>/dev/null',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
 			$args
 		);

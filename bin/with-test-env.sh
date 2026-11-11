@@ -9,11 +9,14 @@
 # interrupted. If they were already running (someone ran `make test-env-up` to
 # iterate), they are left running: this only stops what it started.
 #
-# The same goes for the site's volumes: if none existed, the ones created for
-# this run are removed with the containers, so a run from a clean machine
-# leaves nothing behind. Volumes that were already there are kept.
+# The site lives in RAM (database and docroot), so stopping also removes its
+# volume: there is nothing on disk to keep, and a run leaves nothing behind.
 #
 # Set KEEP_TEST_ENV=1 to leave them running regardless.
+#
+# TEST_ENV_HTTP=1 also starts the web server, for the suites that drive the site
+# over HTTP; PHPUnit alone needs only the database and WP-CLI. If the rest was
+# already running and only the web server was started here, only it is stopped.
 #
 # Before this, every test target and the release left a WordPress and a MySQL
 # container running indefinitely.
@@ -21,60 +24,58 @@ set -uo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit 1
 
-COMPOSE="docker compose -f docker-compose.test.yml"
+# With the "http" profile, so down, ps and rm also see the web server.
+COMPOSE="docker compose -f docker-compose.test.yml --profile http"
 
 # shellcheck disable=SC2086 # COMPOSE is a command line by design.
-running() { [ -n "$($COMPOSE ps -q --status running 2>/dev/null)" ]; }
-
-# The compose project's name, as Compose resolves it (the directory name unless
-# a name is set), so this keeps working if the checkout is renamed.
-# shellcheck disable=SC2086
-PROJECT=$($COMPOSE config 2>/dev/null | sed -n 's/^name:[[:space:]]*//p' | head -1)
-
-volumes_exist() { [ -n "$(docker volume ls -q --filter "label=com.docker.compose.project=${PROJECT}")" ]; }
+running() { [ -n "$($COMPOSE ps -q --status running "$1" 2>/dev/null)" ]; }
 
 STARTED_HERE=0
-if ! running; then
+if ! running wpcli; then
   STARTED_HERE=1
 fi
 
-HAD_VOLUMES=0
-if volumes_exist; then
-  HAD_VOLUMES=1
+STARTED_HTTP=0
+if [ "${TEST_ENV_HTTP:-0}" = 1 ] && ! running wordpress; then
+  STARTED_HTTP=1
 fi
 
 stop_if_started_here() {
-  if [ "$STARTED_HERE" = 1 ] && [ "${KEEP_TEST_ENV:-0}" != 1 ]; then
-    if [ "$HAD_VOLUMES" = 1 ]; then
-      # shellcheck disable=SC2086
-      $COMPOSE down >/dev/null 2>&1 || true
-      echo "Stopped the test containers (they were not running before; KEEP_TEST_ENV=1 keeps them)."
-    else
-      # shellcheck disable=SC2086
-      $COMPOSE down -v >/dev/null 2>&1 || true
-      echo "Stopped the test containers and removed the test site's volumes (neither existed before; KEEP_TEST_ENV=1 keeps them)."
-    fi
+  if [ "${KEEP_TEST_ENV:-0}" = 1 ]; then
+    return
+  fi
+  if [ "$STARTED_HERE" = 0 ] && [ "$STARTED_HTTP" = 1 ]; then
+    # shellcheck disable=SC2086
+    $COMPOSE rm -sf wordpress >/dev/null 2>&1 || true
+    echo "Stopped the web server (it was not running before; KEEP_TEST_ENV=1 keeps it)."
+    return
+  fi
+  if [ "$STARTED_HERE" = 1 ]; then
+    # shellcheck disable=SC2086
+    $COMPOSE down -v >/dev/null 2>&1 || true
+    echo "Stopped the test site (it was not running before; KEEP_TEST_ENV=1 keeps it)."
   fi
 }
 trap stop_if_started_here EXIT
 
-# Starting the stack needs about 1.5 GB (its containers are capped at 768 MB,
-# 512 MB and 256 MB). On a machine that is already short of memory, starting it
-# can tip the whole machine into swap, so refuse instead.
+# The containers are capped at 384 MB (database), 384 MB (WP-CLI and PHPUnit)
+# and 256 MB (web server). On a machine that is already short of memory,
+# starting them can tip the whole machine into swap, so refuse instead.
 # TEST_ENV_MIN_FREE_MB overrides the threshold.
-if [ "$STARTED_HERE" = 1 ]; then
-  min_free_mb=${TEST_ENV_MIN_FREE_MB:-1536}
+if [ "$STARTED_HERE" = 1 ] || [ "$STARTED_HTTP" = 1 ]; then
+  min_free_mb=${TEST_ENV_MIN_FREE_MB:-1024}
   available_mb=$(awk '/^MemAvailable:/ { print int($2 / 1024) }' /proc/meminfo 2>/dev/null)
   if [ -n "$available_mb" ] && [ "$available_mb" -lt "$min_free_mb" ]; then
     STARTED_HERE=0 # Nothing was started, so there is nothing to stop.
+    STARTED_HTTP=0
     echo "Not starting the test site: only ${available_mb} MB of memory is available, and it needs ${min_free_mb} MB." >&2
     echo "Free some memory first (close idle sessions or programs), or set TEST_ENV_MIN_FREE_MB to override." >&2
     exit 1
   fi
 fi
 
-# Always (re)provision: it pulls the newest WordPress and resets the plugin
-# options the suites expect, whether or not the containers were already up.
-make --no-print-directory test-env-up || exit 1
+# Always (re)provision: it resets the plugin options the suites expect, whether
+# or not the containers were already up, and starts what is missing.
+bash bin/test-env-init.sh || exit 1
 
 "$@"

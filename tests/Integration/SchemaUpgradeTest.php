@@ -43,6 +43,14 @@ namespace MembersForKofi\Tests\Integration;
 class SchemaUpgradeTest extends IntegrationTestCase {
 
 	/**
+	 * Runs the database's command-line client: `mariadb` in the MariaDB image
+	 * (the default), `mysql` in the MySQL one (DB_IMAGE=mysql:8.4).
+	 *
+	 * @var string
+	 */
+	private const DB_CLIENT = 'exec "$(command -v mariadb || command -v mysql)" "$@"';
+
+	/**
 	 * The plugin options row as it was before the test, hex-encoded.
 	 *
 	 * @var string
@@ -92,8 +100,9 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 		$name = getenv( 'WORDPRESS_TEST_DB_NAME' );
 
 		$command = sprintf(
-			'docker compose -f %s exec -T db mysql -u%s -p%s %s -N -B -e %s 2>/dev/null',
+			'docker compose -f %s exec -T db sh -c %s db-client -u%s -p%s %s -N -B -e %s 2>/dev/null',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
+			escapeshellarg( self::DB_CLIENT ),
 			escapeshellarg( false === $user || '' === $user ? 'wp' : $user ),
 			escapeshellarg( false === $pass || '' === $pass ? 'wp' : $pass ),
 			escapeshellarg( false === $name || '' === $name ? 'wordpress_test' : $name ),
@@ -528,7 +537,7 @@ class SchemaUpgradeTest extends IntegrationTestCase {
 
 		$name   = 'mfk_up_' . md5( 'wordpress_test|wp_' );
 		$holder = proc_open(
-			array( 'docker', 'compose', '-f', dirname( __DIR__, 2 ) . '/docker-compose.test.yml', 'exec', '-T', 'db', 'mysql', '-uwp', '-pwp', 'wordpress_test', '-N', '-e', "SELECT GET_LOCK('{$name}', 0); SELECT SLEEP(12);" ),
+			array( 'docker', 'compose', '-f', dirname( __DIR__, 2 ) . '/docker-compose.test.yml', 'exec', '-T', 'db', 'sh', '-c', self::DB_CLIENT, 'db-client', '-uwp', '-pwp', 'wordpress_test', '-N', '-e', "SELECT GET_LOCK('{$name}', 0); SELECT SLEEP(12);" ),
 			array(
 				1 => array( 'pipe', 'w' ),
 				2 => array( 'pipe', 'w' ),

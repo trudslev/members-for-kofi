@@ -44,7 +44,9 @@ class WebhookTest extends TestCase {
 		parent::setUp();
 
 		// Load environment variables (if needed).
-		if ( file_exists( __DIR__ . '/../../.env' ) ) {
+		// Readable only where the developer chose to share it: on a maintainer's
+		// machine .env can hold credentials and be private to their user.
+		if ( is_readable( __DIR__ . '/../../.env' ) ) {
 			$dotenv = Dotenv::createImmutable( __DIR__ . '/../../' );
 			$dotenv->load();
 		}

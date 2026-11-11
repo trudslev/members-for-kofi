@@ -97,7 +97,7 @@ class DonationWebhookTest extends IntegrationTestCase {
 	 */
 	private function roles_for( string $email ): array {
 		$command = sprintf(
-			'docker compose -f %s run --rm -T wpcli wp user get %s --field=roles 2>/dev/null',
+			'docker compose -f %s exec -T wpcli wp user get %s --field=roles 2>/dev/null',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
 			escapeshellarg( $email )
 		);
@@ -133,7 +133,7 @@ class DonationWebhookTest extends IntegrationTestCase {
 		);
 
 		$command = sprintf(
-			'docker compose -f %s run --rm -T wpcli wp eval %s 2>/dev/null',
+			'docker compose -f %s exec -T wpcli wp eval %s 2>/dev/null',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
 			escapeshellarg( $php )
 		);
@@ -164,7 +164,7 @@ class DonationWebhookTest extends IntegrationTestCase {
 		);
 
 		$command = sprintf(
-			'docker compose -f %s run --rm -T wpcli wp eval %s 2>/dev/null',
+			'docker compose -f %s exec -T wpcli wp eval %s 2>/dev/null',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
 			escapeshellarg( $php )
 		);
@@ -886,7 +886,7 @@ class DonationWebhookTest extends IntegrationTestCase {
 	 */
 	private static function wp_with_errors( string $args ): string {
 		$command = sprintf(
-			'docker compose -f %s run --rm -T wpcli wp %s 2>&1',
+			'docker compose -f %s exec -T wpcli wp %s 2>&1',
 			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
 			$args
 		);
