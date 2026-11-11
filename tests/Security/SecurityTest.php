@@ -22,6 +22,7 @@ namespace MembersForKofi\Tests\Security;
 
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Admin\AdminSettings;
+use MembersForKofi\Admin\LogsTab;
 use MembersForKofi\Tests\TestCase;
 
 /**
@@ -336,24 +337,23 @@ class SecurityTest extends TestCase {
 			array(
 				'email'       => 'stored-xss@example.com',
 				'tier_name'   => '<script>alert(1)</script>',
-				'payload'     => '{}',
-				'status_code' => 200,
-				'success'     => 1,
+				'payload'     => '{"message":"<svg onload=alert(3)>"}',
+				'status_code' => 401,
+				'success'     => 0,
 				'error'       => '<img src=x onerror=alert(2)>',
 				'timestamp'   => current_time( 'mysql' ),
 			),
 			array( '%s', '%s', '%s', '%d', '%d', '%s', '%s' )
 		);
 
-		delete_transient( 'members_for_kofi_total_request_logs' );
-
 		ob_start();
-		( new AdminSettings() )->render_request_logs_table();
+		LogsTab::render( LogsTab::view( array() ) );
 		$output = (string) ob_get_clean();
 
 		$this->assertStringContainsString( 'stored-xss@example.com', $output, 'The row should be rendered.' );
 		$this->assertStringNotContainsString( '<script>alert(1)</script>', $output, 'Stored markup must not be emitted raw.' );
 		$this->assertStringNotContainsString( '<img src=x', $output, 'Stored markup must not be emitted raw.' );
+		$this->assertStringNotContainsString( '<svg onload', $output, 'A stored payload must not be emitted raw.' );
 		$this->assertStringContainsString( '&lt;script&gt;', $output, 'It should appear HTML-escaped instead.' );
 	}
 

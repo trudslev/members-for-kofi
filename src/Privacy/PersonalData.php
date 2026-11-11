@@ -211,9 +211,6 @@ class PersonalData {
 			}
 		}
 
-		delete_transient( 'members_for_kofi_total_logs' );
-		delete_transient( 'members_for_kofi_total_request_logs' );
-
 		// The record of a membership that ended is history, and goes. A
 		// membership still being tracked is kept: deleting it would end access
 		// the person is paying for, and the expiry job removes it when it ends.

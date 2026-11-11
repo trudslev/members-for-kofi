@@ -30,21 +30,34 @@ namespace MembersForKofi\Tests;
 class TranslationTest extends TestCase {
 
 	/**
-	 * Reads the msgid => msgstr pairs of a .po or .pot file.
+	 * Reads the source => translation pairs of a .po or .pot file.
+	 *
+	 * A plural entry gives two pairs: the singular with `msgstr[0]`, and the
+	 * plural with `msgstr[1]`, keyed `plural: <msgid_plural>` so each form is
+	 * checked for its own translation and placeholders.
 	 *
 	 * @param string $file Path.
 	 * @return array<string,string>
 	 */
 	private static function entries( string $file ): array {
 		$text = (string) file_get_contents( $file ); // phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local test fixture.
-		preg_match_all( '/^msgid "((?:[^"\\\\]|\\\\.)*)"\nmsgstr "((?:[^"\\\\]|\\\\.)*)"/m', $text, $matches, PREG_SET_ORDER );
+		$str  = '"((?:[^"\\\\]|\\\\.)*)"';
 
 		$entries = array();
-		foreach ( $matches as $match ) {
+
+		preg_match_all( '/^msgid ' . $str . '\nmsgstr ' . $str . '/m', $text, $singles, PREG_SET_ORDER );
+		foreach ( $singles as $match ) {
 			if ( '' !== $match[1] ) {
 				$entries[ $match[1] ] = $match[2];
 			}
 		}
+
+		preg_match_all( '/^msgid ' . $str . '\nmsgid_plural ' . $str . '\nmsgstr\[0\] ' . $str . '\nmsgstr\[1\] ' . $str . '/m', $text, $plurals, PREG_SET_ORDER );
+		foreach ( $plurals as $match ) {
+			$entries[ $match[1] ]              = $match[3];
+			$entries[ 'plural: ' . $match[2] ] = $match[4];
+		}
+
 		return $entries;
 	}
 

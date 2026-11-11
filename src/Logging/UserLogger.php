@@ -58,8 +58,6 @@ class UserLogger {
 			array( '%d', '%s', '%s', '%s', '%f', '%s', '%s' )
 		);
 
-		// Invalidate cached total logs count so UI refresh reflects new entries.
-		delete_transient( 'members_for_kofi_total_logs' );
 	}
 
 	/**

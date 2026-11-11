@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.1
+Stable tag: 1.7.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -140,6 +140,17 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 
 == Changelog ==
 
+= 1.7.0 =
+* Redesign: The settings page is reorganised around how you set it up. "Ko-fi connection" walks through the three steps in Ko-fi's own order (copy the webhook URL, paste the token, press Send test) and shows whether Ko-fi's requests are arriving and being accepted.
+* Feature: Tiers Ko-fi has sent that aren't mapped to a role are listed, and can be added with one click.
+* Feature: A new Members tab lists everyone who has or had a membership through Ko-fi, with their role, status, member-since date, last payment and when access ends. It can show only active members, those ending within a week, or those that ended.
+* Logs: The request log can show only refused requests, says in words why a request was refused, shows times in the site's time zone, links to the member's profile, and shows each request's payload. Paging no longer prints a button for every page.
+* Logs: Deleting a log now says which log it empties and leaves the other one alone.
+* Accessibility: Every checkbox and button has a label, and the copy button confirms in place instead of with a pop-up.
+* Fix: The descriptions of "Subscriptions only" and tier matching were inaccurate; they now say what the settings do.
+* Security: The log viewer no longer runs on AJAX endpoints, so the many low-privilege accounts this plugin creates have nothing of it to call. Viewing and deleting logs still require an administrator.
+* Translation: Complete Danish translation of the new screens.
+
 = 1.6.1 =
 * Fix: Unticking "Automatically Clear Logs" on the settings page and saving left it switched on, so old log entries kept being deleted. It now switches off.
 * Fix: Two settings labels ("Only assign roles to subscribers." and the expiry description) were always shown in English. They are now translated.
@@ -221,6 +232,9 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.7.0 =
+A redesigned admin page: a connection status, a Members tab, and a log viewer that can show only refused requests. No settings change.
 
 = 1.6.1 =
 "Automatically Clear Logs" can now be switched off. If you unticked it before, untick it again and save after updating.

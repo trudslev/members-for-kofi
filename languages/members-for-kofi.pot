@@ -2,23 +2,24 @@
 # This file is distributed under the GPL-3.0-or-later.
 msgid ""
 msgstr ""
-"Project-Id-Version: Members for Ko-fi 1.6.1\n"
+"Project-Id-Version: Members for Ko-fi 1.7.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/members-for-kofi\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-11-11T09:51:50+00:00\n"
+"POT-Creation-Date: 2026-11-11T11:11:06+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: members-for-kofi\n"
 
 #. Plugin Name of the plugin
 #: members-for-kofi.php
+#: src/Admin/AdminSettings.php:162
 #: src/Plugin.php:436
 #: src/Plugin.php:437
-#: src/Privacy/PersonalData.php:363
+#: src/Privacy/PersonalData.php:360
 msgid "Members for Ko-fi"
 msgstr ""
 
@@ -42,332 +43,626 @@ msgstr ""
 msgid "https://foodgeek.io"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:107
-#: src/Admin/AdminSettings.php:671
-msgid "Ko-fi Settings"
+#: src/Admin/AdminSettings.php:110
+msgid "Copied"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:108
-msgid "Verification Token"
+#: src/Admin/AdminSettings.php:156
+msgid "Settings"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:111
-#: src/Admin/AdminSettings.php:675
-msgid "Role Assignment"
+#: src/Admin/AdminSettings.php:157
+msgid "Members"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:112
-msgid "Only Accept Subscriptions"
+#: src/Admin/AdminSettings.php:158
+msgid "Logs"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:113
-msgid "Tier to Role Mapping"
+#: src/Admin/AdminSettings.php:171
+msgid "Members for Ko-fi sections"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:114
-msgid "Default Role (if no match)"
+#: src/Admin/AdminSettings.php:201
+msgid "Ko-fi connection"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:115
-msgid "Enable Expiry"
+#: src/Admin/AdminSettings.php:208
+msgid "Press \"Send test\" on Ko-fi"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:116
-msgid "Role Expiry (days)"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:119
-#: src/Admin/AdminSettings.php:679
-msgid "Logging"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:120
-msgid "Automatically Clear Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:121
-msgid "Number of Days to Keep Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:150
-msgid "Are you sure you want to clear all logs? This action cannot be undone."
-msgstr ""
-
-#: src/Admin/AdminSettings.php:151
-msgid "An error occurred. Please try again."
-msgstr ""
-
-#: src/Admin/AdminSettings.php:152
-#: src/Admin/AdminSettings.php:752
-msgid "Search (email / action / role)"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:153
-#: src/Admin/AdminSettings.php:750
-msgid "Search (email / tier / status)"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:188
-msgid "Verification Token is required."
-msgstr ""
-
-#: src/Admin/AdminSettings.php:193
-msgid "Role Expiry Days is required and must be a number when expiry is enabled."
-msgstr ""
-
-#. translators: %s is the role name that was rejected.
+#. translators: %s is a link to the request log.
 #: src/Admin/AdminSettings.php:213
-#: src/Admin/AdminSettings.php:229
 #, php-format
-msgid "Security: Role \"%s\" cannot be assigned via webhook for security reasons."
+msgid "It shows up in the status line above and in %s. A test never creates an account."
 msgstr ""
 
-#. translators: %s is the role name that was rejected.
-#: src/Admin/AdminSettings.php:241
+#: src/Admin/AdminSettings.php:214
+msgid "the request log"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:223
+msgid "Who gets a role"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:232
+msgid "When membership ends"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:239
+msgid "Ko-fi subscriptions renew monthly, so 35 days leaves a few days' grace. A role the user held before paying is never removed."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:243
+msgid "Log history"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:250
+msgid "Untick to keep everything, for example when another tool reads the request log."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:272
+msgid "Not connected: no token is saved, so Ko-fi's requests are refused."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:277
+msgid "Waiting for Ko-fi: no request has arrived yet."
+msgstr ""
+
+#. translators: %s is a time span, e.g. "2 hours".
+#: src/Admin/AdminSettings.php:283
 #, php-format
-msgid "Security: Role \"%s\" cannot be used as default role for security reasons."
+msgid "Working: the last request from Ko-fi, %s ago, was accepted."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:290
-msgid "A token is saved. Leave this blank to keep it, or paste a new one to replace it."
-msgstr ""
-
-#. translators: %s is the first eight characters of the saved token's SHA-256 hash.
-#: src/Admin/AdminSettings.php:293
+#. translators: 1: a time span, e.g. "2 hours", 2: why it was refused, e.g. "the token doesn't match".
+#: src/Admin/AdminSettings.php:287
 #, php-format
-msgid "Saved token fingerprint: %s"
+msgid "The last request, %1$s ago, was refused: %2$s"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:297
-msgid "No token set yet. Webhooks are rejected until one is saved."
+#: src/Admin/AdminSettings.php:302
+msgid "Ko-fi's webhook settings"
 msgstr ""
 
-#. translators: %s is a link to the Ko-fi Webhooks Management page.
-#: src/Admin/AdminSettings.php:307
-#, php-format
-msgid "This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. Only a hash of it is stored, so it cannot be shown again; to change it, paste the new one."
+#: src/Admin/AdminSettings.php:303
+msgid "(opens in a new tab)"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:305
+msgid "Give Ko-fi this webhook URL"
 msgstr ""
 
 #: src/Admin/AdminSettings.php:308
-msgid "Ko-fi Webhooks Management"
+msgid "Copy URL"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:322
-msgid "Webhook URL:"
+#. translators: %s is a link to Ko-fi's webhook settings.
+#: src/Admin/AdminSettings.php:314
+#, php-format
+msgid "Paste it into %s."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:325
-msgid "Copy to Clipboard"
+#: src/Admin/AdminSettings.php:329
+msgid "Paste Ko-fi's verification token"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:327
-msgid "Use this URL to configure your Ko-fi webhook."
+#: src/Admin/AdminSettings.php:332
+msgid "A token is saved"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:334
+msgid "fingerprint, to compare with another site"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:337
+msgid "No token is saved yet."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:343
+msgid "Leave blank to keep the saved token"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:344
+msgid "On Ko-fi's webhook page, open Advanced and copy the token. Only a hash is stored, so it can't be shown again."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:358
+msgid "Payments that grant a role"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:359
+msgid "Donations and subscriptions"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:360
+msgid "Subscriptions only"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:360
+msgid "(one-off donations are logged and ignored)"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:393
+#: src/Admin/AdminSettings.php:421
+msgid "Tier name on Ko-fi"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:394
+msgid "Role for this tier"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:395
+msgid "Remove this tier"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:395
+msgid "Remove"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:416
+msgid "Ko-fi tiers"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:422
+msgid "Role it grants"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:423
+msgid "Actions"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:433
+msgid "Add tier"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:434
+msgid "Names match whatever their capitalisation."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:438
+msgid "Tiers Ko-fi sent that aren't listed:"
+msgstr ""
+
+#. translators: 1: a tier name, 2: how many payments named it.
+#: src/Admin/AdminSettings.php:445
+#, php-format
+msgid "Add \"%1$s\" (%2$d payment)"
+msgid_plural "Add \"%1$s\" (%2$d payments)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/AdminSettings.php:469
+msgid "Any other tier, or no tier"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:471
+msgid "— No role —"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:474
+msgid "With \"No role\", those payers still get an account, but no role. Administrator and other roles that can run the site are never offered."
+msgstr ""
+
+#: src/Admin/AdminSettings.php:489
+msgid "Remove the role"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:500
+msgid "Days after the last payment"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:502
+msgid "days after the member's last payment"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:518
+msgid "Delete log entries older than"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:529
+msgid "Number of Days to Keep Logs"
+msgstr ""
+
+#: src/Admin/AdminSettings.php:531
+msgid "days"
 msgstr ""
 
 #. translators: %s is a human-readable time span, e.g. "3 days".
-#: src/Admin/AdminSettings.php:372
+#: src/Admin/AdminSettings.php:575
 #, php-format
 msgid "Scheduled tasks are not running: role expiry and log cleanup are %s overdue. Make sure WP-Cron runs, or that a system cron calls wp-cron.php."
 msgstr ""
 
 #. translators: 1: email address, 2: comma-separated role names, or "no role".
-#: src/Admin/AdminSettings.php:424
+#: src/Admin/AdminSettings.php:627
 #, php-format
 msgid "Members for Ko-fi: an account was created by Ko-fi's \"Send test\" button (%1$s, role: %2$s). It is not a real supporter; earlier versions treated tests as payments. You can safely delete it."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:426
+#: src/Admin/AdminSettings.php:629
 msgid "none"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:430
+#: src/Admin/AdminSettings.php:633
 msgid "Review the account"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:440
+#: src/Admin/AdminSettings.php:643
 msgid "Members for Ko-fi: two different verification tokens are stored, and webhooks are checked against the hashed one. Re-enter your Ko-fi verification token in the settings to resolve this."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:465
+#: src/Admin/AdminSettings.php:668
 msgid "Open settings"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:480
-msgid "Only assign roles to subscribers."
+#: src/Admin/AdminSettings.php:701
+msgid "Verification Token is required."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:481
-msgid "When enabled, users must be active subscribers to receive a role."
+#: src/Admin/AdminSettings.php:706
+msgid "Role Expiry Days is required and must be a number when expiry is enabled."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:498
-msgid "Ko-fi Tier"
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:726
+#: src/Admin/AdminSettings.php:742
+#, php-format
+msgid "Security: Role \"%s\" cannot be assigned via webhook for security reasons."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:498
-#: src/Admin/AdminSettings.php:1101
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:754
+#, php-format
+msgid "Security: Role \"%s\" cannot be used as default role for security reasons."
+msgstr ""
+
+#: src/Admin/LogsTab.php:245
+msgid "the token doesn't match"
+msgstr ""
+
+#: src/Admin/LogsTab.php:247
+msgid "no token is saved"
+msgstr ""
+
+#: src/Admin/LogsTab.php:252
+msgid "the request was malformed"
+msgstr ""
+
+#: src/Admin/LogsTab.php:254
+msgid "the account could not be created"
+msgstr ""
+
+#. translators: %s is a time of day.
+#: src/Admin/LogsTab.php:292
+#, php-format
+msgid "Today, %s"
+msgstr ""
+
+#. translators: %s is a time of day.
+#: src/Admin/LogsTab.php:297
+#, php-format
+msgid "Yesterday, %s"
+msgstr ""
+
+#: src/Admin/LogsTab.php:365
+msgid "The log was deleted."
+msgstr ""
+
+#: src/Admin/LogsTab.php:383
+msgid "Member activity"
+msgstr ""
+
+#: src/Admin/LogsTab.php:396
+msgid "Requests from Ko-fi"
+msgstr ""
+
+#. translators: %s is the site's time zone, e.g. "Europe/Copenhagen".
+#: src/Admin/LogsTab.php:401
+#, php-format
+msgid "Times are in the site's time zone (%s)."
+msgstr ""
+
+#: src/Admin/LogsTab.php:412
+#: src/Admin/LogsTab.php:477
+msgid "Outcome"
+msgstr ""
+
+#: src/Admin/LogsTab.php:414
+msgid "All outcomes"
+msgstr ""
+
+#: src/Admin/LogsTab.php:415
+#: src/Admin/LogsTab.php:547
+msgid "Accepted"
+msgstr ""
+
+#: src/Admin/LogsTab.php:416
+msgid "Refused"
+msgstr ""
+
+#: src/Admin/LogsTab.php:424
+msgid "Search email, tier or reason"
+msgstr ""
+
+#: src/Admin/LogsTab.php:426
+msgid "Search email, action or role"
+msgstr ""
+
+#: src/Admin/LogsTab.php:433
+msgid "Per page"
+msgstr ""
+
+#: src/Admin/LogsTab.php:440
+msgid "Filter"
+msgstr ""
+
+#: src/Admin/LogsTab.php:473
+msgid "Received"
+msgstr ""
+
+#: src/Admin/LogsTab.php:474
+#: src/Privacy/PersonalData.php:321
+#: src/Webhook/Webhook.php:911
+#: src/Webhook/Webhook.php:931
+msgid "Supporter"
+msgstr ""
+
+#: src/Admin/LogsTab.php:475
+msgid "Tier"
+msgstr ""
+
+#: src/Admin/LogsTab.php:476
+msgid "Payment"
+msgstr ""
+
+#: src/Admin/LogsTab.php:478
+msgid "Details"
+msgstr ""
+
+#: src/Admin/LogsTab.php:483
+#: src/Admin/LogsTab.php:610
+msgid "No entries match."
+msgstr ""
+
+#: src/Admin/LogsTab.php:483
+#: src/Admin/LogsTab.php:610
+msgid "No entries yet."
+msgstr ""
+
+#: src/Admin/LogsTab.php:504
+msgid "Ko-fi test"
+msgstr ""
+
+#: src/Admin/LogsTab.php:506
+msgid "Not stored"
+msgstr ""
+
+#: src/Admin/LogsTab.php:522
+msgid "not mapped"
+msgstr ""
+
+#: src/Admin/LogsTab.php:530
+msgid "Test, no account made"
+msgstr ""
+
+#. translators: %s is an amount with its currency, e.g. "5.00 EUR".
+#: src/Admin/LogsTab.php:536
+#, php-format
+msgid "%s · subscription"
+msgstr ""
+
+#. translators: %s is an amount with its currency, e.g. "5.00 EUR".
+#: src/Admin/LogsTab.php:538
+#, php-format
+msgid "%s · one-off"
+msgstr ""
+
+#. translators: %s is why the request was refused, e.g. "the token doesn't match".
+#: src/Admin/LogsTab.php:552
+#, php-format
+msgid "Refused: %s"
+msgstr ""
+
+#: src/Admin/LogsTab.php:560
+msgid "Payload"
+msgstr ""
+
+#: src/Admin/LogsTab.php:602
+msgid "When"
+msgstr ""
+
+#: src/Admin/LogsTab.php:603
+#: src/Admin/MembersTab.php:264
+msgid "Member"
+msgstr ""
+
+#: src/Admin/LogsTab.php:604
+msgid "What happened"
+msgstr ""
+
+#: src/Admin/LogsTab.php:605
+#: src/Admin/MembersTab.php:265
 msgid "Role"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:536
-msgid "Add Tier Mapping"
+#: src/Admin/LogsTab.php:651
+msgid "First page"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:537
-msgid "Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched."
+#: src/Admin/LogsTab.php:652
+#: src/Admin/MembersTab.php:351
+msgid "Previous page"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:554
-msgid "— No default —"
+#: src/Admin/LogsTab.php:653
+#: src/Admin/MembersTab.php:362
+msgid "Next page"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:563
-msgid "If no tier matches, or if you are not using tiers, this role will be assigned to the user."
+#: src/Admin/LogsTab.php:654
+msgid "Last page"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:578
-msgid "If checked, role will be removed after the set number of days."
+#: src/Admin/LogsTab.php:665
+msgid "Current page"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:594
-msgid "Number of days the role remains active (only used if expiry is enabled)."
+#: src/Admin/LogsTab.php:676
+#: src/Admin/MembersTab.php:349
+msgid "Pages"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:610
-msgid "Enable automatic deletion of old logs based on retention period."
+#. translators: 1: an input holding the current page number, 2: the number of pages.
+#. translators: 1: the current page number, 2: the number of pages.
+#: src/Admin/LogsTab.php:683
+#: src/Admin/MembersTab.php:356
+#, php-format
+msgid "Page %1$s of %2$s"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:622
-msgid "Number of days to keep logs before automatic deletion (minimum 1 day)."
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:715
+#, php-format
+msgid "Removes %s request entry. Member activity is kept."
+msgid_plural "Removes all %s request entries. Member activity is kept."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:717
+#, php-format
+msgid "Removes %s activity entry. The request log is kept."
+msgid_plural "Removes all %s activity entries. The request log is kept."
+msgstr[0] ""
+msgstr[1] ""
+
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:720
+#, php-format
+msgid "Delete %s entry in this log? This can't be undone."
+msgid_plural "Delete all %s entries in this log? This can't be undone."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/LogsTab.php:726
+msgid "Delete this log"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:650
-msgid "Members for Ko-fi Settings"
+#. translators: %d is a number of days.
+#: src/Admin/LogsTab.php:734
+#, php-format
+msgid "Entries older than %d day are deleted automatically."
+msgid_plural "Entries older than %d days are deleted automatically."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/LogsTab.php:747
+msgid "Delete request log…"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:661
-msgid "Settings"
+#: src/Admin/LogsTab.php:747
+msgid "Delete activity log…"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:664
-#: src/Admin/AdminSettings.php:687
-msgid "Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:732
-msgid "Log Type:"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:736
-msgid "User Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:739
-msgid "Request Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:759
-msgid "Search"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:760
-msgid "Reset"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:763
-msgid "Refresh"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:794
-#: src/Admin/AdminSettings.php:830
-#: src/Admin/AdminSettings.php:904
-#: src/Admin/AdminSettings.php:933
-#: src/Admin/AdminSettings.php:964
-#: src/Admin/AdminSettings.php:987
+#: src/Admin/LogsTab.php:761
 msgid "You do not have permission to access this resource."
 msgstr ""
 
-#: src/Admin/AdminSettings.php:803
-msgid "Invalid page number."
+#: src/Admin/MembersTab.php:195
+msgid "Unknown"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:863
-msgid "Logs table does not exist."
+#: src/Admin/MembersTab.php:214
+msgid "All"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1097
-#: src/Admin/AdminSettings.php:1239
-msgid "Timestamp"
+#: src/Admin/MembersTab.php:215
+#: src/Admin/MembersTab.php:316
+msgid "Active"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1098
-msgid "User ID"
+#. translators: The members whose access ends within the next seven days.
+#: src/Admin/MembersTab.php:217
+msgid "Ending within 7 days"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1099
-#: src/Admin/AdminSettings.php:1240
-msgid "Email"
+#: src/Admin/MembersTab.php:218
+#: src/Admin/MembersTab.php:305
+msgid "Ended"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1100
-msgid "Action"
+#: src/Admin/MembersTab.php:254
+#: src/Admin/MembersTab.php:256
+msgid "Search members"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1107
-#: src/Admin/AdminSettings.php:1252
-msgid "No logs available."
+#: src/Admin/MembersTab.php:255
+msgid "Name or email"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1129
-#: src/Admin/AdminSettings.php:1277
-msgid "Clear Logs"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1137
-#: src/Admin/AdminSettings.php:1285
-msgid "Rows per page:"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1152
-#: src/Admin/AdminSettings.php:1300
-msgid "Previous"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1159
-#: src/Admin/AdminSettings.php:1307
-msgid "Next"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1241
-msgid "Tier Name"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1242
-msgid "Amount"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1243
-msgid "Subscription"
-msgstr ""
-
-#: src/Admin/AdminSettings.php:1244
+#: src/Admin/MembersTab.php:266
 msgid "Status"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1245
-msgid "Success"
+#: src/Admin/MembersTab.php:267
+msgid "Member since"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1246
-msgid "Error"
+#: src/Admin/MembersTab.php:268
+msgid "Last payment"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1261
-msgid "Yes"
+#: src/Admin/MembersTab.php:269
+msgid "Access until"
 msgstr ""
 
-#: src/Admin/AdminSettings.php:1261
-msgid "No"
+#: src/Admin/MembersTab.php:274
+msgid "Nobody has become a member through Ko-fi yet."
+msgstr ""
+
+#: src/Admin/MembersTab.php:274
+msgid "No members match."
+msgstr ""
+
+#. translators: %s is the name of a role that was removed.
+#: src/Admin/MembersTab.php:293
+#, php-format
+msgid "%s, removed"
+msgstr ""
+
+#: src/Admin/MembersTab.php:297
+msgid "Granted before payment; never removed"
+msgstr ""
+
+#. translators: %d is a number of days.
+#: src/Admin/MembersTab.php:311
+#, php-format
+msgid "Ends in %d day"
+msgid_plural "Ends in %d days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/Admin/MembersTab.php:325
+msgid "subscription"
+msgstr ""
+
+#: src/Admin/MembersTab.php:325
+msgid "one-off"
+msgstr ""
+
+#: src/Admin/MembersTab.php:332
+msgid "No expiry"
+msgstr ""
+
+#. translators: %s is a date.
+#: src/Admin/MembersTab.php:335
+#, php-format
+msgid "Ended %s"
+msgstr ""
+
+#: src/Admin/MembersTab.php:367
+msgid "Cancelling happens on Ko-fi, not here."
 msgstr ""
 
 #: src/Membership.php:198
@@ -407,20 +702,14 @@ msgstr ""
 msgid "Ko-fi webhook requests"
 msgstr ""
 
-#: src/Privacy/PersonalData.php:245
+#: src/Privacy/PersonalData.php:242
 msgid "An active Ko-fi membership was kept, so the person keeps the access they pay for. It is removed when the membership ends."
 msgstr ""
 
-#: src/Privacy/PersonalData.php:324
-#: src/Webhook/Webhook.php:911
-#: src/Webhook/Webhook.php:931
-msgid "Supporter"
-msgstr ""
-
-#: src/Privacy/PersonalData.php:365
+#: src/Privacy/PersonalData.php:362
 msgid "When you support us on Ko-fi, Ko-fi sends this site your email address, the name and message you entered, the amount, and your membership tier. We use your email address to create or find your account here and give it the access your support pays for."
 msgstr ""
 
-#: src/Privacy/PersonalData.php:366
+#: src/Privacy/PersonalData.php:363
 msgid "A record of each payment and of the access granted or removed is kept for the number of days set by the site owner, then deleted automatically when log cleanup is enabled. You can ask for a copy of this data, or for it to be erased, through the site's personal data request process."
 msgstr ""

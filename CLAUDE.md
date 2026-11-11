@@ -1,6 +1,6 @@
 # Members for Ko-fi
 
-WordPress plugin (v1.6.1, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
+WordPress plugin (v1.7.0, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
 WordPress accounts and roles by tier, expires roles that are not renewed, and logs users and
 requests to two custom tables. Work happens on `develop`.
 
@@ -15,7 +15,11 @@ requests to two custom tables. Work happens on `develop`.
 - `src/Hooks.php`: runs the public filters and actions (README "For Developers: Hooks")
 - `src/EmailAliases.php`: previous addresses of members who changed their email
 - `src/Membership.php` + `src/functions.php`: the public API for other plugins
-- `src/Admin/AdminSettings.php`: settings and log viewer. `src/Cron/`: expiry and log clean-up.
+- `src/Admin/AdminSettings.php`: the admin page, its tabs (`?tab=settings|members|logs`, real URLs),
+  the Settings tab and the sanitizer. `src/Admin/LogsTab.php` and `src/Admin/MembersTab.php`: the
+  other two tabs, rendered from the URL. No AJAX: the only write, deleting a log, is an admin-post
+  form with a nonce and a `manage_options` check (`AdminPageTest` covers both). Checkboxes send a
+  hidden "0" first, or an unticked box never reaches the sanitizer. `src/Cron/`: expiry and log clean-up.
   `src/Logging/`: user/request loggers and `DebugLogger`. `src/Privacy/`: export and erase.
   `src/Cli/`: WP-CLI commands
 

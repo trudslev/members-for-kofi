@@ -3,7 +3,7 @@
 # This file is distributed under the same license as the Members for Ko-fi plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: Members for Ko-fi 1.4.0\n"
+"Project-Id-Version: Members for Ko-fi 1.7.0\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/members-for-kofi\n"
 "Language: da_DK\n"
 "MIME-Version: 1.0\n"
@@ -14,9 +14,10 @@ msgstr ""
 
 #. Plugin Name of the plugin
 #: members-for-kofi.php
-#: src/Plugin.php:434
-#: src/Plugin.php:435
-#: src/Privacy/PersonalData.php:333
+#: src/Admin/AdminSettings.php:162
+#: src/Plugin.php:436
+#: src/Plugin.php:437
+#: src/Privacy/PersonalData.php:360
 msgid "Members for Ko-fi"
 msgstr "Members for Ko-fi"
 
@@ -40,325 +41,627 @@ msgstr "Sune Adelowo Trudslev"
 msgid "https://foodgeek.io"
 msgstr "https://foodgeek.io"
 
-#: src/Admin/AdminSettings.php:107
-#: src/Admin/AdminSettings.php:667
-msgid "Ko-fi Settings"
-msgstr "Ko-fi-indstillinger"
+#: src/Admin/AdminSettings.php:110
+msgid "Copied"
+msgstr "Kopieret"
 
-#: src/Admin/AdminSettings.php:108
-msgid "Verification Token"
-msgstr "Verifikationstoken"
+#: src/Admin/AdminSettings.php:156
+msgid "Settings"
+msgstr "Indstillinger"
 
-#: src/Admin/AdminSettings.php:111
-#: src/Admin/AdminSettings.php:671
-msgid "Role Assignment"
-msgstr "Tildeling af roller"
+#: src/Admin/AdminSettings.php:157
+msgid "Members"
+msgstr "Medlemmer"
 
-#: src/Admin/AdminSettings.php:112
-msgid "Only Accept Subscriptions"
-msgstr "Accepter kun abonnementer"
+#: src/Admin/AdminSettings.php:158
+msgid "Logs"
+msgstr "Logs"
 
-#: src/Admin/AdminSettings.php:113
-msgid "Tier to Role Mapping"
-msgstr "Tilknytning af niveauer til roller"
+#: src/Admin/AdminSettings.php:171
+msgid "Members for Ko-fi sections"
+msgstr "Sektioner i Members for Ko-fi"
 
-#: src/Admin/AdminSettings.php:114
-msgid "Default Role (if no match)"
-msgstr "Standardrolle (hvis intet matcher)"
+#: src/Admin/AdminSettings.php:201
+msgid "Ko-fi connection"
+msgstr "Forbindelse til Ko-fi"
 
-#: src/Admin/AdminSettings.php:115
-msgid "Enable Expiry"
-msgstr "Slå udløb til"
+#: src/Admin/AdminSettings.php:208
+msgid "Press \"Send test\" on Ko-fi"
+msgstr "Tryk på \"Send test\" hos Ko-fi"
 
-#: src/Admin/AdminSettings.php:116
-msgid "Role Expiry (days)"
-msgstr "Rollens gyldighed (dage)"
+#. translators: %s is a link to the request log.
+#: src/Admin/AdminSettings.php:213
+#, php-format
+msgid "It shows up in the status line above and in %s. A test never creates an account."
+msgstr "Den vises i statuslinjen ovenfor og i %s. En test opretter aldrig en konto."
 
-#: src/Admin/AdminSettings.php:119
-#: src/Admin/AdminSettings.php:675
-msgid "Logging"
-msgstr "Logning"
+#: src/Admin/AdminSettings.php:214
+msgid "the request log"
+msgstr "forespørgselsloggen"
 
-#: src/Admin/AdminSettings.php:120
-msgid "Automatically Clear Logs"
-msgstr "Ryd logs automatisk"
+#: src/Admin/AdminSettings.php:223
+msgid "Who gets a role"
+msgstr "Hvem får en rolle"
 
-#: src/Admin/AdminSettings.php:121
+#: src/Admin/AdminSettings.php:232
+msgid "When membership ends"
+msgstr "Når medlemskabet ophører"
+
+#: src/Admin/AdminSettings.php:239
+msgid "Ko-fi subscriptions renew monthly, so 35 days leaves a few days' grace. A role the user held before paying is never removed."
+msgstr "Ko-fi-abonnementer fornyes hver måned, så 35 dage giver et par dages ekstra frist. En rolle, som brugeren havde før betalingen, fjernes aldrig."
+
+#: src/Admin/AdminSettings.php:243
+msgid "Log history"
+msgstr "Loghistorik"
+
+#: src/Admin/AdminSettings.php:250
+msgid "Untick to keep everything, for example when another tool reads the request log."
+msgstr "Fjern fluebenet for at beholde alt, for eksempel hvis et andet værktøj læser forespørgselsloggen."
+
+#: src/Admin/AdminSettings.php:272
+msgid "Not connected: no token is saved, so Ko-fi's requests are refused."
+msgstr "Ikke forbundet: der er ikke gemt et token, så forespørgsler fra Ko-fi afvises."
+
+#: src/Admin/AdminSettings.php:277
+msgid "Waiting for Ko-fi: no request has arrived yet."
+msgstr "Venter på Ko-fi: der er ikke kommet nogen forespørgsel endnu."
+
+#. translators: %s is a time span, e.g. "2 hours".
+#: src/Admin/AdminSettings.php:283
+#, php-format
+msgid "Working: the last request from Ko-fi, %s ago, was accepted."
+msgstr "Forbindelsen virker: den seneste forespørgsel fra Ko-fi for %s siden blev accepteret."
+
+#. translators: 1: a time span, e.g. "2 hours", 2: why it was refused, e.g. "the token doesn't match".
+#: src/Admin/AdminSettings.php:287
+#, php-format
+msgid "The last request, %1$s ago, was refused: %2$s"
+msgstr "Den seneste forespørgsel for %1$s siden blev afvist: %2$s"
+
+#: src/Admin/AdminSettings.php:302
+msgid "Ko-fi's webhook settings"
+msgstr "Ko-fis webhook-indstillinger"
+
+#: src/Admin/AdminSettings.php:303
+msgid "(opens in a new tab)"
+msgstr "(åbner i en ny fane)"
+
+#: src/Admin/AdminSettings.php:305
+msgid "Give Ko-fi this webhook URL"
+msgstr "Giv Ko-fi denne webhook-URL"
+
+#: src/Admin/AdminSettings.php:308
+msgid "Copy URL"
+msgstr "Kopiér URL"
+
+#. translators: %s is a link to Ko-fi's webhook settings.
+#: src/Admin/AdminSettings.php:314
+#, php-format
+msgid "Paste it into %s."
+msgstr "Indsæt den i %s."
+
+#: src/Admin/AdminSettings.php:329
+msgid "Paste Ko-fi's verification token"
+msgstr "Indsæt Ko-fis verifikationstoken"
+
+#: src/Admin/AdminSettings.php:332
+msgid "A token is saved"
+msgstr "Der er gemt et token"
+
+#: src/Admin/AdminSettings.php:334
+msgid "fingerprint, to compare with another site"
+msgstr "fingeraftryk til sammenligning med et andet websted"
+
+#: src/Admin/AdminSettings.php:337
+msgid "No token is saved yet."
+msgstr "Der er ikke gemt noget token endnu."
+
+#: src/Admin/AdminSettings.php:343
+msgid "Leave blank to keep the saved token"
+msgstr "Lad feltet stå tomt for at beholde det gemte token"
+
+#: src/Admin/AdminSettings.php:344
+msgid "On Ko-fi's webhook page, open Advanced and copy the token. Only a hash is stored, so it can't be shown again."
+msgstr "Åbn Advanced på Ko-fis webhook-side, og kopiér tokenet. Der gemmes kun en hashværdi, så det kan ikke vises igen."
+
+#: src/Admin/AdminSettings.php:358
+msgid "Payments that grant a role"
+msgstr "Betalinger, der giver en rolle"
+
+#: src/Admin/AdminSettings.php:359
+msgid "Donations and subscriptions"
+msgstr "Donationer og abonnementer"
+
+#: src/Admin/AdminSettings.php:360
+msgid "Subscriptions only"
+msgstr "Kun abonnementer"
+
+#: src/Admin/AdminSettings.php:360
+msgid "(one-off donations are logged and ignored)"
+msgstr "(enkeltdonationer logges og ignoreres)"
+
+#: src/Admin/AdminSettings.php:393
+#: src/Admin/AdminSettings.php:421
+msgid "Tier name on Ko-fi"
+msgstr "Niveaunavn hos Ko-fi"
+
+#: src/Admin/AdminSettings.php:394
+msgid "Role for this tier"
+msgstr "Rolle for dette niveau"
+
+#: src/Admin/AdminSettings.php:395
+msgid "Remove this tier"
+msgstr "Fjern dette niveau"
+
+#: src/Admin/AdminSettings.php:395
+msgid "Remove"
+msgstr "Fjern"
+
+#: src/Admin/AdminSettings.php:416
+msgid "Ko-fi tiers"
+msgstr "Ko-fi-niveauer"
+
+#: src/Admin/AdminSettings.php:422
+msgid "Role it grants"
+msgstr "Rolle, der tildeles"
+
+#: src/Admin/AdminSettings.php:423
+msgid "Actions"
+msgstr "Handlinger"
+
+#: src/Admin/AdminSettings.php:433
+msgid "Add tier"
+msgstr "Tilføj niveau"
+
+#: src/Admin/AdminSettings.php:434
+msgid "Names match whatever their capitalisation."
+msgstr "Navne matcher uanset store og små bogstaver."
+
+#: src/Admin/AdminSettings.php:438
+msgid "Tiers Ko-fi sent that aren't listed:"
+msgstr "Niveauer fra Ko-fi, der ikke er på listen:"
+
+#. translators: 1: a tier name, 2: how many payments named it.
+#: src/Admin/AdminSettings.php:445
+#, php-format
+msgid "Add \"%1$s\" (%2$d payment)"
+msgid_plural "Add \"%1$s\" (%2$d payments)"
+msgstr[0] "Tilføj \"%1$s\" (%2$d betaling)"
+msgstr[1] "Tilføj \"%1$s\" (%2$d betalinger)"
+
+#: src/Admin/AdminSettings.php:469
+msgid "Any other tier, or no tier"
+msgstr "Andre niveauer eller intet niveau"
+
+#: src/Admin/AdminSettings.php:471
+msgid "— No role —"
+msgstr "— Ingen rolle —"
+
+#: src/Admin/AdminSettings.php:474
+msgid "With \"No role\", those payers still get an account, but no role. Administrator and other roles that can run the site are never offered."
+msgstr "Med \"Ingen rolle\" får disse betalere stadig en konto, men ingen rolle. Administrator og andre roller, der kan styre webstedet, tilbydes aldrig."
+
+#: src/Admin/AdminSettings.php:489
+msgid "Remove the role"
+msgstr "Fjern rollen"
+
+#: src/Admin/AdminSettings.php:500
+msgid "Days after the last payment"
+msgstr "Dage efter seneste betaling"
+
+#: src/Admin/AdminSettings.php:502
+msgid "days after the member's last payment"
+msgstr "dage efter medlemmets seneste betaling"
+
+#: src/Admin/AdminSettings.php:518
+msgid "Delete log entries older than"
+msgstr "Slet logposter, der er ældre end"
+
+#: src/Admin/AdminSettings.php:529
 msgid "Number of Days to Keep Logs"
 msgstr "Antal dage, logs gemmes"
 
-#: src/Admin/AdminSettings.php:150
-msgid "Are you sure you want to clear all logs? This action cannot be undone."
-msgstr "Er du sikker på, at du vil rydde alle logs? Det kan ikke fortrydes."
-
-#: src/Admin/AdminSettings.php:151
-msgid "An error occurred. Please try again."
-msgstr "Der opstod en fejl. Prøv igen."
-
-#: src/Admin/AdminSettings.php:152
-#: src/Admin/AdminSettings.php:748
-msgid "Search (email / action / role)"
-msgstr "Søg (e-mail / handling / rolle)"
-
-#: src/Admin/AdminSettings.php:153
-#: src/Admin/AdminSettings.php:746
-msgid "Search (email / tier / status)"
-msgstr "Søg (e-mail / niveau / status)"
-
-#: src/Admin/AdminSettings.php:188
-msgid "Verification Token is required."
-msgstr "Verifikationstoken skal udfyldes."
-
-#: src/Admin/AdminSettings.php:193
-msgid "Role Expiry Days is required and must be a number when expiry is enabled."
-msgstr "Når udløb er slået til, skal du angive rollens gyldighed i dage."
-
-#. translators: %s is the role name that was rejected.
-#: src/Admin/AdminSettings.php:213
-#: src/Admin/AdminSettings.php:229
-#, php-format
-msgid "Security: Role \"%s\" cannot be assigned via webhook for security reasons."
-msgstr "Sikkerhed: Rollen \"%s\" kan af sikkerhedshensyn ikke tildeles via webhook."
-
-#. translators: %s is the role name that was rejected.
-#: src/Admin/AdminSettings.php:241
-#, php-format
-msgid "Security: Role \"%s\" cannot be used as default role for security reasons."
-msgstr "Sikkerhed: Rollen \"%s\" kan af sikkerhedshensyn ikke bruges som standardrolle."
-
-#: src/Admin/AdminSettings.php:290
-msgid "A token is saved. Leave this blank to keep it, or paste a new one to replace it."
-msgstr "Der er gemt et token. Lad feltet stå tomt for at beholde det, eller indsæt et nyt for at erstatte det."
-
-#. translators: %s is the first eight characters of the saved token's SHA-256 hash.
-#: src/Admin/AdminSettings.php:293
-#, php-format
-msgid "Saved token fingerprint: %s"
-msgstr "Fingeraftryk af det gemte token: %s"
-
-#: src/Admin/AdminSettings.php:297
-msgid "No token set yet. Webhooks are rejected until one is saved."
-msgstr "Der er endnu ikke gemt et token. Webhook-forespørgsler afvises, indtil du gemmer et."
-
-#. translators: %s is a link to the Ko-fi Webhooks Management page.
-#: src/Admin/AdminSettings.php:307
-#, php-format
-msgid "This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. Only a hash of it is stored, so it cannot be shown again; to change it, paste the new one."
-msgstr "Dette token bruges til at bekræfte, at webhook-forespørgsler kommer fra Ko-fi. Åbn %s, find sektionen Advanced, og kopiér verifikationstokenet. Der gemmes kun en hashværdi af tokenet, så det kan ikke vises igen. Indsæt et nyt token for at erstatte det."
-
-#: src/Admin/AdminSettings.php:308
-msgid "Ko-fi Webhooks Management"
-msgstr "Ko-fi Webhooks Management"
-
-#: src/Admin/AdminSettings.php:322
-msgid "Webhook URL:"
-msgstr "Webhook-URL:"
-
-#: src/Admin/AdminSettings.php:325
-msgid "Copy to Clipboard"
-msgstr "Kopiér til udklipsholder"
-
-#: src/Admin/AdminSettings.php:327
-msgid "Use this URL to configure your Ko-fi webhook."
-msgstr "Brug denne URL, når du opsætter din webhook i Ko-fi."
+#: src/Admin/AdminSettings.php:531
+msgid "days"
+msgstr "dage"
 
 #. translators: %s is a human-readable time span, e.g. "3 days".
-#: src/Admin/AdminSettings.php:372
+#: src/Admin/AdminSettings.php:575
 #, php-format
 msgid "Scheduled tasks are not running: role expiry and log cleanup are %s overdue. Make sure WP-Cron runs, or that a system cron calls wp-cron.php."
 msgstr "Planlagte opgaver kører ikke: udløb af roller og oprydning i logs er %s forsinket. Sørg for, at WP-Cron kører, eller at et system-cronjob kalder wp-cron.php."
 
 #. translators: 1: email address, 2: comma-separated role names, or "no role".
-#: src/Admin/AdminSettings.php:424
+#: src/Admin/AdminSettings.php:627
 #, php-format
 msgid "Members for Ko-fi: an account was created by Ko-fi's \"Send test\" button (%1$s, role: %2$s). It is not a real supporter; earlier versions treated tests as payments. You can safely delete it."
 msgstr "Members for Ko-fi: Ko-fi's \"Send test\"-knap har oprettet en konto (%1$s, rolle: %2$s). Det er ikke en rigtig supporter; tidligere versioner behandlede test som betalinger. Du kan roligt slette den."
 
-#: src/Admin/AdminSettings.php:426
+#: src/Admin/AdminSettings.php:629
 msgid "none"
 msgstr "ingen"
 
-#: src/Admin/AdminSettings.php:430
+#: src/Admin/AdminSettings.php:633
 msgid "Review the account"
 msgstr "Se kontoen"
 
-#: src/Admin/AdminSettings.php:440
+#: src/Admin/AdminSettings.php:643
 msgid "Members for Ko-fi: two different verification tokens are stored, and webhooks are checked against the hashed one. Re-enter your Ko-fi verification token in the settings to resolve this."
 msgstr "Members for Ko-fi: der er gemt to forskellige verifikationstokens, og webhooks tjekkes mod det hashede. Indtast dit Ko-fi-verifikationstoken igen i indstillingerne for at løse det."
 
-#: src/Admin/AdminSettings.php:465
+#: src/Admin/AdminSettings.php:668
 msgid "Open settings"
 msgstr "Åbn indstillinger"
 
-#: src/Admin/AdminSettings.php:481
-msgid "When enabled, users must be active subscribers to receive a role."
-msgstr "Når det er slået til, skal brugere have et aktivt abonnement for at få en rolle."
+#: src/Admin/AdminSettings.php:701
+msgid "Verification Token is required."
+msgstr "Verifikationstoken skal udfyldes."
 
-#: src/Admin/AdminSettings.php:498
-msgid "Ko-fi Tier"
-msgstr "Ko-fi-niveau"
+#: src/Admin/AdminSettings.php:706
+msgid "Role Expiry Days is required and must be a number when expiry is enabled."
+msgstr "Når udløb er slået til, skal du angive rollens gyldighed i dage."
 
-#: src/Admin/AdminSettings.php:498
-#: src/Admin/AdminSettings.php:1097
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:726
+#: src/Admin/AdminSettings.php:742
+#, php-format
+msgid "Security: Role \"%s\" cannot be assigned via webhook for security reasons."
+msgstr "Sikkerhed: Rollen \"%s\" kan af sikkerhedshensyn ikke tildeles via webhook."
+
+#. translators: %s is the role name that was rejected.
+#: src/Admin/AdminSettings.php:754
+#, php-format
+msgid "Security: Role \"%s\" cannot be used as default role for security reasons."
+msgstr "Sikkerhed: Rollen \"%s\" kan af sikkerhedshensyn ikke bruges som standardrolle."
+
+#: src/Admin/LogsTab.php:245
+msgid "the token doesn't match"
+msgstr "tokenet passer ikke"
+
+#: src/Admin/LogsTab.php:247
+msgid "no token is saved"
+msgstr "der er ikke gemt noget token"
+
+#: src/Admin/LogsTab.php:252
+msgid "the request was malformed"
+msgstr "forespørgslen var ugyldig"
+
+#: src/Admin/LogsTab.php:254
+msgid "the account could not be created"
+msgstr "kontoen kunne ikke oprettes"
+
+#. translators: %s is a time of day.
+#: src/Admin/LogsTab.php:292
+#, php-format
+msgid "Today, %s"
+msgstr "I dag, %s"
+
+#. translators: %s is a time of day.
+#: src/Admin/LogsTab.php:297
+#, php-format
+msgid "Yesterday, %s"
+msgstr "I går, %s"
+
+#: src/Admin/LogsTab.php:365
+msgid "The log was deleted."
+msgstr "Loggen blev ryddet."
+
+#: src/Admin/LogsTab.php:383
+msgid "Member activity"
+msgstr "Medlemsaktivitet"
+
+#: src/Admin/LogsTab.php:396
+msgid "Requests from Ko-fi"
+msgstr "Forespørgsler fra Ko-fi"
+
+#. translators: %s is the site's time zone, e.g. "Europe/Copenhagen".
+#: src/Admin/LogsTab.php:401
+#, php-format
+msgid "Times are in the site's time zone (%s)."
+msgstr "Tidspunkter er i webstedets tidszone (%s)."
+
+#: src/Admin/LogsTab.php:412
+#: src/Admin/LogsTab.php:477
+msgid "Outcome"
+msgstr "Resultat"
+
+#: src/Admin/LogsTab.php:414
+msgid "All outcomes"
+msgstr "Alle resultater"
+
+#: src/Admin/LogsTab.php:415
+#: src/Admin/LogsTab.php:547
+msgid "Accepted"
+msgstr "Accepteret"
+
+#: src/Admin/LogsTab.php:416
+msgid "Refused"
+msgstr "Afvist"
+
+#: src/Admin/LogsTab.php:424
+msgid "Search email, tier or reason"
+msgstr "Søg i e-mail, niveau eller årsag"
+
+#: src/Admin/LogsTab.php:426
+msgid "Search email, action or role"
+msgstr "Søg i e-mail, handling eller rolle"
+
+#: src/Admin/LogsTab.php:433
+msgid "Per page"
+msgstr "Pr. side"
+
+#: src/Admin/LogsTab.php:440
+msgid "Filter"
+msgstr "Filtrér"
+
+#: src/Admin/LogsTab.php:473
+msgid "Received"
+msgstr "Modtaget"
+
+#: src/Admin/LogsTab.php:474
+#: src/Privacy/PersonalData.php:321
+#: src/Webhook/Webhook.php:911
+#: src/Webhook/Webhook.php:931
+msgid "Supporter"
+msgstr "Supporter"
+
+#: src/Admin/LogsTab.php:475
+msgid "Tier"
+msgstr "Niveau"
+
+#: src/Admin/LogsTab.php:476
+msgid "Payment"
+msgstr "Betaling"
+
+#: src/Admin/LogsTab.php:478
+msgid "Details"
+msgstr "Detaljer"
+
+#: src/Admin/LogsTab.php:483
+#: src/Admin/LogsTab.php:610
+msgid "No entries match."
+msgstr "Ingen poster matcher."
+
+#: src/Admin/LogsTab.php:483
+#: src/Admin/LogsTab.php:610
+msgid "No entries yet."
+msgstr "Ingen poster endnu."
+
+#: src/Admin/LogsTab.php:504
+msgid "Ko-fi test"
+msgstr "Ko-fi-test"
+
+#: src/Admin/LogsTab.php:506
+msgid "Not stored"
+msgstr "Ikke gemt"
+
+#: src/Admin/LogsTab.php:522
+msgid "not mapped"
+msgstr "ikke tilknyttet"
+
+#: src/Admin/LogsTab.php:530
+msgid "Test, no account made"
+msgstr "Test, ingen konto oprettet"
+
+#. translators: %s is an amount with its currency, e.g. "5.00 EUR".
+#: src/Admin/LogsTab.php:536
+#, php-format
+msgid "%s · subscription"
+msgstr "%s · abonnement"
+
+#. translators: %s is an amount with its currency, e.g. "5.00 EUR".
+#: src/Admin/LogsTab.php:538
+#, php-format
+msgid "%s · one-off"
+msgstr "%s · enkeltbetaling"
+
+#. translators: %s is why the request was refused, e.g. "the token doesn't match".
+#: src/Admin/LogsTab.php:552
+#, php-format
+msgid "Refused: %s"
+msgstr "Afvist: %s"
+
+#: src/Admin/LogsTab.php:560
+msgid "Payload"
+msgstr "Indhold"
+
+#: src/Admin/LogsTab.php:602
+msgid "When"
+msgstr "Tidspunkt"
+
+#: src/Admin/LogsTab.php:603
+#: src/Admin/MembersTab.php:264
+msgid "Member"
+msgstr "Medlem"
+
+#: src/Admin/LogsTab.php:604
+msgid "What happened"
+msgstr "Hændelse"
+
+#: src/Admin/LogsTab.php:605
+#: src/Admin/MembersTab.php:265
 msgid "Role"
 msgstr "Rolle"
 
-#: src/Admin/AdminSettings.php:536
-msgid "Add Tier Mapping"
-msgstr "Tilføj niveautilknytning"
+#: src/Admin/LogsTab.php:651
+msgid "First page"
+msgstr "Første side"
 
-#: src/Admin/AdminSettings.php:537
-msgid "Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched."
-msgstr "Knyt Ko-fi-niveauer til WordPress-roller. Kun niveaunavne, der er helt ens, matcher."
+#: src/Admin/LogsTab.php:652
+#: src/Admin/MembersTab.php:351
+msgid "Previous page"
+msgstr "Forrige side"
 
-#: src/Admin/AdminSettings.php:554
-msgid "— No default —"
-msgstr "— Ingen standard —"
+#: src/Admin/LogsTab.php:653
+#: src/Admin/MembersTab.php:362
+msgid "Next page"
+msgstr "Næste side"
 
-#: src/Admin/AdminSettings.php:563
-msgid "If no tier matches, or if you are not using tiers, this role will be assigned to the user."
-msgstr "Hvis intet niveau matcher, eller hvis du ikke bruger niveauer, får brugeren denne rolle."
+#: src/Admin/LogsTab.php:654
+msgid "Last page"
+msgstr "Sidste side"
 
-#: src/Admin/AdminSettings.php:594
-msgid "Number of days the role remains active (only used if expiry is enabled)."
-msgstr "Antal dage rollen er aktiv (bruges kun, når udløb er slået til)."
+#: src/Admin/LogsTab.php:665
+msgid "Current page"
+msgstr "Aktuel side"
 
-#: src/Admin/AdminSettings.php:606
-msgid "Enable automatic deletion of old logs based on retention period."
-msgstr "Slet automatisk logs, der er ældre end opbevaringsperioden."
+#: src/Admin/LogsTab.php:676
+#: src/Admin/MembersTab.php:349
+msgid "Pages"
+msgstr "Sider"
 
-#: src/Admin/AdminSettings.php:618
-msgid "Number of days to keep logs before automatic deletion (minimum 1 day)."
-msgstr "Antal dage, logs gemmes, før de slettes automatisk (mindst 1 dag)."
+#. translators: 1: an input holding the current page number, 2: the number of pages.
+#. translators: 1: the current page number, 2: the number of pages.
+#: src/Admin/LogsTab.php:683
+#: src/Admin/MembersTab.php:356
+#, php-format
+msgid "Page %1$s of %2$s"
+msgstr "Side %1$s af %2$s"
 
-#: src/Admin/AdminSettings.php:646
-msgid "Members for Ko-fi Settings"
-msgstr "Indstillinger for Members for Ko-fi"
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:715
+#, php-format
+msgid "Removes %s request entry. Member activity is kept."
+msgid_plural "Removes all %s request entries. Member activity is kept."
+msgstr[0] "Fjerner %s post i forespørgselsloggen. Medlemsaktiviteten bevares."
+msgstr[1] "Fjerner alle %s poster i forespørgselsloggen. Medlemsaktiviteten bevares."
 
-#: src/Admin/AdminSettings.php:657
-msgid "Settings"
-msgstr "Indstillinger"
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:717
+#, php-format
+msgid "Removes %s activity entry. The request log is kept."
+msgid_plural "Removes all %s activity entries. The request log is kept."
+msgstr[0] "Fjerner %s post i medlemsaktiviteten. Forespørgselsloggen bevares."
+msgstr[1] "Fjerner alle %s poster i medlemsaktiviteten. Forespørgselsloggen bevares."
 
-#: src/Admin/AdminSettings.php:660
-#: src/Admin/AdminSettings.php:683
-msgid "Logs"
-msgstr "Logs"
+#. translators: %s is the number of entries.
+#: src/Admin/LogsTab.php:720
+#, php-format
+msgid "Delete %s entry in this log? This can't be undone."
+msgid_plural "Delete all %s entries in this log? This can't be undone."
+msgstr[0] "Ryd %s post i denne log? Det kan ikke fortrydes."
+msgstr[1] "Ryd alle %s poster i denne log? Det kan ikke fortrydes."
 
-#: src/Admin/AdminSettings.php:728
-msgid "Log Type:"
-msgstr "Logtype:"
+#: src/Admin/LogsTab.php:726
+msgid "Delete this log"
+msgstr "Ryd denne log"
 
-#: src/Admin/AdminSettings.php:732
-msgid "User Logs"
-msgstr "Brugerlog"
+#. translators: %d is a number of days.
+#: src/Admin/LogsTab.php:734
+#, php-format
+msgid "Entries older than %d day are deleted automatically."
+msgid_plural "Entries older than %d days are deleted automatically."
+msgstr[0] "Poster ældre end %d dag slettes automatisk."
+msgstr[1] "Poster ældre end %d dage slettes automatisk."
 
-#: src/Admin/AdminSettings.php:735
-msgid "Request Logs"
-msgstr "Forespørgselslog"
+#: src/Admin/LogsTab.php:747
+msgid "Delete request log…"
+msgstr "Ryd forespørgselsloggen…"
 
-#: src/Admin/AdminSettings.php:755
-msgid "Search"
-msgstr "Søg"
+#: src/Admin/LogsTab.php:747
+msgid "Delete activity log…"
+msgstr "Ryd aktivitetsloggen…"
 
-#: src/Admin/AdminSettings.php:756
-msgid "Reset"
-msgstr "Nulstil"
-
-#: src/Admin/AdminSettings.php:759
-msgid "Refresh"
-msgstr "Opdater"
-
-#: src/Admin/AdminSettings.php:790
-#: src/Admin/AdminSettings.php:826
-#: src/Admin/AdminSettings.php:900
-#: src/Admin/AdminSettings.php:929
-#: src/Admin/AdminSettings.php:960
-#: src/Admin/AdminSettings.php:983
+#: src/Admin/LogsTab.php:761
 msgid "You do not have permission to access this resource."
 msgstr "Du har ikke adgang til denne ressource."
 
-#: src/Admin/AdminSettings.php:799
-msgid "Invalid page number."
-msgstr "Ugyldigt sidetal."
+#: src/Admin/MembersTab.php:195
+msgid "Unknown"
+msgstr "Ukendt"
 
-#: src/Admin/AdminSettings.php:859
-msgid "Logs table does not exist."
-msgstr "Logtabellen findes ikke."
+#: src/Admin/MembersTab.php:214
+msgid "All"
+msgstr "Alle"
 
-#: src/Admin/AdminSettings.php:1093
-#: src/Admin/AdminSettings.php:1235
-msgid "Timestamp"
-msgstr "Tidspunkt"
+#: src/Admin/MembersTab.php:215
+#: src/Admin/MembersTab.php:316
+msgid "Active"
+msgstr "Aktive"
 
-#: src/Admin/AdminSettings.php:1094
-msgid "User ID"
-msgstr "Bruger-ID"
+#. translators: The members whose access ends within the next seven days.
+#: src/Admin/MembersTab.php:217
+msgid "Ending within 7 days"
+msgstr "Ophører inden for 7 dage"
 
-#: src/Admin/AdminSettings.php:1095
-#: src/Admin/AdminSettings.php:1236
-msgid "Email"
-msgstr "E-mail"
+#: src/Admin/MembersTab.php:218
+#: src/Admin/MembersTab.php:305
+msgid "Ended"
+msgstr "Ophørt"
 
-#: src/Admin/AdminSettings.php:1096
-msgid "Action"
-msgstr "Handling"
+#: src/Admin/MembersTab.php:254
+#: src/Admin/MembersTab.php:256
+msgid "Search members"
+msgstr "Søg efter medlemmer"
 
-#: src/Admin/AdminSettings.php:1103
-#: src/Admin/AdminSettings.php:1248
-msgid "No logs available."
-msgstr "Der er ingen logs."
+#: src/Admin/MembersTab.php:255
+msgid "Name or email"
+msgstr "Navn eller e-mail"
 
-#: src/Admin/AdminSettings.php:1125
-#: src/Admin/AdminSettings.php:1273
-msgid "Clear Logs"
-msgstr "Ryd logs"
-
-#: src/Admin/AdminSettings.php:1133
-#: src/Admin/AdminSettings.php:1281
-msgid "Rows per page:"
-msgstr "Rækker pr. side:"
-
-#: src/Admin/AdminSettings.php:1148
-#: src/Admin/AdminSettings.php:1296
-msgid "Previous"
-msgstr "Forrige"
-
-#: src/Admin/AdminSettings.php:1155
-#: src/Admin/AdminSettings.php:1303
-msgid "Next"
-msgstr "Næste"
-
-#: src/Admin/AdminSettings.php:1237
-msgid "Tier Name"
-msgstr "Niveaunavn"
-
-#: src/Admin/AdminSettings.php:1238
-msgid "Amount"
-msgstr "Beløb"
-
-#: src/Admin/AdminSettings.php:1239
-msgid "Subscription"
-msgstr "Abonnement"
-
-#: src/Admin/AdminSettings.php:1240
+#: src/Admin/MembersTab.php:266
 msgid "Status"
 msgstr "Status"
 
-#: src/Admin/AdminSettings.php:1241
-msgid "Success"
-msgstr "Gennemført"
+#: src/Admin/MembersTab.php:267
+msgid "Member since"
+msgstr "Medlem siden"
 
-#: src/Admin/AdminSettings.php:1242
-msgid "Error"
-msgstr "Fejl"
+#: src/Admin/MembersTab.php:268
+msgid "Last payment"
+msgstr "Seneste betaling"
 
-#: src/Admin/AdminSettings.php:1257
-msgid "Yes"
-msgstr "Ja"
+#: src/Admin/MembersTab.php:269
+msgid "Access until"
+msgstr "Adgang indtil"
 
-#: src/Admin/AdminSettings.php:1257
-msgid "No"
-msgstr "Nej"
+#: src/Admin/MembersTab.php:274
+msgid "Nobody has become a member through Ko-fi yet."
+msgstr "Ingen er endnu blevet medlem via Ko-fi."
+
+#: src/Admin/MembersTab.php:274
+msgid "No members match."
+msgstr "Ingen medlemmer matcher."
+
+#. translators: %s is the name of a role that was removed.
+#: src/Admin/MembersTab.php:293
+#, php-format
+msgid "%s, removed"
+msgstr "%s, fjernet"
+
+#: src/Admin/MembersTab.php:297
+msgid "Granted before payment; never removed"
+msgstr "Tildelt før betaling; fjernes aldrig"
+
+#. translators: %d is a number of days.
+#: src/Admin/MembersTab.php:311
+#, php-format
+msgid "Ends in %d day"
+msgid_plural "Ends in %d days"
+msgstr[0] "Udløber om %d dag"
+msgstr[1] "Udløber om %d dage"
+
+#: src/Admin/MembersTab.php:325
+msgid "subscription"
+msgstr "abonnement"
+
+#: src/Admin/MembersTab.php:325
+msgid "one-off"
+msgstr "enkeltbetaling"
+
+#: src/Admin/MembersTab.php:332
+msgid "No expiry"
+msgstr "Udløber ikke"
+
+#. translators: %s is a date.
+#: src/Admin/MembersTab.php:335
+#, php-format
+msgid "Ended %s"
+msgstr "Ophørte %s"
+
+#: src/Admin/MembersTab.php:367
+msgid "Cancelling happens on Ko-fi, not here."
+msgstr "Opsigelse sker hos Ko-fi, ikke her."
 
 #: src/Membership.php:198
 msgid "No such user."
@@ -380,45 +683,31 @@ msgstr "Der er allerede registreret en dato for, hvornår medlemskabet begyndte.
 msgid "Sign in to Ko-fi, then go to Account settings and Subscriptions. If you pay with PayPal, you can also cancel there."
 msgstr "Log ind på Ko-fi, og gå til Account settings og Subscriptions. Betaler du med PayPal, kan du også opsige det i PayPal."
 
-#: src/Privacy/PersonalData.php:64
-#: src/Privacy/PersonalData.php:79
+#: src/Privacy/PersonalData.php:65
+#: src/Privacy/PersonalData.php:80
 msgid "Members for Ko-fi logs"
 msgstr "Logs fra Members for Ko-fi"
 
-#: src/Privacy/PersonalData.php:115
+#: src/Privacy/PersonalData.php:119
 msgid "Ko-fi membership"
 msgstr "Ko-fi-medlemskab"
 
-#: src/Privacy/PersonalData.php:145
+#: src/Privacy/PersonalData.php:148
 msgid "Ko-fi membership activity"
 msgstr "Aktivitet knyttet til Ko-fi-medlemskab"
 
-#: src/Privacy/PersonalData.php:165
+#: src/Privacy/PersonalData.php:166
 msgid "Ko-fi webhook requests"
 msgstr "Ko-fi-webhook-forespørgsler"
 
-#: src/Privacy/PersonalData.php:227
+#: src/Privacy/PersonalData.php:242
 msgid "An active Ko-fi membership was kept, so the person keeps the access they pay for. It is removed when the membership ends."
 msgstr "Et aktivt Ko-fi-medlemskab blev bevaret, så personen fortsat har den adgang, vedkommende betaler for. Adgangen fjernes, når medlemskabet ophører."
 
-#: src/Privacy/PersonalData.php:294
-#: src/Webhook/Webhook.php:753
-#: src/Webhook/Webhook.php:772
-msgid "Supporter"
-msgstr "Supporter"
-
-#: src/Privacy/PersonalData.php:335
+#: src/Privacy/PersonalData.php:362
 msgid "When you support us on Ko-fi, Ko-fi sends this site your email address, the name and message you entered, the amount, and your membership tier. We use your email address to create or find your account here and give it the access your support pays for."
 msgstr "Når du støtter os på Ko-fi, sender Ko-fi din e-mailadresse, det navn og den besked, du skrev, beløbet og dit medlemsniveau til denne side. Vi bruger din e-mailadresse til at oprette eller finde din konto her og give dig den adgang, din støtte betaler for."
 
-#: src/Privacy/PersonalData.php:336
+#: src/Privacy/PersonalData.php:363
 msgid "A record of each payment and of the access granted or removed is kept for the number of days set by the site owner, then deleted automatically when log cleanup is enabled. You can ask for a copy of this data, or for it to be erased, through the site's personal data request process."
 msgstr "Hver betaling og hver tildelt eller fjernet adgang registreres og gemmes i det antal dage, sidens ejer har valgt, og slettes derefter automatisk, når oprydning i logs er slået til. Du kan bede om en kopi af disse data eller om at få dem slettet via sidens procedure for anmodninger om persondata."
-
-#: src/Admin/AdminSettings.php
-msgid "Only assign roles to subscribers."
-msgstr "Tildel kun roller til abonnenter."
-
-#: src/Admin/AdminSettings.php
-msgid "If checked, role will be removed after the set number of days."
-msgstr "Hvis markeret, fjernes rollen efter det angivne antal dage."

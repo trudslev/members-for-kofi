@@ -25,72 +25,42 @@ defined( 'ABSPATH' ) || exit;
 use MembersForKofi\Webhook\Webhook;
 use MembersForKofi\Webhook\VerificationToken;
 
-use function add_settings_section;
-use function add_settings_field;
 use function register_setting;
 use function add_settings_error;
 use function get_editable_roles;
 
 /**
- * Handles the admin settings for the Members for Ko-fi plugin.
+ * The plugin's admin page: Settings, Members and Logs tabs.
  *
- * This class is responsible for registering and rendering the settings
- * for the plugin in the WordPress admin dashboard.
+ * Each tab is its own URL (`?page=members-for-kofi&tab=…`), so a tab or a
+ * filtered log can be linked and reloaded. The Members and Logs tabs live in
+ * MembersTab and LogsTab; this class renders the page, the Settings tab and
+ * the admin notices, and sanitizes the settings.
  *
  * @package MembersForKofi
  */
 class AdminSettings {
 
 	/**
-	 * Page sizes the log viewer offers.
+	 * The page's tabs, in order.
 	 *
-	 * @var array<int>
+	 * @var array<int,string>
 	 */
-	public const ROWS_PER_PAGE_OPTIONS = array( 10, 25, 50, 100 );
+	public const TABS = array( 'settings', 'members', 'logs' );
 
 	/**
-	 * Page size used when none is given, or when an invalid one is.
-	 *
-	 * @var int
-	 */
-	public const DEFAULT_ROWS_PER_PAGE = 10;
-	/**
-	 * Resolve the current logs table name, handling legacy name mismatch.
-	 *
-	 * @return string Fully qualified table name with prefix.
-	 */
-	private function get_logs_table_name(): string {
-		global $wpdb;
-		return $wpdb->prefix . 'members_for_kofi_user_logs';
-	}
-
-	/**
-	 * Constructor for the AdminSettings class.
-	 *
-	 * Initializes the class by adding the necessary WordPress actions.
+	 * Registers the page's handlers and assets.
 	 */
 	public function __construct() {
-		// Register settings.
-		add_action( 'admin_init', array( $this, 'register_settings' ) );
-
-		// Enqueue admin scripts.
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_scripts' ) );
-
-		// Register AJAX handlers.
-		add_action( 'wp_ajax_members_for_kofi_pagination', array( $this, 'handle_pagination' ) );
-		add_action( 'wp_ajax_members_for_kofi_clear_logs', array( $this, 'handle_clear_logs' ) );
-		add_action( 'wp_ajax_members_for_kofi_update_rows_per_page', array( $this, 'handle_update_rows_per_page' ) );
-		add_action( 'wp_ajax_members_for_kofi_filter_logs', array( $this, 'handle_filter_logs' ) );
-		add_action( 'wp_ajax_members_for_kofi_refresh_logs', array( $this, 'handle_refresh_logs' ) );
-		add_action( 'wp_ajax_members_for_kofi_switch_log_type', array( $this, 'handle_switch_log_type' ) );
+		LogsTab::register();
 	}
 
-
 	/**
-	 * Registers the settings for the Members for Ko-fi plugin.
+	 * Registers the plugin's setting and its sanitizer.
 	 *
-	 * This function sets up the settings sections and fields for the plugin
-	 * in the WordPress admin dashboard.
+	 * The form is rendered by render_settings_tab(), not by Settings API
+	 * sections, so only the setting itself is registered here.
 	 *
 	 * @return void
 	 */
@@ -102,230 +72,463 @@ class AdminSettings {
 				'sanitize_callback' => array( $this, 'sanitize_options' ),
 			)
 		);
-
-		// Ko-fi Settings section.
-		add_settings_section( 'members_for_kofi_general', __( 'Ko-fi Settings', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
-		add_settings_field( 'verification_token', __( 'Verification Token', 'members-for-kofi' ), array( $this, 'render_verification_token_field' ), 'members-for-kofi', 'members_for_kofi_general' );
-
-		// Role Assignment section.
-		add_settings_section( 'members_for_kofi_role_assignment', __( 'Role Assignment', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
-		add_settings_field( 'only_subscriptions', __( 'Only Accept Subscriptions', 'members-for-kofi' ), array( $this, 'render_only_subscriptions_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
-		add_settings_field( 'tier_role_map', __( 'Tier to Role Mapping', 'members-for-kofi' ), array( $this, 'render_tier_role_map_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
-		add_settings_field( 'default_role', __( 'Default Role (if no match)', 'members-for-kofi' ), array( $this, 'render_default_role_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
-		add_settings_field( 'enable_expiry', __( 'Enable Expiry', 'members-for-kofi' ), array( $this, 'render_expiry_toggle_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
-		add_settings_field( 'role_expiry_days', __( 'Role Expiry (days)', 'members-for-kofi' ), array( $this, 'render_role_expiry_field' ), 'members-for-kofi', 'members_for_kofi_role_assignment' );
-
-		// Logging section.
-		add_settings_section( 'members_for_kofi_logging', __( 'Logging', 'members-for-kofi' ), '__return_null', 'members-for-kofi' );
-		add_settings_field( 'auto_clear_logs', __( 'Automatically Clear Logs', 'members-for-kofi' ), array( $this, 'render_auto_clear_logs_field' ), 'members-for-kofi', 'members_for_kofi_logging' );
-		add_settings_field( 'log_retention_days', __( 'Number of Days to Keep Logs', 'members-for-kofi' ), array( $this, 'render_log_retention_days_field' ), 'members-for-kofi', 'members_for_kofi_logging' );
-	}   /**
-		 * Enqueues the admin JavaScript file for the Members for Ko-fi settings page.
-		 *
-		 * @return void
-		 */
-	public function enqueue_admin_scripts(): void {
-		$screen = get_current_screen();
-
-		if ( isset( $screen->id ) && 'toplevel_page_members-for-kofi' === $screen->id ) {
-			wp_enqueue_script(
-				'members-for-kofi-admin-settings',
-				plugins_url( 'assets/js/admin-settings.js', dirname( __DIR__ ) ),
-				array(),
-				'1.0.6',
-				true
-			);
-
-			wp_localize_script(
-				'members-for-kofi-admin-settings',
-				'kofiMembers',
-				array(
-					'ajaxurl'            => admin_url( 'admin-ajax.php' ),
-					'paginationNonce'    => wp_create_nonce( 'members_for_kofi_pagination' ),
-					'clearLogsNonce'     => wp_create_nonce( 'members_for_kofi_clear_logs' ),
-					'rowsPerPageNonce'   => wp_create_nonce( 'members_for_kofi_update_rows_per_page' ),
-					'filterNonce'        => wp_create_nonce( 'members_for_kofi_filter_logs' ),
-					'refreshNonce'       => wp_create_nonce( 'members_for_kofi_refresh_logs' ),
-					'switchLogTypeNonce' => wp_create_nonce( 'members_for_kofi_switch_log_type' ),
-					'clearLogsConfirm'   => __( 'Are you sure you want to clear all logs? This action cannot be undone.', 'members-for-kofi' ),
-					'errorMessage'       => __( 'An error occurred. Please try again.', 'members-for-kofi' ),
-					'searchLabelUser'    => __( 'Search (email / action / role)', 'members-for-kofi' ),
-					'searchLabelRequest' => __( 'Search (email / tier / status)', 'members-for-kofi' ),
-				)
-			);
-		}
 	}
 
 	/**
-	 * Sanitizes the options for the Members for Ko-fi plugin.
+	 * Enqueues the page's script and stylesheet, on this page only.
 	 *
-	 * This function validates and sanitizes the input options
-	 * provided by the user in the settings page.
-	 *
-	 * @param array $options The input options to sanitize.
-	 * @return array The sanitized options.
+	 * @return void
 	 */
-	public function sanitize_options( array $options ): array {
-		$stored        = get_option( 'members_for_kofi_options', array() );
-		$errors        = array();
-		$enable_expiry = ! empty( $options['enable_expiry'] );
+	public function enqueue_admin_scripts(): void {
+		$screen = get_current_screen();
 
-		// The field is write-only: only a hash is stored, and the form never
-		// shows it. A blank submission therefore means "keep the saved token",
-		// never "clear it". sanitize_text_field() trims, so a token pasted with
-		// stray whitespace is stored the way Ko-fi's real traffic arrives. A
-		// submitted hash is never accepted: it can only come from this code.
-		$submitted_token = isset( $options['verification_token'] ) && is_string( $options['verification_token'] )
-			? sanitize_text_field( $options['verification_token'] )
-			: '';
-		// A blank save also converts a plaintext token left in the settings by
-		// a restore from before 1.2.0, which webhooks no longer accept.
-		$token_hash = '' !== $submitted_token ? VerificationToken::hash( $submitted_token ) : VerificationToken::stored_hash( $stored );
-		if ( '' === $token_hash ) {
-			$token_hash = VerificationToken::legacy_hash( $stored );
-		}
-		if ( '' === $token_hash ) {
-			$errors[] = __( 'Verification Token is required.', 'members-for-kofi' );
+		if ( ! isset( $screen->id ) || 'toplevel_page_members-for-kofi' !== $screen->id ) {
+			return;
 		}
 
-		$role_expiry_days = isset( $options['role_expiry_days'] ) ? absint( $options['role_expiry_days'] ) : ( $stored['role_expiry_days'] ?? 35 );
-		if ( $enable_expiry && ( empty( $role_expiry_days ) || ! is_numeric( (string) $role_expiry_days ) ) ) {
-			$errors[] = __( 'Role Expiry Days is required and must be a number when expiry is enabled.', 'members-for-kofi' );
-		}
+		$version = get_file_data( MEMBERS_FOR_KOFI_PLUGIN_FILE, array( 'Version' => 'Version' ) )['Version'];
 
-		if ( ! $enable_expiry ) {
-			// Preserve existing stored value if expiry disabled, fallback to default.
-			$role_expiry_days = $stored['role_expiry_days'] ?? 35;
-		}
-
-		// Build tier map supporting both new parallel arrays and legacy associative array submission.
-		$tier_map = array();
-		if ( isset( $options['tier_role_map']['tier'] ) && is_array( $options['tier_role_map']['tier'] ) ) {
-			foreach ( $options['tier_role_map']['tier'] as $index => $tier_raw ) {
-				$tier = sanitize_text_field( $tier_raw );
-				$role = isset( $options['tier_role_map']['role'][ $index ] ) ? sanitize_key( $options['tier_role_map']['role'][ $index ] ) : '';
-				// Security: Explicitly reject disallowed roles (e.g., administrator).
-				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
-					$tier_map[ $tier ] = $role;
-				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
-					$errors[] = sprintf(
-						// translators: %s is the role name that was rejected.
-						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
-						$role
-					);
-				}
-			}
-		} elseif ( isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ) {
-			// Legacy format already associative.
-			foreach ( $options['tier_role_map'] as $tier_raw => $role_raw ) {
-				$tier = sanitize_text_field( $tier_raw );
-				$role = sanitize_key( $role_raw );
-				// Security: Explicitly reject disallowed roles (e.g., administrator).
-				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
-					$tier_map[ $tier ] = $role;
-				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
-					$errors[] = sprintf(
-						// translators: %s is the role name that was rejected.
-						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
-						$role
-					);
-				}
-			}
-		}
-
-		// Security: Validate default role is not in disallowed list.
-		$default_role = isset( $options['default_role'] ) ? sanitize_key( $options['default_role'] ) : '';
-		if ( $default_role && ! Webhook::is_assignable_role( $default_role ) ) {
-			$errors[] = sprintf(
-				// translators: %s is the role name that was rejected.
-				__( 'Security: Role "%s" cannot be used as default role for security reasons.', 'members-for-kofi' ),
-				$default_role
-			);
-			$default_role = ''; // Clear invalid default role.
-		}
-
-		if ( ! empty( $errors ) ) {
-			foreach ( $errors as $error ) {
-				add_settings_error( 'members_for_kofi_options', 'members_for_kofi_options_error', $error, 'error' );
-			}
-			return $stored; // Return previous values.
-		}
-
-		// Sanitize logging settings.
-		$auto_clear_logs    = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
-		$log_retention_days = isset( $options['log_retention_days'] ) ? absint( $options['log_retention_days'] ) : 30;
-		if ( $log_retention_days < 1 ) {
-			$log_retention_days = 30;
-		}
-
-		return array(
-			VerificationToken::HASH_KEY => $token_hash,
-			'only_subscriptions'        => ! empty( $options['only_subscriptions'] ),
-			'tier_role_map'             => $tier_map,
-			'default_role'              => $default_role,
-			'enable_expiry'             => $enable_expiry,
-			'role_expiry_days'          => $role_expiry_days,
-			'auto_clear_logs'           => $auto_clear_logs,
-			'log_retention_days'        => $log_retention_days,
+		wp_enqueue_style(
+			'members-for-kofi-admin',
+			plugins_url( 'assets/css/admin.css', dirname( __DIR__ ) ),
+			array(),
+			$version
 		);
-	}   /**
-		 * Renders the verification token field in the settings page.
-		 *
-		 * This function outputs the HTML for the verification token input field,
-		 * allowing users to enter the token required for webhook verification.
-		 *
-		 * @return void
-		 */
+
+		wp_enqueue_script(
+			'members-for-kofi-admin-settings',
+			plugins_url( 'assets/js/admin-settings.js', dirname( __DIR__ ) ),
+			array(),
+			$version,
+			true
+		);
+
+		wp_localize_script(
+			'members-for-kofi-admin-settings',
+			'kofiMembers',
+			array(
+				'copied' => __( 'Copied', 'members-for-kofi' ),
+			)
+		);
+	}
+
+	/**
+	 * The tab the URL asks for.
+	 *
+	 * @return string
+	 */
+	public static function current_tab(): string {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Choosing which tab to display.
+		$tab = isset( $_GET['tab'] ) ? sanitize_key( wp_unslash( $_GET['tab'] ) ) : 'settings';
+
+		// The log viewer used to link to its own tab name.
+		if ( 'user_logs' === $tab ) {
+			return 'logs';
+		}
+
+		return in_array( $tab, self::TABS, true ) ? $tab : 'settings';
+	}
+
+	/**
+	 * URL of one of the page's tabs.
+	 *
+	 * @param string $tab Tab key.
+	 * @return string
+	 */
+	public static function tab_url( string $tab ): string {
+		$args = array( 'page' => 'members-for-kofi' );
+
+		if ( 'settings' !== $tab ) {
+			$args['tab'] = $tab;
+		}
+
+		return add_query_arg( $args, admin_url( 'admin.php' ) );
+	}
+
+	/**
+	 * Renders the admin page.
+	 *
+	 * @return void
+	 */
+	public function render_settings_page(): void {
+		$active = self::current_tab();
+		$labels = array(
+			'settings' => __( 'Settings', 'members-for-kofi' ),
+			'members'  => __( 'Members', 'members-for-kofi' ),
+			'logs'     => __( 'Logs', 'members-for-kofi' ),
+		);
+		?>
+		<div class="wrap mfk-wrap">
+			<h1><?php esc_html_e( 'Members for Ko-fi', 'members-for-kofi' ); ?></h1>
+			<?php
+			// WordPress prints Settings API messages by itself only on pages
+			// under Settings. This is a top-level page, so without this call a
+			// rejected save ("Verification Token is required", a disallowed
+			// role) was silently dropped, and a good one got no confirmation.
+			settings_errors();
+			$this->render_cron_warning();
+			?>
+			<nav class="nav-tab-wrapper" aria-label="<?php esc_attr_e( 'Members for Ko-fi sections', 'members-for-kofi' ); ?>">
+				<?php foreach ( $labels as $tab => $label ) : ?>
+					<a href="<?php echo esc_url( self::tab_url( $tab ) ); ?>" class="nav-tab<?php echo $tab === $active ? ' nav-tab-active' : ''; ?>"<?php echo $tab === $active ? ' aria-current="page"' : ''; ?>><?php echo esc_html( $label ); ?></a>
+				<?php endforeach; ?>
+			</nav>
+			<?php
+			if ( 'members' === $active ) {
+				MembersTab::render();
+			} elseif ( 'logs' === $active ) {
+				LogsTab::render();
+			} else {
+				$this->render_settings_tab();
+			}
+			?>
+		</div>
+		<?php
+	}
+
+	/**
+	 * Renders the Settings tab.
+	 *
+	 * @return void
+	 */
+	public function render_settings_tab(): void {
+		?>
+		<form method="post" action="options.php" id="members-for-kofi-settings-form" class="mfk-settings">
+			<?php settings_fields( 'members_for_kofi_options' ); ?>
+
+			<section class="mfk-card" aria-labelledby="mfk-connection">
+				<div class="mfk-card-head">
+					<h2 id="mfk-connection"><?php esc_html_e( 'Ko-fi connection', 'members-for-kofi' ); ?></h2>
+					<?php $this->render_connection_status(); ?>
+				</div>
+				<ol class="mfk-steps">
+					<li><?php $this->render_webhook_url_field(); ?></li>
+					<li><?php $this->render_verification_token_field(); ?></li>
+					<li>
+						<p class="mfk-step-title"><?php esc_html_e( 'Press "Send test" on Ko-fi', 'members-for-kofi' ); ?></p>
+						<p class="description">
+							<?php
+							printf(
+								// translators: %s is a link to the request log.
+								esc_html__( 'It shows up in the status line above and in %s. A test never creates an account.', 'members-for-kofi' ),
+								'<a href="' . esc_url( add_query_arg( 'log', 'requests', self::tab_url( 'logs' ) ) ) . '">' . esc_html__( 'the request log', 'members-for-kofi' ) . '</a>'
+							);
+							?>
+						</p>
+					</li>
+				</ol>
+			</section>
+
+			<section class="mfk-card mfk-card-body" aria-labelledby="mfk-roles">
+				<h2 id="mfk-roles"><?php esc_html_e( 'Who gets a role', 'members-for-kofi' ); ?></h2>
+				<?php
+				$this->render_only_subscriptions_field();
+				$this->render_tier_role_map_field();
+				$this->render_default_role_field();
+				?>
+			</section>
+
+			<section class="mfk-card mfk-card-body" aria-labelledby="mfk-expiry">
+				<h2 id="mfk-expiry"><?php esc_html_e( 'When membership ends', 'members-for-kofi' ); ?></h2>
+				<p class="mfk-sentence">
+					<?php
+					$this->render_expiry_toggle_field();
+					$this->render_role_expiry_field();
+					?>
+				</p>
+				<p class="description"><?php esc_html_e( 'Ko-fi subscriptions renew monthly, so 35 days leaves a few days\' grace. A role the user held before paying is never removed.', 'members-for-kofi' ); ?></p>
+			</section>
+
+			<section class="mfk-card mfk-card-body" aria-labelledby="mfk-log-history">
+				<h2 id="mfk-log-history"><?php esc_html_e( 'Log history', 'members-for-kofi' ); ?></h2>
+				<p class="mfk-sentence">
+					<?php
+					$this->render_auto_clear_logs_field();
+					$this->render_log_retention_days_field();
+					?>
+				</p>
+				<p class="description"><?php esc_html_e( 'Untick to keep everything, for example when another tool reads the request log.', 'members-for-kofi' ); ?></p>
+			</section>
+
+			<?php submit_button(); ?>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Says whether Ko-fi's requests are arriving and being accepted.
+	 *
+	 * Based on the newest row of the request log, which also holds refused
+	 * requests from anyone who finds the URL: a refusal says "the last
+	 * request", not "Ko-fi".
+	 *
+	 * @return void
+	 */
+	public function render_connection_status(): void {
+		$options = get_option( VerificationToken::OPTION );
+
+		if ( '' === VerificationToken::stored_hash( $options ) ) {
+			$class = 'mfk-status-error';
+			$text  = __( 'Not connected: no token is saved, so Ko-fi\'s requests are refused.', 'members-for-kofi' );
+		} else {
+			$latest = LogsTab::latest_request();
+			if ( null === $latest ) {
+				$class = 'mfk-status-waiting';
+				$text  = __( 'Waiting for Ko-fi: no request has arrived yet.', 'members-for-kofi' );
+			} else {
+				$ago = human_time_diff( LogsTab::to_unix( (string) $latest['timestamp'] ) );
+				if ( '1' === (string) $latest['success'] ) {
+					$class = 'mfk-status-ok';
+					// translators: %s is a time span, e.g. "2 hours".
+					$text = sprintf( __( 'Working: the last request from Ko-fi, %s ago, was accepted.', 'members-for-kofi' ), $ago );
+				} else {
+					$class = 'mfk-status-error';
+					// translators: 1: a time span, e.g. "2 hours", 2: why it was refused, e.g. "the token doesn't match".
+					$text = sprintf( __( 'The last request, %1$s ago, was refused: %2$s', 'members-for-kofi' ), $ago, LogsTab::refusal_reason( (string) $latest['error'] ) );
+				}
+			}
+		}
+
+		echo '<p class="mfk-status ' . esc_attr( $class ) . '">' . esc_html( $text ) . '</p>';
+	}
+
+	/**
+	 * Step 1: the webhook URL to give Ko-fi, with a copy button.
+	 *
+	 * @return void
+	 */
+	public function render_webhook_url_field(): void {
+		$link = '<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank" rel="noopener noreferrer">'
+			. esc_html__( 'Ko-fi\'s webhook settings', 'members-for-kofi' )
+			. '<span class="screen-reader-text"> ' . esc_html__( '(opens in a new tab)', 'members-for-kofi' ) . '</span></a>';
+		?>
+		<label for="webhook-kofi-url" class="mfk-step-title"><?php esc_html_e( 'Give Ko-fi this webhook URL', 'members-for-kofi' ); ?></label>
+		<div class="mfk-copy-row">
+			<input type="text" id="webhook-kofi-url" value="<?php echo esc_url( self::webhook_url() ); ?>" readonly class="regular-text code">
+			<button type="button" id="copy-webhook-url" class="button"><?php esc_html_e( 'Copy URL', 'members-for-kofi' ); ?></button>
+			<span id="mfk-copy-status" class="mfk-copy-status" role="status"></span>
+		</div>
+		<p class="description">
+			<?php
+			// translators: %s is a link to Ko-fi's webhook settings.
+			printf( esc_html__( 'Paste it into %s.', 'members-for-kofi' ), $link ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built from escaped parts above.
+			?>
+		</p>
+		<?php
+	}
+
+	/**
+	 * Step 2: the verification token. Write-only: the saved one is never shown.
+	 *
+	 * @return void
+	 */
 	public function render_verification_token_field(): void {
 		$options     = get_option( 'members_for_kofi_options' );
-		$webhook_url = self::webhook_url();
-
 		$fingerprint = VerificationToken::fingerprint( $options );
+		?>
+		<label for="mfk-token" class="mfk-step-title"><?php esc_html_e( 'Paste Ko-fi\'s verification token', 'members-for-kofi' ); ?></label>
+		<?php if ( '' !== $fingerprint ) : ?>
+			<p class="mfk-token-state">
+				<?php esc_html_e( 'A token is saved', 'members-for-kofi' ); ?>
+				<code><?php echo esc_html( $fingerprint ); ?></code>
+				<span class="mfk-muted"><?php esc_html_e( 'fingerprint, to compare with another site', 'members-for-kofi' ); ?></span>
+			</p>
+		<?php else : ?>
+			<p class="mfk-token-state mfk-status-error"><?php esc_html_e( 'No token is saved yet.', 'members-for-kofi' ); ?></p>
+		<?php endif; ?>
+		<?php if ( VerificationToken::has_conflict( $options ) ) : ?>
+			<p class="mfk-status-error"><?php echo esc_html( self::token_conflict_message() ); ?></p>
+		<?php endif; ?>
+		<?php // Write-only: the saved token is never rendered back into the page, and only its hash is stored, so the value is always empty. ?>
+		<input type="password" id="mfk-token" name="members_for_kofi_options[verification_token]" value="" class="regular-text" autocomplete="new-password"<?php echo '' !== $fingerprint ? ' placeholder="' . esc_attr__( 'Leave blank to keep the saved token', 'members-for-kofi' ) . '"' : ''; ?>>
+		<p class="description"><?php esc_html_e( 'On Ko-fi\'s webhook page, open Advanced and copy the token. Only a hash is stored, so it can\'t be shown again.', 'members-for-kofi' ); ?></p>
+		<?php
+	}
 
-		// Write-only: the saved token is never rendered back into the page, and
-		// only its hash is stored, so the value is always empty.
-		echo '<input type="password" name="members_for_kofi_options[verification_token]" value="" class="regular-text" autocomplete="new-password">';
+	/**
+	 * Which payments grant a role. Radios, so both answers are always sent.
+	 *
+	 * @return void
+	 */
+	public static function render_only_subscriptions_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$only    = ! empty( $options['only_subscriptions'] );
+		?>
+		<fieldset class="mfk-field">
+			<legend class="mfk-field-title"><?php esc_html_e( 'Payments that grant a role', 'members-for-kofi' ); ?></legend>
+			<label><input type="radio" name="members_for_kofi_options[only_subscriptions]" value="0"<?php checked( ! $only ); ?>> <?php esc_html_e( 'Donations and subscriptions', 'members-for-kofi' ); ?></label><br>
+			<label><input type="radio" name="members_for_kofi_options[only_subscriptions]" value="1"<?php checked( $only ); ?>> <?php esc_html_e( 'Subscriptions only', 'members-for-kofi' ); ?> <span class="mfk-muted"><?php esc_html_e( '(one-off donations are logged and ignored)', 'members-for-kofi' ); ?></span></label>
+		</fieldset>
+		<?php
+	}
 
-		if ( '' !== $fingerprint ) {
-			echo '<p class="description">' . esc_html__( 'A token is saved. Leave this blank to keep it, or paste a new one to replace it.', 'members-for-kofi' ) . '</p>';
-			echo '<p class="description">' . sprintf(
-				// translators: %s is the first eight characters of the saved token's SHA-256 hash.
-				esc_html__( 'Saved token fingerprint: %s', 'members-for-kofi' ),
-				'<code>' . esc_html( $fingerprint ) . '</code>'
-			) . '</p>';
-		} else {
-			echo '<p class="description">' . esc_html__( 'No token set yet. Webhooks are rejected until one is saved.', 'members-for-kofi' ) . '</p>';
+	/**
+	 * Options for a role select: assignable roles only.
+	 *
+	 * @param string $selected Selected role slug.
+	 * @return string Escaped `<option>` elements.
+	 */
+	private function role_options( string $selected ): string {
+		$html = '';
+
+		foreach ( get_editable_roles() as $key => $details ) {
+			if ( ! Webhook::is_assignable_role( $key ) ) {
+				continue;
+			}
+			$html .= '<option value="' . esc_attr( $key ) . '"' . selected( $selected, $key, false ) . '>' . esc_html( translate_user_role( $details['name'] ) ) . '</option>';
 		}
 
-		if ( VerificationToken::has_conflict( $options ) ) {
-			echo '<p class="description" style="color: #b32d2e;">' . esc_html( self::token_conflict_message() ) . '</p>';
+		return $html;
+	}
+
+	/**
+	 * One row of the tier table.
+	 *
+	 * @param string $tier Tier name.
+	 * @param string $role Role slug.
+	 * @return string
+	 */
+	private function tier_row( string $tier, string $role ): string {
+		return '<tr>'
+			. '<td><input type="text" name="members_for_kofi_options[tier_role_map][tier][]" value="' . esc_attr( $tier ) . '" class="regular-text tier-name-input" aria-label="' . esc_attr__( 'Tier name on Ko-fi', 'members-for-kofi' ) . '"></td>'
+			. '<td><select name="members_for_kofi_options[tier_role_map][role][]" class="tier-role-select" aria-label="' . esc_attr__( 'Role for this tier', 'members-for-kofi' ) . '">' . $this->role_options( $role ) . '</select></td>'
+			. '<td class="mfk-actions"><button type="button" class="button-link button-link-delete remove-tier-role-row" aria-label="' . esc_attr__( 'Remove this tier', 'members-for-kofi' ) . '">' . esc_html__( 'Remove', 'members-for-kofi' ) . '</button></td>'
+			. '</tr>';
+	}
+
+	/**
+	 * The tier table, with tiers Ko-fi sent that are not mapped yet.
+	 *
+	 * @return void
+	 */
+	public function render_tier_role_map_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$map     = isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ? $options['tier_role_map'] : array();
+
+		$rows = '';
+		foreach ( $map as $tier => $role ) {
+			$rows .= $this->tier_row( (string) $tier, (string) $role );
 		}
 
-		// Description for Verification Token.
-		$description = sprintf(
-			// translators: %s is a link to the Ko-fi Webhooks Management page.
-			esc_html__( 'This token is used to verify incoming webhook requests from Ko-fi. Paste the verification token from this page: %s and open the Advanced box. Only a hash of it is stored, so it cannot be shown again; to change it, paste the new one.', 'members-for-kofi' ),
-			'<a href="' . esc_url( 'https://ko-fi.com/manage/webhooks?src=sidemenu' ) . '" target="_blank">' . esc_html__( 'Ko-fi Webhooks Management', 'members-for-kofi' ) . '</a>'
-		);
-		echo '<p class="description">' . wp_kses(
-			$description,
-			array(
-				'a' => array(
-					'href'   => array(),
-					'target' => array(),
-				),
-			)
-		) . '</p>';
+		$unmapped = LogsTab::unmapped_tiers( array_map( 'strval', array_keys( $map ) ) );
+		?>
+		<div class="mfk-field">
+			<p class="mfk-field-title"><?php esc_html_e( 'Ko-fi tiers', 'members-for-kofi' ); ?></p>
+			<div class="mfk-table-wrap">
+				<table id="tier-role-map-table" class="widefat mfk-table mfk-tier-table">
+					<thead>
+						<tr>
+							<th scope="col"><?php esc_html_e( 'Tier name on Ko-fi', 'members-for-kofi' ); ?></th>
+							<th scope="col"><?php esc_html_e( 'Role it grants', 'members-for-kofi' ); ?></th>
+							<th scope="col"><span class="screen-reader-text"><?php esc_html_e( 'Actions', 'members-for-kofi' ); ?></span></th>
+						</tr>
+					</thead>
+					<tbody>
+						<?php echo $rows; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Built by tier_row(), which escapes every value. ?>
+					</tbody>
+				</table>
+			</div>
+			<template id="tier-role-row-template"><?php echo $this->tier_row( '', '' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in tier_row(). ?></template>
+			<p class="mfk-inline">
+				<button type="button" class="button" id="add-tier-role-row"><?php esc_html_e( 'Add tier', 'members-for-kofi' ); ?></button>
+				<span class="mfk-muted"><?php esc_html_e( 'Names match whatever their capitalisation.', 'members-for-kofi' ); ?></span>
+			</p>
+			<?php if ( array() !== $unmapped ) : ?>
+				<div class="mfk-unmapped">
+					<span><?php esc_html_e( 'Tiers Ko-fi sent that aren\'t listed:', 'members-for-kofi' ); ?></span>
+					<?php foreach ( $unmapped as $tier => $payments ) : ?>
+						<button type="button" class="button mfk-add-unmapped" data-tier="<?php echo esc_attr( $tier ); ?>">
+							<?php
+							echo esc_html(
+								sprintf(
+									// translators: 1: a tier name, 2: how many payments named it.
+									_n( 'Add "%1$s" (%2$d payment)', 'Add "%1$s" (%2$d payments)', $payments, 'members-for-kofi' ),
+									$tier,
+									$payments
+								)
+							);
+							?>
+						</button>
+					<?php endforeach; ?>
+				</div>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
 
-		// Webhook URL Textbox and Copy Button.
-		echo '<div style="margin-top: 20px;">';
-		echo '<label for="webhook-kofi-url" style="font-weight: bold; display: block; margin-bottom: 5px;">' . esc_html__( 'Webhook URL:', 'members-for-kofi' ) . '</label>';
-		echo '<div style="display: flex; align-items: center; width: 500px;">';
-		echo '<input type="text" id="webhook-kofi-url" value="' . esc_url( $webhook_url ) . '" readonly style="flex: 1; margin-right: 10px;" class="regular-text">';
-		echo '<button type="button" id="copy-webhook-url" class="button button-secondary">' . esc_html__( 'Copy to Clipboard', 'members-for-kofi' ) . '</button>';
-		echo '</div>';
-		echo '<p class="description">' . esc_html__( 'Use this URL to configure your Ko-fi webhook.', 'members-for-kofi' ) . '</p>';
-		echo '</div>';
+	/**
+	 * The role for payments no tier matches.
+	 *
+	 * @return void
+	 */
+	public function render_default_role_field(): void {
+		$options  = get_option( 'members_for_kofi_options', array() );
+		$selected = isset( $options['default_role'] ) && is_string( $options['default_role'] ) ? $options['default_role'] : '';
+		?>
+		<div class="mfk-field">
+			<label for="mfk-default-role" class="mfk-field-title"><?php esc_html_e( 'Any other tier, or no tier', 'members-for-kofi' ); ?></label>
+			<select id="mfk-default-role" name="members_for_kofi_options[default_role]">
+				<option value=""><?php esc_html_e( '— No role —', 'members-for-kofi' ); ?></option>
+				<?php echo $this->role_options( $selected ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Escaped in role_options(). ?>
+			</select>
+			<p class="description"><?php esc_html_e( 'With "No role", those payers still get an account, but no role. Administrator and other roles that can run the site are never offered.', 'members-for-kofi' ); ?></p>
+		</div>
+		<?php
+	}
+
+	/**
+	 * "Remove the role" checkbox: the start of the expiry sentence.
+	 *
+	 * @return void
+	 */
+	public static function render_expiry_toggle_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$checked = ! empty( $options['enable_expiry'] );
+		echo '<input type="hidden" name="members_for_kofi_options[enable_expiry]" value="0">';
+		echo '<input type="checkbox" id="members_for_kofi_enable_expiry" name="members_for_kofi_options[enable_expiry]" value="1"' . checked( $checked, true, false ) . '> ';
+		echo '<label for="members_for_kofi_enable_expiry">' . esc_html__( 'Remove the role', 'members-for-kofi' ) . '</label> ';
+	}
+
+	/**
+	 * "[35] days after the member's last payment": the end of the sentence.
+	 *
+	 * @return void
+	 */
+	public static function render_role_expiry_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$value   = isset( $options['role_expiry_days'] ) ? intval( $options['role_expiry_days'] ) : 35;
+		echo '<label for="members_for_kofi_expiry_days" class="screen-reader-text">' . esc_html__( 'Days after the last payment', 'members-for-kofi' ) . '</label>';
+		echo '<input type="number" id="members_for_kofi_expiry_days" name="members_for_kofi_options[role_expiry_days]" value="' . esc_attr( (string) $value ) . '" min="1" class="small-text"> ';
+		echo '<span>' . esc_html__( 'days after the member\'s last payment', 'members-for-kofi' ) . '</span>';
+	}
+
+	/**
+	 * "Delete log entries older than" checkbox.
+	 *
+	 * @return void
+	 */
+	public static function render_auto_clear_logs_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$checked = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
+		// A browser sends nothing for an unchecked box, and the sanitizer reads a
+		// missing value as on (the default for installs that predate the
+		// setting). Without this hidden "0", unticking the box never stuck.
+		echo '<input type="hidden" name="members_for_kofi_options[auto_clear_logs]" value="0">';
+		echo '<input type="checkbox" id="members_for_kofi_auto_clear_logs" name="members_for_kofi_options[auto_clear_logs]" value="1"' . checked( $checked, true, false ) . '> ';
+		echo '<label for="members_for_kofi_auto_clear_logs">' . esc_html__( 'Delete log entries older than', 'members-for-kofi' ) . '</label> ';
+	}
+
+	/**
+	 * "[30] days": the end of the log sentence.
+	 *
+	 * @return void
+	 */
+	public static function render_log_retention_days_field(): void {
+		$options = get_option( 'members_for_kofi_options', array() );
+		$value   = isset( $options['log_retention_days'] ) ? intval( $options['log_retention_days'] ) : 30;
+		echo '<label for="members_for_kofi_log_retention_days" class="screen-reader-text">' . esc_html__( 'Number of Days to Keep Logs', 'members-for-kofi' ) . '</label>';
+		echo '<input type="number" id="members_for_kofi_log_retention_days" name="members_for_kofi_options[log_retention_days]" value="' . esc_attr( (string) $value ) . '" min="1" class="small-text"> ';
+		echo '<span>' . esc_html__( 'days', 'members-for-kofi' ) . '</span>';
 	}
 
 	/**
@@ -467,849 +670,116 @@ class AdminSettings {
 	}
 
 	/**
-	 * Renders the "Only Accept Subscriptions" field in the settings page.
+	 * Sanitizes the options for the Members for Ko-fi plugin.
 	 *
-	 * This function outputs the HTML for the checkbox that allows users
-	 * to enable or disable role assignment only for active subscribers.
+	 * This function validates and sanitizes the input options
+	 * provided by the user in the settings page.
 	 *
-	 * @return void
+	 * @param array $options The input options to sanitize.
+	 * @return array The sanitized options.
 	 */
-	public static function render_only_subscriptions_field(): void {
-		$options = get_option( 'members_for_kofi_options', array() );
-		$checked = ! empty( $options['only_subscriptions'] );
-		echo '<label><input type="checkbox" name="members_for_kofi_options[only_subscriptions]" value="1" ' . checked( $checked, true, false ) . '> ' . esc_html__( 'Only assign roles to subscribers.', 'members-for-kofi' ) . '</label>';
-		echo '<p class="description">' . esc_html__( 'When enabled, users must be active subscribers to receive a role.', 'members-for-kofi' ) . '</p>';
-	}
+	public function sanitize_options( array $options ): array {
+		$stored        = get_option( 'members_for_kofi_options', array() );
+		$errors        = array();
+		$enable_expiry = ! empty( $options['enable_expiry'] );
 
-	/**
-	 * Renders the Tier to Role Mapping field in the settings page.
-	 *
-	 * This function outputs the HTML for mapping Ko-fi tiers to WordPress roles,
-	 * allowing users to assign roles based on Ko-fi tier names.
-	 *
-	 * @return void
-	 */
-	public function render_tier_role_map_field(): void {
-		$options = get_option( 'members_for_kofi_options', array() );
-		$map     = isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ? $options['tier_role_map'] : array();
-		$roles   = get_editable_roles();
+		// The field is write-only: only a hash is stored, and the form never
+		// shows it. A blank submission therefore means "keep the saved token",
+		// never "clear it". sanitize_text_field() trims, so a token pasted with
+		// stray whitespace is stored the way Ko-fi's real traffic arrives. A
+		// submitted hash is never accepted: it can only come from this code.
+		$submitted_token = isset( $options['verification_token'] ) && is_string( $options['verification_token'] )
+			? sanitize_text_field( $options['verification_token'] )
+			: '';
+		// A blank save also converts a plaintext token left in the settings by
+		// a restore from before 1.2.0, which webhooks no longer accept.
+		$token_hash = '' !== $submitted_token ? VerificationToken::hash( $submitted_token ) : VerificationToken::stored_hash( $stored );
+		if ( '' === $token_hash ) {
+			$token_hash = VerificationToken::legacy_hash( $stored );
+		}
+		if ( '' === $token_hash ) {
+			$errors[] = __( 'Verification Token is required.', 'members-for-kofi' );
+		}
 
-		echo '<table id="tier-role-map-table" class="form-table" style="margin-top:0">';
-		echo '<thead><tr><th>' . esc_html__( 'Ko-fi Tier', 'members-for-kofi' ) . '</th><th>' . esc_html__( 'Role', 'members-for-kofi' ) . '</th><th></th></tr></thead><tbody>';
+		$role_expiry_days = isset( $options['role_expiry_days'] ) ? absint( $options['role_expiry_days'] ) : ( $stored['role_expiry_days'] ?? 35 );
+		if ( $enable_expiry && ( empty( $role_expiry_days ) || ! is_numeric( (string) $role_expiry_days ) ) ) {
+			$errors[] = __( 'Role Expiry Days is required and must be a number when expiry is enabled.', 'members-for-kofi' );
+		}
 
-		if ( ! empty( $map ) ) {
-			foreach ( $map as $tier => $role ) {
-				$tier_val = esc_attr( $tier );
-				$role_val = esc_attr( $role );
-				echo '<tr>';
-				echo '<td><input type="text" name="members_for_kofi_options[tier_role_map][tier][]" value="' . esc_attr( $tier_val ) . '" class="regular-text"></td>';
-				echo '<td><select name="members_for_kofi_options[tier_role_map][role][]" class="regular-text">';
-				foreach ( $roles as $key => $details ) {
-					if ( ! Webhook::is_assignable_role( $key ) ) {
-						continue;
-					}
-					echo '<option value="' . esc_attr( $key ) . '"' . selected( $role_val, $key, false ) . '>' . esc_html( $details['name'] ) . '</option>';
+		if ( ! $enable_expiry && empty( $role_expiry_days ) ) {
+			// Expiry is off and no usable number was sent: keep the stored one.
+			$role_expiry_days = $stored['role_expiry_days'] ?? 35;
+		}
+
+		// Build tier map supporting both new parallel arrays and legacy associative array submission.
+		$tier_map = array();
+		if ( isset( $options['tier_role_map']['tier'] ) && is_array( $options['tier_role_map']['tier'] ) ) {
+			foreach ( $options['tier_role_map']['tier'] as $index => $tier_raw ) {
+				$tier = sanitize_text_field( $tier_raw );
+				$role = isset( $options['tier_role_map']['role'][ $index ] ) ? sanitize_key( $options['tier_role_map']['role'][ $index ] ) : '';
+				// Security: Explicitly reject disallowed roles (e.g., administrator).
+				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
+					$tier_map[ $tier ] = $role;
+				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
+					$errors[] = sprintf(
+						// translators: %s is the role name that was rejected.
+						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
+						$role
+					);
 				}
-				echo '</select></td>';
-				echo '<td><button type="button" class="button remove-tier-role-row">×</button></td>';
-				echo '</tr>';
+			}
+		} elseif ( isset( $options['tier_role_map'] ) && is_array( $options['tier_role_map'] ) ) {
+			// Legacy format already associative.
+			foreach ( $options['tier_role_map'] as $tier_raw => $role_raw ) {
+				$tier = sanitize_text_field( $tier_raw );
+				$role = sanitize_key( $role_raw );
+				// Security: Explicitly reject disallowed roles (e.g., administrator).
+				if ( $tier && $role && Webhook::is_assignable_role( $role ) ) {
+					$tier_map[ $tier ] = $role;
+				} elseif ( $tier && $role && ! Webhook::is_assignable_role( $role ) ) {
+					$errors[] = sprintf(
+						// translators: %s is the role name that was rejected.
+						__( 'Security: Role "%s" cannot be assigned via webhook for security reasons.', 'members-for-kofi' ),
+						$role
+					);
+				}
 			}
 		}
 
-		echo '</tbody></table>';
-
-		echo '<template id="tier-role-row-template">';
-		echo '<tr>';
-		echo '<td><input type="text" name="members_for_kofi_options[tier_role_map][tier][]" class="regular-text tier-name-input"></td>';
-		echo '<td><select name="members_for_kofi_options[tier_role_map][role][]" class="regular-text tier-role-select">';
-		foreach ( $roles as $key => $details ) {
-			if ( ! Webhook::is_assignable_role( $key ) ) {
-				continue;
-			}
-			echo '<option value="' . esc_attr( $key ) . '">' . esc_html( $details['name'] ) . '</option>';
-		}
-		echo '</select></td>';
-		echo '<td><button type="button" class="button remove-tier-role-row">×</button></td>';
-		echo '</tr>';
-		echo '</template>';
-
-		echo '<p><button type="button" class="button" id="add-tier-role-row">' . esc_html__( 'Add Tier Mapping', 'members-for-kofi' ) . '</button></p>';
-		echo '<p><em>' . esc_html__( 'Map Ko-fi tiers to WordPress roles. Only exact tier names will be matched.', 'members-for-kofi' ) . '</em></p>';
-	}
-
-	/**
-	 * Renders the default role field in the settings page.
-	 *
-	 * This function outputs the HTML for selecting a default WordPress role
-	 * to assign to users when no tier matches or tiers are not used.
-	 *
-	 * @return void
-	 */
-	public function render_default_role_field(): void {
-		$options  = get_option( 'members_for_kofi_options', array() );
-		$roles    = get_editable_roles();
-		$selected = $options['default_role'] ?? array();
-
-		echo '<select name="members_for_kofi_options[default_role]">';
-		echo '<option value="">' . esc_html__( '— No default —', 'members-for-kofi' ) . '</option>';
-		foreach ( $roles as $role_key => $role_details ) {
-			// Skip disallowed roles (e.g., administrator) for security.
-			if ( ! Webhook::is_assignable_role( $role_key ) ) {
-				continue;
-			}
-			echo '<option value="' . esc_attr( $role_key ) . '"' . selected( $role_key, $selected, false ) . '>' . esc_html( $role_details['name'] ) . '</option>';
-		}
-		echo '</select>';
-		echo '<p class="description">' . esc_html__( 'If no tier matches, or if you are not using tiers, this role will be assigned to the user.', 'members-for-kofi' ) . '</p>';
-	}
-
-	/**
-	 * Renders the "Enable Expiry" toggle field in the settings page.
-	 *
-	 * This function outputs the HTML for the checkbox that allows users
-	 * to enable or disable role expiry after a set number of days.
-	 *
-	 * @return void
-	 */
-	public static function render_expiry_toggle_field(): void {
-		$options = get_option( 'members_for_kofi_options', array() );
-		$checked = ! empty( $options['enable_expiry'] );
-		echo '<label><input type="checkbox" name="members_for_kofi_options[enable_expiry]" value="1" ' . checked( $checked, true, false ) . '></label>';
-		echo '<p class="description">' . esc_html__( 'If checked, role will be removed after the set number of days.', 'members-for-kofi' ) . '</p>';
-	}
-
-	/**
-	 * Renders the role expiry field in the settings page.
-	 *
-	 * This function outputs the HTML for the input field that allows users
-	 * to specify the number of days a role remains active for non-subscribers.
-	 *
-	 * @return void
-	 */
-	public static function render_role_expiry_field(): void {
-		$options       = get_option( 'members_for_kofi_options', array() );
-		$value         = isset( $options['role_expiry_days'] ) ? intval( $options['role_expiry_days'] ) : 35;
-		$expiry_enable = ! empty( $options['enable_expiry'] );
-		echo '<input type="number" id="members_for_kofi_expiry_days" name="members_for_kofi_options[role_expiry_days]" value="' . esc_attr( $value ) . '" min="1" ' . disabled( ! $expiry_enable, true, false ) . ' class="small-text">';
-		echo '<p class="description">' . esc_html__( 'Number of days the role remains active (only used if expiry is enabled).', 'members-for-kofi' ) . '</p>';
-	}
-
-	/**
-	 * Renders the auto clear logs checkbox field.
-	 *
-	 * @return void
-	 */
-	public static function render_auto_clear_logs_field(): void {
-		$options = get_option( 'members_for_kofi_options', array() );
-		$checked = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
-		// A browser sends nothing for an unchecked box, and the sanitizer reads a
-		// missing value as on (the default for installs that predate the
-		// setting). Without this hidden "0", unticking the box never stuck.
-		echo '<input type="hidden" name="members_for_kofi_options[auto_clear_logs]" value="0">';
-		echo '<input type="checkbox" id="members_for_kofi_auto_clear_logs" name="members_for_kofi_options[auto_clear_logs]" value="1" ' . checked( $checked, true, false ) . '>';
-		echo '<p class="description">' . esc_html__( 'Enable automatic deletion of old logs based on retention period.', 'members-for-kofi' ) . '</p>';
-	}
-
-	/**
-	 * Renders the log retention days field.
-	 *
-	 * @return void
-	 */
-	public static function render_log_retention_days_field(): void {
-		$options = get_option( 'members_for_kofi_options', array() );
-		$value   = isset( $options['log_retention_days'] ) ? intval( $options['log_retention_days'] ) : 30;
-		echo '<input type="number" id="members_for_kofi_log_retention_days" name="members_for_kofi_options[log_retention_days]" value="' . esc_attr( $value ) . '" min="1" class="small-text">';
-		echo '<p class="description">' . esc_html__( 'Number of days to keep logs before automatic deletion (minimum 1 day).', 'members-for-kofi' ) . '</p>';
-	}
-
-	/**
-	 * Renders the log level field in the settings page.
-	 *
-	 * This function outputs the HTML for selecting the minimum severity
-	 * of log messages to record in the plugin's log file.
-	 *
-	 * @return void
-	 */
-	// Deprecated: log level field removed with lightweight logger; method retained intentionally removed.
-
-	/**
-	 * Renders the settings page for the Members for Ko-fi plugin.
-	 * This function outputs the HTML for the settings page in the WordPress admin dashboard,
-	 * allowing users to configure the plugin's settings.
-	 *
-	 * @return void
-	 */
-	public function render_settings_page(): void {
-		// phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Reading tab from URL for display only
-		$active_tab = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'settings';
-		if ( ! in_array( $active_tab, array( 'settings', 'logs' ), true ) ) {
-			$active_tab = 'settings';
-		}
-		?>
-		<div class="wrap">
-			<h1><?php esc_html_e( 'Members for Ko-fi Settings', 'members-for-kofi' ); ?></h1>
-			<?php
-			// WordPress prints Settings API messages by itself only on pages
-			// under Settings. This is a top-level page, so without this call a
-			// rejected save ("Verification Token is required", a disallowed
-			// role) was silently dropped, and a good one got no confirmation.
-			settings_errors();
-			$this->render_cron_warning();
-			?>
-			<h2 class="nav-tab-wrapper" role="tablist">
-				<a href="#" role="tab" data-tab="settings" aria-selected="<?php echo 'settings' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'settings' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Settings', 'members-for-kofi' ); ?>
-				</a>
-				<a href="#" role="tab" data-tab="logs" aria-selected="<?php echo 'logs' === $active_tab ? 'true' : 'false'; ?>" class="nav-tab <?php echo 'logs' === $active_tab ? 'nav-tab-active' : ''; ?>">
-					<?php esc_html_e( 'Logs', 'members-for-kofi' ); ?>
-				</a>
-			</h2>
-			<input type="hidden" id="active_tab" value="<?php echo esc_attr( $active_tab ); ?>" />
-			<form method="post" action="options.php" id="members-for-kofi-settings-form">
-				<?php settings_fields( 'members_for_kofi_options' ); ?>
-				<div id="members-for-kofi-tab-settings" class="members-for-kofi-tab" style="<?php echo 'settings' === $active_tab ? '' : 'display:none;'; ?>">
-					<h2><?php esc_html_e( 'Ko-fi Settings', 'members-for-kofi' ); ?></h2>
-					<table class="form-table">
-						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_general' ); ?>
-					</table>
-					<h2><?php esc_html_e( 'Role Assignment', 'members-for-kofi' ); ?></h2>
-					<table class="form-table">
-						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_role_assignment' ); ?>
-					</table>
-					<h2><?php esc_html_e( 'Logging', 'members-for-kofi' ); ?></h2>
-					<table class="form-table">
-						<?php do_settings_fields( 'members-for-kofi', 'members_for_kofi_logging' ); ?>
-					</table>
-					<?php submit_button(); ?>
-				</div>
-			</form>
-			<div id="members-for-kofi-tab-logs" class="members-for-kofi-tab" style="<?php echo 'logs' === $active_tab ? '' : 'display:none;'; ?>">
-				<h2><?php esc_html_e( 'Logs', 'members-for-kofi' ); ?></h2>
-				<?php $this->render_logs_tab(); ?>
-			</div>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Renders the "Logs" tab in the settings page.
-	 *
-	 * This function outputs the HTML for displaying logs with a dropdown to switch between user and request logs.
-	 *
-	 * @param int|null $paged         The current page number, or null to auto-determine.
-	 * @param int      $rows_per_page The number of rows to display per page.
-	 * @param string   $log_type      The type of logs to display ('user' or 'request').
-	 * @return void
-	 */
-	public function render_logs_tab( ?int $paged = null, int $rows_per_page = 10, string $log_type = 'user' ): void {
-		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
-		global $wpdb;
-
-		// Determine which table to query based on log type.
-		if ( 'request' === $log_type ) {
-			$table_name    = $wpdb->prefix . 'members_for_kofi_request_logs';
-			$transient_key = 'members_for_kofi_total_request_logs';
-		} else {
-			$table_name    = $this->get_logs_table_name();
-			$transient_key = 'members_for_kofi_total_logs';
-		}
-
-		$total_logs = get_transient( $transient_key );
-
-		if ( false === $total_logs || 0 === (int) $total_logs ) {
-			// Recalculate if not cached or cached as zero (could be stale from prior table mismatch).
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- Counting rows in plugin-owned table.
-			$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
-			set_transient( $transient_key, $total_logs, MINUTE_IN_SECONDS );
-		}
-
-		$total_pages = ceil( $total_logs / $rows_per_page );
-
-		?>
-		<!-- Log Type Selector -->
-		<div style="margin-bottom:15px;">
-			<label for="log-type-selector" style="font-weight:bold; margin-right:10px;">
-				<?php esc_html_e( 'Log Type:', 'members-for-kofi' ); ?>
-			</label>
-			<select id="log-type-selector" style="min-width:150px;">
-				<option value="user" <?php selected( $log_type, 'user' ); ?>>
-					<?php esc_html_e( 'User Logs', 'members-for-kofi' ); ?>
-				</option>
-				<option value="request" <?php selected( $log_type, 'request' ); ?>>
-					<?php esc_html_e( 'Request Logs', 'members-for-kofi' ); ?>
-				</option>
-			</select>
-		</div>
-
-		<!-- Logs Table Container -->
-		<div id="logs-controls" style="display:flex; gap:10px; align-items:flex-end; margin-bottom:10px;">
-			<div>
-				<label for="kofi-members-log-search" style="display:block;">
-					<?php
-					if ( 'request' === $log_type ) {
-						esc_html_e( 'Search (email / tier / status)', 'members-for-kofi' );
-					} else {
-						esc_html_e( 'Search (email / action / role)', 'members-for-kofi' );
-					}
-					?>
-				</label>
-				<input type="search" id="kofi-members-log-search" style="min-width:280px;" />
-			</div>
-			<div>
-				<button type="button" class="button" id="kofi-members-log-search-btn"><?php esc_html_e( 'Search', 'members-for-kofi' ); ?></button>
-				<button type="button" class="button" id="kofi-members-log-reset-btn"><?php esc_html_e( 'Reset', 'members-for-kofi' ); ?></button>
-			</div>
-			<div>
-				<button type="button" class="button" id="kofi-members-log-refresh-btn"><?php esc_html_e( 'Refresh', 'members-for-kofi' ); ?></button>
-			</div>
-		</div>
-		<div id="logs-table-container" data-current-search="" data-log-type="<?php echo esc_attr( $log_type ); ?>">
-			<?php
-			if ( 'request' === $log_type ) {
-				$this->render_request_logs_table( $paged, $rows_per_page );
-			} else {
-				$this->render_user_logs_table( $paged, $rows_per_page );
-			}
-			?>
-		</div>
-
-		<?php
-	}
-
-	/**
-	 * Handles the AJAX request for pagination in the user logs tab.
-	 *
-	 * This function verifies the user's permissions, processes the pagination request,
-	 * and returns the rendered logs table for the requested page.
-	 *
-	 * @return void
-	 */
-	public function handle_pagination(): void {
-		// Verify the nonce for security.
-		check_ajax_referer( 'members_for_kofi_pagination', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX pagination request' );
-
-		// Verify the current user has permission to view logs.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		$paged    = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$search   = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-		$log_type = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
-
-		// Ensure the paged parameter is valid.
-		if ( $paged < 1 ) {
-			wp_send_json_error( __( 'Invalid page number.', 'members-for-kofi' ) );
-		}
-
-		// Render only the logs table for the requested page.
-		ob_start();
-		if ( 'request' === $log_type ) {
-			$this->render_request_logs_table( $paged, 10, $search );
-		} else {
-			$this->render_user_logs_table( $paged, 10, $search );
-		}
-		$content = ob_get_clean();
-
-		wp_send_json_success( $content );
-	}
-
-	/**
-	 * Handles the AJAX request to clear logs.
-	 *
-	 * @return void
-	 */
-	public function handle_clear_logs(): void {
-		// Verify the nonce for security.
-		check_ajax_referer( 'members_for_kofi_clear_logs', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX clear logs request' );
-
-		// Verify the current user has permission to clear logs.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		global $wpdb;
-		$log_type = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
-
-		// Determine which table to clear based on log type.
-		if ( 'request' === $log_type ) {
-			$table_name    = $wpdb->prefix . 'members_for_kofi_request_logs';
-			$transient_key = 'members_for_kofi_total_request_logs';
-		} else {
-			$table_name    = $this->get_logs_table_name();
-			$transient_key = 'members_for_kofi_total_logs';
-		}
-
-		// Check if the logs table exists and clear it.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Checking for the plugin's own table; a cached answer could be wrong.
-		if ( $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $table_name ) ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- Clearing the plugin's own log table on admin request; the cached count is deleted below.
-			$wpdb->query( 'DELETE FROM `' . esc_sql( $table_name ) . '`' );
-			delete_transient( $transient_key ); // Clear the cached total logs count.
-
-			// Render the updated logs table (which will now show "No logs available").
-			ob_start();
-			if ( 'request' === $log_type ) {
-				$this->render_request_logs_table();
-			} else {
-				$this->render_user_logs_table();
-			}
-			$content = ob_get_clean();
-
-			wp_send_json_success( $content );
-		} else {
-			wp_send_json_error( __( 'Logs table does not exist.', 'members-for-kofi' ) );
-		}
-	}
-
-	/**
-	 * Handles the AJAX request to update rows per page.
-	 *
-	 * @return void
-	 */
-	/**
-	 * Clamps a requested page size to one the log viewer actually offers.
-	 *
-	 * Anything the picker cannot produce is rejected rather than squeezed
-	 * into range: 0 reached `ceil( $total_logs / 0 )` and killed the page
-	 * with a DivisionByZeroError, and a huge value went straight into LIMIT
-	 * and loaded the entire table into memory.
-	 *
-	 * @param mixed $raw Untrusted page size, typically straight from $_POST.
-	 * @return int One of ROWS_PER_PAGE_OPTIONS.
-	 */
-	public function sanitize_rows_per_page( $raw ): int {
-		$value = absint( $raw );
-
-		if ( ! in_array( $value, self::ROWS_PER_PAGE_OPTIONS, true ) ) {
-			return self::DEFAULT_ROWS_PER_PAGE;
-		}
-
-		return $value;
-	}
-
-	/**
-	 * Handles the AJAX request that changes the log table's page size.
-	 *
-	 * @return void
-	 */
-	public function handle_update_rows_per_page(): void {
-		check_ajax_referer( 'members_for_kofi_update_rows_per_page', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX rows per page update request' );
-
-		// Verify the current user has permission to update settings.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		$rows_per_page = $this->sanitize_rows_per_page(
-			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
-		);
-		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
-
-		ob_start();
-		if ( 'request' === $log_type ) {
-			$this->render_request_logs_table( null, $rows_per_page, $search );
-		} else {
-			$this->render_user_logs_table( null, $rows_per_page, $search );
-		}
-		$content = ob_get_clean();
-
-		wp_send_json_success( $content );
-	}
-
-	/**
-	 * Handles AJAX log filtering.
-	 */
-	public function handle_filter_logs(): void {
-		check_ajax_referer( 'members_for_kofi_filter_logs', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX filter logs request' );
-
-		// Verify the current user has permission to view logs.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
-		$rows_per_page = $this->sanitize_rows_per_page(
-			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
-		);
-
-		ob_start();
-		// Every other log handler honours log_type; this one always rendered the
-		// user log, so searching from the Request tab answered with user rows.
-		if ( 'request' === $log_type ) {
-			$this->render_request_logs_table( $paged, $rows_per_page, $search );
-		} else {
-			$this->render_user_logs_table( $paged, $rows_per_page, $search );
-		}
-		$content = ob_get_clean();
-		wp_send_json_success( $content );
-	}
-
-	/**
-	 * Handles AJAX refresh (no search alteration; just reload current page).
-	 */
-	public function handle_refresh_logs(): void {
-		check_ajax_referer( 'members_for_kofi_refresh_logs', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX refresh logs request' );
-
-		// Verify the current user has permission to view logs.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$rows_per_page = $this->sanitize_rows_per_page(
-			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
-		);
-		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-		ob_start();
-		$this->render_user_logs_table( $paged, $rows_per_page, $search );
-		$content = ob_get_clean();
-		wp_send_json_success( $content );
-	}
-
-	/**
-	 * Handles AJAX log type switch (User vs Request logs).
-	 */
-	public function handle_switch_log_type(): void {
-		check_ajax_referer( 'members_for_kofi_switch_log_type', '_ajax_nonce' );
-		\MembersForKofi\Logging\DebugLogger::debug( 'AJAX switch log type request' );
-
-		// Verify the current user has permission to view logs.
-		if ( ! current_user_can( 'manage_options' ) ) {
-			wp_send_json_error( __( 'You do not have permission to access this resource.', 'members-for-kofi' ) );
-		}
-
-		$log_type      = isset( $_POST['log_type'] ) ? sanitize_text_field( wp_unslash( $_POST['log_type'] ) ) : 'user';
-		$search        = isset( $_POST['search'] ) ? sanitize_text_field( wp_unslash( $_POST['search'] ) ) : '';
-		$paged         = isset( $_POST['paged'] ) ? absint( $_POST['paged'] ) : 1;
-		$rows_per_page = $this->sanitize_rows_per_page(
-			isset( $_POST['rows_per_page'] ) ? absint( wp_unslash( $_POST['rows_per_page'] ) ) : self::DEFAULT_ROWS_PER_PAGE
-		);
-
-		ob_start();
-		if ( 'request' === $log_type ) {
-			$this->render_request_logs_table( $paged, $rows_per_page, $search );
-		} else {
-			$this->render_user_logs_table( $paged, $rows_per_page, $search );
-		}
-		$content = ob_get_clean();
-		wp_send_json_success( $content );
-	}
-
-	/**
-	 * Renders the user logs table.
-	 *
-	 * This function outputs the HTML for displaying the user logs in a table,
-	 * including pagination links.
-	 *
-	 * @param int|null $paged         The current page number, or null to auto-determine.
-	 * @param int      $rows_per_page The number of rows to display per page.
-	 * @param string   $search        Search filter.
-	 * @return void
-	 */
-	public function render_user_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
-		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
-		global $wpdb;
-
-		$table_name   = $this->get_logs_table_name();
-		$current_page = $paged ?? 1; // Simplified; no $_GET fallback (avoids nonce sniff concerns).
-		$offset       = ( $current_page - 1 ) * $rows_per_page;
-
-		$use_cache  = ( '' === $search );
-		$total_logs = $use_cache ? get_transient( 'members_for_kofi_total_logs' ) : false;
-		$where_sql  = 'WHERE 1=1';
-		$params     = array();
-		$like       = '';
-		if ( '' !== $search ) {
-			$like       = '%' . $wpdb->esc_like( $search ) . '%';
-			$where_sql .= ' AND (email LIKE %s OR action LIKE %s OR role LIKE %s)';
-			$params     = array( $like, $like, $like );
-		}
-
-		if ( false === $total_logs ) {
-			if ( empty( $params ) ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
-				$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
-			} else {
-				// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
-				$query      = 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '` ' . $where_sql;
-				$total_logs = (int) $wpdb->get_var( $wpdb->prepare( $query, $params ) );
-				// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
-			}
-			if ( ! empty( $wpdb->last_error ) ) {
-				\MembersForKofi\Logging\DebugLogger::error(
-					'DB error counting logs',
-					array(
-						'error'      => $wpdb->last_error,
-						'last_query' => $wpdb->last_query,
-					)
-				);
-			}
-			if ( $use_cache ) {
-				set_transient( 'members_for_kofi_total_logs', $total_logs, MINUTE_IN_SECONDS );
-			}
-		}
-
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- Controlled table name.
-		// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Plugin-owned table query.
-		if ( empty( $params ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Unfiltered query.
-			$logs = $wpdb->get_results(
-				$wpdb->prepare(
-					'SELECT `timestamp`, `user_id`, `email`, `action`, `role` FROM `' . esc_sql( $table_name ) . '` ORDER BY `timestamp` DESC LIMIT %d OFFSET %d',
-					$rows_per_page,
-					$offset
-				),
-				ARRAY_A
+		// Security: Validate default role is not in disallowed list.
+		$default_role = isset( $options['default_role'] ) ? sanitize_key( $options['default_role'] ) : '';
+		if ( $default_role && ! Webhook::is_assignable_role( $default_role ) ) {
+			$errors[] = sprintf(
+				// translators: %s is the role name that was rejected.
+				__( 'Security: Role "%s" cannot be used as default role for security reasons.', 'members-for-kofi' ),
+				$default_role
 			);
-			// Debug removed (noise).
-		} else {
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
-			$query = 'SELECT `timestamp`, `user_id`, `email`, `action`, `role` FROM `' . esc_sql( $table_name ) . '` ' . $where_sql . ' ORDER BY `timestamp` DESC LIMIT %d OFFSET %d';
-			$logs  = $wpdb->get_results(
-				$wpdb->prepare(
-					$query,
-					array_merge( $params, array( $rows_per_page, $offset ) )
-				),
-				ARRAY_A
-			);
-			// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
-			// Debug removed (noise).
-		}
-		if ( empty( $logs ) && (int) $total_logs > 0 ) {
-			\MembersForKofi\Logging\DebugLogger::warning( 'No rows returned despite positive total' );
+			$default_role = ''; // Clear invalid default role.
 		}
 
-		$total_pages = ceil( $total_logs / $rows_per_page );
-
-		?>
-		<table class="widefat fixed striped">
-			<thead>
-				<tr>
-					<th><?php esc_html_e( 'Timestamp', 'members-for-kofi' ); ?></th>
-					<th><?php esc_html_e( 'User ID', 'members-for-kofi' ); ?></th>
-					<th><?php esc_html_e( 'Email', 'members-for-kofi' ); ?></th>
-					<th><?php esc_html_e( 'Action', 'members-for-kofi' ); ?></th>
-					<th><?php esc_html_e( 'Role', 'members-for-kofi' ); ?></th>
-				</tr>
-			</thead>
-			<tbody>
-				<?php if ( empty( $logs ) ) : ?>
-					<tr>
-						<td colspan="5"><?php esc_html_e( 'No logs available.', 'members-for-kofi' ); ?></td>
-					</tr>
-				<?php else : ?>
-					<?php foreach ( $logs as $log ) : ?>
-						<tr>
-							<td><?php echo esc_html( $log['timestamp'] ); ?></td>
-							<td><?php echo esc_html( $log['user_id'] ); ?></td>
-							<td><?php echo esc_html( $log['email'] ); ?></td>
-							<td><?php echo esc_html( $log['action'] ); ?></td>
-							<td><?php echo esc_html( $log['role'] ); ?></td>
-						</tr>
-					<?php endforeach; ?>
-				<?php endif; ?>
-			</tbody>
-		</table>
-
-		<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px;">
-			<input type="hidden" id="kofi-members-current-search" value="<?php echo esc_attr( $search ); ?>" />
-			<!-- Clear Logs Button -->
-			<form method="post" action="<?php echo esc_url( add_query_arg( 'tab', 'user_logs', admin_url( 'admin.php?page=members-for-kofi' ) ) ); ?>" style="margin-right: 15px;">
-				<?php wp_nonce_field( 'clear_user_logs_action', 'clear_user_logs_nonce' ); ?>
-				<button type="button" name="clear_logs" class="button button-secondary">
-					<?php esc_html_e( 'Clear Logs', 'members-for-kofi' ); ?>
-				</button>
-			</form>
-
-			<!-- Rows Per Page Dropdown -->
-			<form method="get" style="margin-right: 15px;">
-				<input type="hidden" name="page" value="members-for-kofi">
-				<input type="hidden" name="tab" value="user_logs">
-				<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
-				<select name="rows_per_page" id="rows_per_page" style="width: auto;">
-					<?php foreach ( self::ROWS_PER_PAGE_OPTIONS as $option ) : ?>
-						<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
-							<?php echo esc_html( $option ); ?>
-						</option>
-					<?php endforeach; ?>
-				</select>
-			</form>
-			<div class="pagination-links" style="display:flex; gap:4px; flex-wrap:wrap;">
-				<?php if ( $total_pages > 1 ) : ?>
-					<?php
-					$prev_page = max( 1, $current_page - 1 );
-					$next_page = min( $total_pages, $current_page + 1 );
-					if ( $current_page > 1 ) {
-						echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $prev_page ) . '">&laquo; ' . esc_html__( 'Previous', 'members-for-kofi' ) . '</button>';
-					}
-					for ( $p = 1; $p <= $total_pages; $p++ ) {
-						$cls = 'button members-for-kofi-page-btn' . ( $p === $current_page ? ' button-primary' : '' );
-						echo '<button type="button" class="' . esc_attr( $cls ) . '" data-page="' . esc_attr( $p ) . '">' . esc_html( (string) $p ) . '</button>';
-					}
-					if ( $current_page < $total_pages ) {
-						echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $next_page ) . '">' . esc_html__( 'Next', 'members-for-kofi' ) . ' &raquo;</button>';
-					}
-					?>
-				<?php endif; ?>
-			</div>
-		</div>
-		<?php
-	}
-
-	/**
-	 * Renders the request logs table.
-	 *
-	 * @param int|null $paged         The current page number.
-	 * @param int      $rows_per_page The number of rows to display per page.
-	 * @param string   $search        Search filter.
-	 * @return void
-	 */
-	public function render_request_logs_table( ?int $paged = null, int $rows_per_page = 10, string $search = '' ): void {
-		$rows_per_page = $this->sanitize_rows_per_page( $rows_per_page );
-		global $wpdb;
-
-		$table_name   = $wpdb->prefix . 'members_for_kofi_request_logs';
-		$current_page = $paged ?? 1;
-		$offset       = ( $current_page - 1 ) * $rows_per_page;
-
-		$use_cache  = ( '' === $search );
-		$total_logs = $use_cache ? get_transient( 'members_for_kofi_total_request_logs' ) : false;
-		$where_sql  = 'WHERE 1=1';
-		$params     = array();
-
-		if ( '' !== $search ) {
-			$like       = '%' . $wpdb->esc_like( $search ) . '%';
-			$where_sql .= ' AND (email LIKE %s OR tier_name LIKE %s OR CAST(status_code AS CHAR) LIKE %s OR error LIKE %s)';
-			$params     = array( $like, $like, $like, $like );
+		if ( ! empty( $errors ) ) {
+			foreach ( $errors as $error ) {
+				add_settings_error( 'members_for_kofi_options', 'members_for_kofi_options_error', $error, 'error' );
+			}
+			return $stored; // Return previous values.
 		}
 
-		if ( false === $total_logs ) {
-			if ( empty( $params ) ) {
-				// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Counting plugin-owned table.
-				$total_logs = (int) $wpdb->get_var( 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '`' );
-			} else {
-				// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
-				$query      = 'SELECT COUNT(*) FROM `' . esc_sql( $table_name ) . '` ' . $where_sql;
-				$total_logs = (int) $wpdb->get_var( $wpdb->prepare( $query, $params ) );
-				// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
-			}
-			if ( $use_cache ) {
-				set_transient( 'members_for_kofi_total_request_logs', $total_logs, MINUTE_IN_SECONDS );
-			}
+		// Sanitize logging settings.
+		$auto_clear_logs    = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
+		$log_retention_days = isset( $options['log_retention_days'] ) ? absint( $options['log_retention_days'] ) : 30;
+		if ( $log_retention_days < 1 ) {
+			$log_retention_days = 30;
 		}
 
-		if ( empty( $params ) ) {
-			// phpcs:ignore WordPress.DB.DirectDatabaseQuery -- Unfiltered query on a plugin-owned table.
-			$logs = $wpdb->get_results(
-				$wpdb->prepare(
-					'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ORDER BY `timestamp` DESC LIMIT %d OFFSET %d',
-					$rows_per_page,
-					$offset
-				),
-				ARRAY_A
-			);
-		} else {
-			// phpcs:disable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared -- $query is literal SQL with %s placeholders; the search term is escaped into $params.
-			$query = 'SELECT `timestamp`, `email`, `tier_name`, `amount`, `currency`, `is_subscription`, `status_code`, `success`, `error` FROM `' . esc_sql( $table_name ) . '` ' . $where_sql . ' ORDER BY `timestamp` DESC LIMIT %d OFFSET %d';
-			$logs  = $wpdb->get_results(
-				$wpdb->prepare(
-					$query,
-					array_merge( $params, array( $rows_per_page, $offset ) )
-				),
-				ARRAY_A
-			);
-			// phpcs:enable WordPress.DB.DirectDatabaseQuery, WordPress.DB.PreparedSQL.NotPrepared
-		}
-
-		$total_pages = ceil( $total_logs / $rows_per_page );
-
-		?>
-<table class="widefat fixed striped">
-<thead>
-<tr>
-<th><?php esc_html_e( 'Timestamp', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Email', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Tier Name', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Amount', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Subscription', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Status', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Success', 'members-for-kofi' ); ?></th>
-<th><?php esc_html_e( 'Error', 'members-for-kofi' ); ?></th>
-</tr>
-</thead>
-<tbody>
-		<?php if ( empty( $logs ) ) : ?>
-<tr>
-<td colspan="8"><?php esc_html_e( 'No logs available.', 'members-for-kofi' ); ?></td>
-</tr>
-<?php else : ?>
-	<?php foreach ( $logs as $log ) : ?>
-<tr>
-<td><?php echo esc_html( $log['timestamp'] ); ?></td>
-<td><?php echo esc_html( $log['email'] ); ?></td>
-<td><?php echo esc_html( $log['tier_name'] ); ?></td>
-<td><?php echo esc_html( $log['amount'] ? esc_html( $log['amount'] . ' ' . $log['currency'] ) : '-' ); ?></td>
-<td><?php echo $log['is_subscription'] ? esc_html__( 'Yes', 'members-for-kofi' ) : esc_html__( 'No', 'members-for-kofi' ); ?></td>
-<td><?php echo esc_html( $log['status_code'] ); ?></td>
-<td><?php echo $log['success'] ? '✓' : '✗'; ?></td>
-<td><?php echo esc_html( $log['error'] ); ?></td>
-</tr>
-<?php endforeach; ?>
-<?php endif; ?>
-</tbody>
-</table>
-
-<div style="display: flex; align-items: center; justify-content: space-between; margin-top: 15px;">
-<input type="hidden" id="kofi-members-current-search" value="<?php echo esc_attr( $search ); ?>" />
-<!-- Clear Logs Button -->
-<form method="post" action="<?php echo esc_url( add_query_arg( 'tab', 'logs', admin_url( 'admin.php?page=members-for-kofi' ) ) ); ?>" style="margin-right: 15px;">
-		<?php wp_nonce_field( 'clear_request_logs_action', 'clear_request_logs_nonce' ); ?>
-<button type="button" name="clear_logs" class="button button-secondary">
-		<?php esc_html_e( 'Clear Logs', 'members-for-kofi' ); ?>
-</button>
-</form>
-
-<!-- Rows Per Page Dropdown -->
-<form method="get" style="margin-right: 15px;">
-<input type="hidden" name="page" value="members-for-kofi">
-<input type="hidden" name="tab" value="logs">
-<label for="rows_per_page" style="margin-right: 10px;"><?php esc_html_e( 'Rows per page:', 'members-for-kofi' ); ?></label>
-<select name="rows_per_page" id="rows_per_page" style="width: auto;">
-		<?php foreach ( self::ROWS_PER_PAGE_OPTIONS as $option ) : ?>
-<option value="<?php echo esc_attr( $option ); ?>" <?php selected( $rows_per_page, $option ); ?>>
-			<?php echo esc_html( $option ); ?>
-</option>
-<?php endforeach; ?>
-</select>
-</form>
-<div class="pagination-links" style="display:flex; gap:4px; flex-wrap:wrap;">
-		<?php if ( $total_pages > 1 ) : ?>
-			<?php
-			$prev_page = max( 1, $current_page - 1 );
-			$next_page = min( $total_pages, $current_page + 1 );
-			if ( $current_page > 1 ) {
-				echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $prev_page ) . '">&laquo; ' . esc_html__( 'Previous', 'members-for-kofi' ) . '</button>';
-			}
-			for ( $p = 1; $p <= $total_pages; $p++ ) {
-				$cls = 'button members-for-kofi-page-btn' . ( $p === $current_page ? ' button-primary' : '' );
-				echo '<button type="button" class="' . esc_attr( $cls ) . '" data-page="' . esc_attr( $p ) . '">' . esc_html( (string) $p ) . '</button>';
-			}
-			if ( $current_page < $total_pages ) {
-				echo '<button type="button" class="button members-for-kofi-page-btn" data-page="' . esc_attr( $next_page ) . '">' . esc_html__( 'Next', 'members-for-kofi' ) . ' &raquo;</button>';
-			}
-			?>
-<?php endif; ?>
-</div>
-</div>
-		<?php
+		return array(
+			VerificationToken::HASH_KEY => $token_hash,
+			'only_subscriptions'        => ! empty( $options['only_subscriptions'] ),
+			'tier_role_map'             => $tier_map,
+			'default_role'              => $default_role,
+			'enable_expiry'             => $enable_expiry,
+			'role_expiry_days'          => $role_expiry_days,
+			'auto_clear_logs'           => $auto_clear_logs,
+			'log_retention_days'        => $log_retention_days,
+		);
 	}
 }

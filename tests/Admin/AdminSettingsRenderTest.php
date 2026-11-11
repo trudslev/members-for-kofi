@@ -91,15 +91,16 @@ class AdminSettingsRenderTest extends TestCase {
 	public function test_render_only_subscriptions_field(): void {
 		$output = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
 
-		$this->assertStringContainsString( 'name="members_for_kofi_options[only_subscriptions]"', $output );
-		$this->assertStringContainsString( 'checked', $output, 'The stored "true" value should render as checked.' );
+		$this->assertMatchesRegularExpression( '/name="members_for_kofi_options\[only_subscriptions\]" value="1" checked/', $output, 'The stored "true" value should select "Subscriptions only".' );
+		$this->assertDoesNotMatchRegularExpression( '/value="0" checked/', $output );
 
 		$options                       = (array) get_option( 'members_for_kofi_options', array() );
 		$options['only_subscriptions'] = false;
 		update_option( 'members_for_kofi_options', $options );
 
 		$output = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
-		$this->assertStringNotContainsString( 'checked', $output, 'A stored "false" value must not render as checked.' );
+		$this->assertMatchesRegularExpression( '/name="members_for_kofi_options\[only_subscriptions\]" value="0" checked/', $output, 'A stored "false" value should select "Donations and subscriptions".' );
+		$this->assertDoesNotMatchRegularExpression( '/value="1" checked/', $output );
 	}
 
 	/**
@@ -169,7 +170,130 @@ class AdminSettingsRenderTest extends TestCase {
 	 * Ensures that the rendered output contains the expected input field
 	 * for the log enabled option with the correct name attribute.
 	 */
-	// Logging fields removed; corresponding render tests dropped.
+	/**
+	 * The connection status says which of four states the site is in.
+	 */
+	public function test_the_connection_status_follows_the_request_log(): void {
+		$this->write_options_raw( array( 'default_role' => 'subscriber' ) );
+		$this->assertStringContainsString( 'Not connected', $this->capture_render( array( $this->settings, 'render_connection_status' ) ) );
+
+		$this->write_options_raw( array( 'verification_token_sha256' => hash( 'sha256', 'status-token' ) ) );
+		$this->assertStringContainsString( 'Waiting for Ko-fi', $this->capture_render( array( $this->settings, 'render_connection_status' ) ) );
+
+		$logger = new \MembersForKofi\Logging\RequestLogger();
+		$logger->log_request( array( 'email' => 'status@example.com' ), 200, true, '' );
+		$working = $this->capture_render( array( $this->settings, 'render_connection_status' ) );
+		$this->assertStringContainsString( 'Working: the last request from Ko-fi', $working );
+		$this->assertStringContainsString( 'mfk-status-ok', $working );
+
+		$logger->log_request( array(), 401, false, 'Unauthorized: token mismatch' );
+		$refused = $this->capture_render( array( $this->settings, 'render_connection_status' ) );
+		$this->assertStringContainsString( 'was refused: the token doesn&#039;t match', $refused );
+		$this->assertStringContainsString( 'mfk-status-error', $refused );
+	}
+
+	/**
+	 * Tier names are data from the site owner and from Ko-fi: always escaped.
+	 */
+	public function test_tier_names_are_escaped(): void {
+		$this->write_options_raw(
+			array(
+				'verification_token_sha256' => hash( 'sha256', 'x' ),
+				'tier_role_map'             => array( '"><script>alert(1)</script>' => 'subscriber' ),
+			)
+		);
+		( new \MembersForKofi\Logging\UserLogger() )->log_action( 0, 'tier@example.com', 'Unmapped tier: <img src=x onerror=alert(2)>' );
+
+		$output = $this->capture_render( array( $this->settings, 'render_tier_role_map_field' ) );
+
+		$this->assertStringNotContainsString( '<script>alert(1)', $output );
+		$this->assertStringNotContainsString( '<img src=x', $output );
+		$this->assertStringContainsString( '&lt;img src=x onerror=alert(2)&gt;', $output );
+	}
+
+	/**
+	 * A tier Ko-fi sent that has no mapping is offered; a mapped one is not,
+	 * whatever its capitalisation.
+	 */
+	public function test_unmapped_tiers_are_offered(): void {
+		$this->write_options_raw(
+			array(
+				'verification_token_sha256' => hash( 'sha256', 'x' ),
+				'tier_role_map'             => array( 'Gold' => 'subscriber' ),
+			)
+		);
+		$logger = new \MembersForKofi\Logging\UserLogger();
+		$logger->log_action( 0, 'a@example.com', 'Unmapped tier: Bronze' );
+		$logger->log_action( 0, 'b@example.com', 'Unmapped tier: Bronze' );
+		$logger->log_action( 0, 'c@example.com', 'Unmapped tier: gold' );
+
+		$output = $this->capture_render( array( $this->settings, 'render_tier_role_map_field' ) );
+
+		$this->assertStringContainsString( 'data-tier="Bronze"', $output );
+		$this->assertStringContainsString( 'Add &quot;Bronze&quot; (2 payments)', $output );
+		$this->assertStringNotContainsString( 'data-tier="gold"', $output );
+	}
+
+	/**
+	 * Role menus never offer administrator.
+	 */
+	public function test_role_menus_never_offer_administrator(): void {
+		$output = $this->capture_render( array( $this->settings, 'render_default_role_field' ) )
+			. $this->capture_render( array( $this->settings, 'render_tier_role_map_field' ) );
+
+		$this->assertStringNotContainsString( 'value="administrator"', $output );
+		$this->assertStringContainsString( '— No role —', $output );
+	}
+
+	/**
+	 * Unticking expiry is sent as "0", and the box has a visible label.
+	 */
+	public function test_the_expiry_box_has_a_label_and_sends_off(): void {
+		$output = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
+
+		$this->assertLessThan(
+			strpos( $output, 'type="checkbox"' ),
+			strpos( $output, 'type="hidden" name="members_for_kofi_options[enable_expiry]" value="0"' )
+		);
+		$this->assertStringContainsString( '<label for="members_for_kofi_enable_expiry">Remove the role</label>', $output );
+	}
+
+	/**
+	 * Each tab is its own URL; an unknown tab falls back to Settings, and the
+	 * old log link still opens the logs.
+	 *
+	 * @dataProvider tabs
+	 *
+	 * @param string $requested `tab` in the URL.
+	 * @param string $marker    Text only that tab shows.
+	 */
+	public function test_each_tab_has_its_own_url( string $requested, string $marker ): void {
+		$_GET['tab'] = $requested;
+
+		try {
+			$output = $this->capture_render( array( $this->settings, 'render_settings_page' ) );
+		} finally {
+			unset( $_GET['tab'] );
+		}
+
+		$this->assertStringContainsString( $marker, $output );
+		$this->assertStringContainsString( 'nav-tab-active', $output );
+	}
+
+	/**
+	 * Tabs and what each one shows.
+	 *
+	 * @return array
+	 */
+	public function tabs(): array {
+		return array(
+			'settings' => array( 'settings', 'id="members-for-kofi-settings-form"' ),
+			'members'  => array( 'members', 'Member since' ),
+			'logs'     => array( 'logs', 'Requests from Ko-fi' ),
+			'old link' => array( 'user_logs', 'Requests from Ko-fi' ),
+			'unknown'  => array( '<script>', 'id="members-for-kofi-settings-form"' ),
+		);
+	}
 
 	/**
 	 * The field is write-only: neither a stored plaintext token nor its hash
@@ -211,7 +335,7 @@ class AdminSettingsRenderTest extends TestCase {
 
 		$output = $this->capture_render( array( $this->settings, 'render_verification_token_field' ) );
 
-		$this->assertStringContainsString( 'No token set yet', $output );
+		$this->assertStringContainsString( 'No token is saved yet.', $output );
 		$this->assertStringNotContainsString( 'fingerprint:', $output );
 	}
 
@@ -297,7 +421,7 @@ class AdminSettingsRenderTest extends TestCase {
 		try {
 			update_option( 'permalink_structure', '' );
 			$this->assertSame( home_url( '/?kofi_webhook=1' ), AdminSettings::webhook_url() );
-			$this->assertStringContainsString( 'kofi_webhook=1', $this->capture_render( array( $this->settings, 'render_verification_token_field' ) ) );
+			$this->assertStringContainsString( 'kofi_webhook=1', $this->capture_render( array( $this->settings, 'render_webhook_url_field' ) ) );
 
 			update_option( 'permalink_structure', '/%postname%/' );
 			$this->assertSame( home_url( '/webhook-kofi/' ), AdminSettings::webhook_url() );
@@ -444,20 +568,21 @@ class AdminSettingsRenderTest extends TestCase {
 	}
 
 	/**
-	 * The two labels that used to be hard-coded English go through translation.
+	 * The settings labels go through translation (two were hard-coded English
+	 * until 1.6.1).
 	 */
-	public function test_the_subscription_and_expiry_labels_are_translatable(): void {
+	public function test_the_settings_labels_are_translatable(): void {
 		$filter = static function ( $translation, $text, $domain ) {
 			return 'members-for-kofi' === $domain ? 'XX ' . $text : $translation;
 		};
 		add_filter( 'gettext', $filter, 10, 3 );
 
-		$subscriptions = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
-		$expiry        = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
+		$payments = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
+		$expiry   = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
 
 		remove_filter( 'gettext', $filter, 10 );
 
-		$this->assertStringContainsString( 'XX Only assign roles to subscribers.', $subscriptions );
-		$this->assertStringContainsString( 'XX If checked, role will be removed after the set number of days.', $expiry );
+		$this->assertStringContainsString( 'XX Subscriptions only', $payments );
+		$this->assertStringContainsString( 'XX Remove the role', $expiry );
 	}
 }

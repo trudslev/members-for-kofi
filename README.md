@@ -34,15 +34,16 @@
 - **Default Role**: Fallback role if no mapping is found.
 - **Only Subscriptions**: Optionally ignore one-time donations.
 - **Role Expiry**: Automatically remove roles after a set number of days.
-- **Logging**: User activity and webhook requests are stored in dedicated database tables. View logs in the admin interface with the ability to switch between User and Request logs.
+- **Logging**: Member activity and webhook requests are stored in dedicated database tables, shown on the Logs tab.
+- **Members**: The Members tab lists everyone who has or had a membership, with status, role and dates.
 - **Automatic Log Cleanup**: Daily cron job automatically deletes old logs based on configurable retention period (default: 30 days).
 
 ## Logging
 
-The plugin records user-related events (donations, role assignments) and webhook requests in dedicated custom database tables for auditability. Logs can be viewed and managed through the admin interface:
+The plugin records user-related events (donations, role assignments) and webhook requests in dedicated custom database tables for auditability. Both are on the Logs tab, where they can be searched, and the request log filtered to accepted or refused requests:
 
-- **User Logs**: Track donations, role assignments, and user activities
-- **Request Logs**: Every webhook request that reaches the plugin, with its status and any error. Requests that are not POST, and floods of failures from one address, are refused before this point and deliberately leave no row
+- **Member activity**: Track donations, role assignments, and user activities
+- **Requests from Ko-fi**: Every webhook request that reaches the plugin, with its status and any error. Requests that are not POST, and floods of failures from one address, are refused before this point and deliberately leave no row
 - **Automatic Cleanup**: Configure automatic deletion of old logs (default: 30 days retention)
 
 For development or troubleshooting, if `WP_DEBUG` is enabled, a minimal debug logger writes contextual messages to the PHP error log.
@@ -233,7 +234,7 @@ This plugin follows WordPress security best practices and implements multiple la
 - **Webhook Verification:** All incoming webhook requests must include a valid verification token that matches your configured token.
 - **Input Sanitization:** All webhook data is sanitized using WordPress security functions before processing.
 - **Output Escaping:** All data displayed in the admin interface is properly escaped to prevent XSS attacks.
-- **Nonce Verification:** All admin forms and AJAX requests verify WordPress nonces.
+- **Nonce Verification:** Every admin form verifies a WordPress nonce.
 - **Capability Checks:** Administrative functions require the `manage_options` capability.
 - **Database Security:** Every query carrying a variable uses `$wpdb->prepare()` with placeholders, and search terms go through `$wpdb->esc_like()`. Table names come from `$wpdb->prefix`, never from a request.
 - **Direct File Access Protection:** All PHP files check for WordPress context (ABSPATH) before executing.
@@ -271,7 +272,7 @@ so there is time to ship a fix before the details are public. See
 src/
   Plugin.php              bootstrapping, hooks, rewrite rule, cron, schema upgrades
   Webhook/Webhook.php     receives and validates the Ko-fi payload, assigns roles
-  Admin/AdminSettings.php settings screens, the log viewer and its AJAX handlers
+  Admin/                  the admin page: Settings, Members and Logs tabs
   Cron/                   role expiry and log cleanup, one daily job each
   Logging/                the two database log tables, plus a debug logger
 tests/
@@ -336,6 +337,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.7.0**: A redesigned admin page. Settings follow Ko-fi's own setup steps and show whether Ko-fi's requests are arriving. Tiers Ko-fi sent that have no role can be added with one click. A new Members tab lists every member with their status and dates. The request log can show only refused requests and explains why each was refused. Complete Danish translation.
 - **1.6.1**: "Automatically Clear Logs" can now be switched off: unticking it used to have no effect. Two settings labels that always showed in English are now translated, and three Danish wordings are improved.
 - **1.6.0**: Filters and actions for other plugins (see "For Developers: Hooks"): skip a payment, refuse to create an account, change the role, adjust new accounts, and react when an account is created, a role is assigned or removed, or a payment is logged. Filtered roles get the same checks as configured ones, and a faulty callback can never turn a payment into an error.
 - **1.5.0**: A supporter who changes their email address on the site keeps their membership: the old address is remembered, so Ko-fi's payments (which keep using it) reach the same account instead of creating a new one. `members_for_kofi_supports_email_change()` tells other plugins this is safe. Previous addresses are covered by the personal-data export and erase tools.

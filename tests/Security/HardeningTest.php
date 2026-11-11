@@ -21,6 +21,7 @@
 namespace MembersForKofi\Tests\Security;
 
 use MembersForKofi\Admin\AdminSettings;
+use MembersForKofi\Admin\LogsTab;
 use MembersForKofi\Logging\RequestLogger;
 use MembersForKofi\Tests\TestCase;
 use MembersForKofi\Webhook\Webhook;
@@ -216,10 +217,8 @@ class HardeningTest extends TestCase {
 	 * Page sizes the picker offers are kept as-is.
 	 */
 	public function test_offered_page_sizes_are_accepted(): void {
-		$settings = new AdminSettings();
-
-		foreach ( AdminSettings::ROWS_PER_PAGE_OPTIONS as $size ) {
-			$this->assertSame( $size, $settings->sanitize_rows_per_page( $size ) );
+		foreach ( LogsTab::PER_PAGE_OPTIONS as $size ) {
+			$this->assertSame( $size, LogsTab::view( array( 'per_page' => (string) $size ) )['per_page'] );
 		}
 	}
 
@@ -230,11 +229,9 @@ class HardeningTest extends TestCase {
 	 * error and an HTTP 500 on the logs screen.
 	 */
 	public function test_zero_page_size_falls_back_to_the_default(): void {
-		$settings = new AdminSettings();
-
 		$this->assertSame(
-			AdminSettings::DEFAULT_ROWS_PER_PAGE,
-			$settings->sanitize_rows_per_page( 0 )
+			LogsTab::DEFAULT_PER_PAGE,
+			LogsTab::view( array( 'per_page' => 0 ) )['per_page']
 		);
 	}
 
@@ -242,11 +239,9 @@ class HardeningTest extends TestCase {
 	 * An enormous page size must not reach the LIMIT clause.
 	 */
 	public function test_huge_page_size_falls_back_to_the_default(): void {
-		$settings = new AdminSettings();
-
 		$this->assertSame(
-			AdminSettings::DEFAULT_ROWS_PER_PAGE,
-			$settings->sanitize_rows_per_page( 999999999 )
+			LogsTab::DEFAULT_PER_PAGE,
+			LogsTab::view( array( 'per_page' => 999999999 ) )['per_page']
 		);
 	}
 
@@ -259,12 +254,20 @@ class HardeningTest extends TestCase {
 	 * @return void
 	 */
 	public function test_unoffered_page_sizes_fall_back_to_the_default( $raw ): void {
-		$settings = new AdminSettings();
-
 		$this->assertSame(
-			AdminSettings::DEFAULT_ROWS_PER_PAGE,
-			$settings->sanitize_rows_per_page( $raw )
+			LogsTab::DEFAULT_PER_PAGE,
+			LogsTab::view( array( 'per_page' => $raw ) )['per_page']
 		);
+	}
+
+	/**
+	 * A page size carrying SQL reaches the query as a plain integer.
+	 */
+	public function test_a_page_size_carrying_sql_becomes_an_integer(): void {
+		$per_page = LogsTab::view( array( 'per_page' => '10; DROP TABLE wp_users' ) )['per_page'];
+
+		$this->assertSame( 10, $per_page );
+		$this->assertContains( $per_page, LogsTab::PER_PAGE_OPTIONS );
 	}
 
 	/**
@@ -279,7 +282,6 @@ class HardeningTest extends TestCase {
 			'just over max' => array( 101 ),
 			'non numeric'   => array( 'all' ),
 			'empty string'  => array( '' ),
-			'sql injection' => array( '10; DROP TABLE wp_users' ),
 		);
 	}
 
@@ -461,10 +463,16 @@ class HardeningTest extends TestCase {
 	 * This is the end the user actually hits: a 500 on the logs screen.
 	 */
 	public function test_rendering_logs_with_zero_page_size_does_not_fatal(): void {
-		$settings = new AdminSettings();
-
 		ob_start();
-		$settings->render_user_logs_table( null, 0 );
+		LogsTab::render(
+			LogsTab::view(
+				array(
+					'log'      => 'activity',
+					'per_page' => '0',
+					'paged'    => '-3',
+				)
+			)
+		);
 		$output = (string) ob_get_clean();
 
 		$this->assertNotSame( '', $output, 'Expected the logs table to render' );

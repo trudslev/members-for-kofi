@@ -1,0 +1,307 @@
+/* Members for Ko-fi admin page. Builds on wp-admin's own styles. */
+
+.mfk-wrap .nav-tab-wrapper {
+	margin-bottom: 20px;
+}
+
+.mfk-settings,
+.mfk-wrap > .mfk-logs-head,
+.mfk-wrap > .mfk-table-wrap {
+	max-width: 1040px;
+}
+
+.mfk-settings {
+	max-width: 880px;
+}
+
+.mfk-card {
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-radius: 4px;
+	margin: 0 0 20px;
+}
+
+.mfk-card h2 {
+	margin: 0;
+	font-size: 15px;
+}
+
+.mfk-card-body {
+	padding: 16px 20px;
+}
+
+.mfk-card-body > * + * {
+	margin-top: 16px;
+}
+
+.mfk-card-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	padding: 14px 20px;
+	border-bottom: 1px solid #dcdcde;
+}
+
+.mfk-status {
+	margin: 0;
+	font-weight: 600;
+}
+
+.mfk-status-ok {
+	color: #00611a;
+}
+
+.mfk-status-error {
+	color: #8a2424;
+}
+
+.mfk-status-waiting {
+	color: #614200;
+}
+
+.mfk-steps {
+	margin: 0;
+	padding: 16px 20px 16px 44px;
+}
+
+.mfk-steps > li + li {
+	margin-top: 20px;
+}
+
+.mfk-step-title,
+.mfk-field-title {
+	display: block;
+	margin: 0 0 6px;
+	font-weight: 600;
+}
+
+.mfk-field {
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+
+.mfk-field .description,
+.mfk-steps .description {
+	margin-top: 6px;
+}
+
+.mfk-copy-row,
+.mfk-inline,
+.mfk-sentence {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+	margin: 0;
+}
+
+.mfk-copy-row input {
+	flex: 1 1 320px;
+	min-width: 0;
+}
+
+.mfk-copy-status {
+	color: #00611a;
+}
+
+.mfk-token-state {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px 8px;
+	margin: 0 0 8px;
+}
+
+.mfk-muted {
+	color: #50575e;
+}
+
+.mfk-table-wrap {
+	overflow-x: auto;
+}
+
+.mfk-table td,
+.mfk-table th {
+	vertical-align: middle;
+}
+
+.mfk-tier-table {
+	max-width: 720px;
+}
+
+.mfk-tier-table input,
+.mfk-tier-table select {
+	width: 100%;
+	max-width: none;
+}
+
+.mfk-tier-table .mfk-actions {
+	width: 1%;
+	white-space: nowrap;
+	text-align: right;
+}
+
+.mfk-unmapped {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin-top: 12px;
+	padding: 10px 12px;
+	background: #fcf9e8;
+	border: 1px solid #dba617;
+	border-radius: 4px;
+}
+
+.mfk-nowrap {
+	white-space: nowrap;
+}
+
+.mfk-badge {
+	display: inline-block;
+	padding: 1px 8px;
+	border-radius: 10px;
+	background: #f0f0f1;
+	color: #3c434a;
+	font-size: 12px;
+	font-weight: 600;
+	line-height: 1.7;
+}
+
+.mfk-badge-success {
+	background: #edfaef;
+	color: #00611a;
+}
+
+.mfk-badge-error {
+	background: #fff;
+	border: 1px solid #d63638;
+	color: #8a2424;
+}
+
+.mfk-badge-warning {
+	background: #fcf9e8;
+	border: 1px solid #dba617;
+	color: #614200;
+}
+
+.mfk-table tr.mfk-refused td {
+	background: #fcf0f1;
+}
+
+.mfk-payload summary {
+	cursor: pointer;
+	color: #2271b1;
+}
+
+.mfk-payload pre {
+	max-width: 520px;
+	max-height: 320px;
+	margin: 8px 0 0;
+	padding: 8px 10px;
+	overflow: auto;
+	background: #f6f7f7;
+	border: 1px solid #dcdcde;
+	font-size: 12px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.mfk-logs-head {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px 16px;
+	margin-bottom: 12px;
+}
+
+.mfk-logs-head .mfk-subsubsub {
+	float: none;
+	margin: 0;
+}
+
+.mfk-logs-head p {
+	margin: 0;
+}
+
+.mfk-filters {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px 12px;
+	margin: 0 0 12px;
+}
+
+.mfk-filters p {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin: 0;
+}
+
+.mfk-filters label {
+	font-weight: 600;
+}
+
+.mfk-filters .mfk-grow {
+	flex: 1 1 240px;
+	max-width: 360px;
+}
+
+.mfk-inline-search {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.mfk-tablenav {
+	height: auto;
+	margin: 8px 0 0;
+}
+
+.mfk-tablenav .tablenav-pages {
+	float: none;
+	margin: 0;
+}
+
+.mfk-pages {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px;
+	margin: 12px 0;
+}
+
+.mfk-delete {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	max-width: 1040px;
+	margin-top: 24px;
+	padding: 14px 20px;
+}
+
+.mfk-delete h2 {
+	font-size: 14px;
+}
+
+.mfk-delete p {
+	margin: 4px 0 0;
+}
+
+.mfk-wrap .button.mfk-button-danger {
+	border-color: #d63638;
+	color: #b32d2e;
+}
+
+.mfk-wrap .button.mfk-button-danger:hover,
+.mfk-wrap .button.mfk-button-danger:focus {
+	border-color: #8a2424;
+	color: #8a2424;
+}
