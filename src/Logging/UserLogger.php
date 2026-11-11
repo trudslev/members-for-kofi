@@ -57,7 +57,6 @@ class UserLogger {
 			),
 			array( '%d', '%s', '%s', '%s', '%f', '%s', '%s' )
 		);
-
 	}
 
 	/**

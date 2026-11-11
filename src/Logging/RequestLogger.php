@@ -94,7 +94,6 @@ class RequestLogger {
 			),
 			array( '%s', '%s', '%f', '%s', '%d', '%s', '%d', '%d', '%s', '%s' )
 		);
-
 	}
 
 	/**

@@ -22,6 +22,8 @@
   <exclude-pattern>*/vendor/*</exclude-pattern>
   <exclude-pattern>*/node_modules/*</exclude-pattern>
   <exclude-pattern>*/tests/_output/*</exclude-pattern>
+  <!-- Local, gitignored scratch output (unpacked release zips and the like). -->
+  <exclude-pattern>*/reports/*</exclude-pattern>
 
   <!-- Test code is not WordPress runtime code. Tests query the plugin's own
        tables directly to assert on what was written, drive the site over real
