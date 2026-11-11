@@ -1,6 +1,6 @@
 # Members for Ko-fi
 
-WordPress plugin (v1.6.0, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
+WordPress plugin (v1.6.1, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
 WordPress accounts and roles by tier, expires roles that are not renewed, and logs users and
 requests to two custom tables. Work happens on `develop`.
 

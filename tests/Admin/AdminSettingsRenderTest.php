@@ -424,4 +424,40 @@ class AdminSettingsRenderTest extends TestCase {
 			wp_set_current_user( $previous );
 		}
 	}
+
+	/**
+	 * Unticking "Automatically Clear Logs" must reach the sanitizer as "off".
+	 *
+	 * A browser sends nothing for an unchecked box, and the sanitizer reads a
+	 * missing value as on, so the field carries a hidden "0" ahead of the
+	 * checkbox: when both are sent, the checkbox's "1" wins.
+	 */
+	public function test_the_auto_clear_field_sends_off_when_unticked(): void {
+		$output = $this->capture_render( array( $this->settings, 'render_auto_clear_logs_field' ) );
+
+		$hidden   = strpos( $output, 'type="hidden" name="members_for_kofi_options[auto_clear_logs]" value="0"' );
+		$checkbox = strpos( $output, 'type="checkbox" id="members_for_kofi_auto_clear_logs" name="members_for_kofi_options[auto_clear_logs]" value="1"' );
+
+		$this->assertNotFalse( $hidden, 'The field needs a hidden "0" so an unticked box is sent at all.' );
+		$this->assertNotFalse( $checkbox );
+		$this->assertLessThan( $checkbox, $hidden, 'The hidden "0" must come first, so a ticked box overrides it.' );
+	}
+
+	/**
+	 * The two labels that used to be hard-coded English go through translation.
+	 */
+	public function test_the_subscription_and_expiry_labels_are_translatable(): void {
+		$filter = static function ( $translation, $text, $domain ) {
+			return 'members-for-kofi' === $domain ? 'XX ' . $text : $translation;
+		};
+		add_filter( 'gettext', $filter, 10, 3 );
+
+		$subscriptions = $this->capture_render( array( $this->settings, 'render_only_subscriptions_field' ) );
+		$expiry        = $this->capture_render( array( $this->settings, 'render_expiry_toggle_field' ) );
+
+		remove_filter( 'gettext', $filter, 10 );
+
+		$this->assertStringContainsString( 'XX Only assign roles to subscribers.', $subscriptions );
+		$this->assertStringContainsString( 'XX If checked, role will be removed after the set number of days.', $expiry );
+	}
 }

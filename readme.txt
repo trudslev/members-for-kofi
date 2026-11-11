@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.6.0
+Stable tag: 1.6.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -140,6 +140,11 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 
 == Changelog ==
 
+= 1.6.1 =
+* Fix: Unticking "Automatically Clear Logs" on the settings page and saving left it switched on, so old log entries kept being deleted. It now switches off.
+* Fix: Two settings labels ("Only assign roles to subscribers." and the expiry description) were always shown in English. They are now translated.
+* Translation: Three Danish wordings improved.
+
 = 1.6.0 =
 * Feature: Other plugins can now steer what a Ko-fi payment does. Filters can skip a payment, refuse to create an account (for example to keep a member who deleted their account from being re-created by their next payment), change or withhold the role, and adjust a new account. Actions report an account created, a role assigned or removed (with the reason: tier change or expiry), and a payment logged. Nothing changes on a site that uses none of them.
 * Security: A role chosen by a filter passes the same checks as one chosen in the settings, so administrator and roles with site-running powers can never be granted, and a filter cannot set a new account's role or email address. Hooks never see the verification token.
@@ -216,6 +221,9 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.6.1 =
+"Automatically Clear Logs" can now be switched off. If you unticked it before, untick it again and save after updating.
 
 = 1.6.0 =
 Adds filters and actions so other plugins can decide whether a payment creates an account, which role it grants, and act when accounts and roles change. No change for sites that do not use them.

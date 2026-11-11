@@ -477,7 +477,7 @@ class AdminSettings {
 	public static function render_only_subscriptions_field(): void {
 		$options = get_option( 'members_for_kofi_options', array() );
 		$checked = ! empty( $options['only_subscriptions'] );
-		echo '<label><input type="checkbox" name="members_for_kofi_options[only_subscriptions]" value="1" ' . checked( $checked, true, false ) . '> Only assign roles to subscribers.</label>';
+		echo '<label><input type="checkbox" name="members_for_kofi_options[only_subscriptions]" value="1" ' . checked( $checked, true, false ) . '> ' . esc_html__( 'Only assign roles to subscribers.', 'members-for-kofi' ) . '</label>';
 		echo '<p class="description">' . esc_html__( 'When enabled, users must be active subscribers to receive a role.', 'members-for-kofi' ) . '</p>';
 	}
 
@@ -575,7 +575,7 @@ class AdminSettings {
 		$options = get_option( 'members_for_kofi_options', array() );
 		$checked = ! empty( $options['enable_expiry'] );
 		echo '<label><input type="checkbox" name="members_for_kofi_options[enable_expiry]" value="1" ' . checked( $checked, true, false ) . '></label>';
-		echo '<p class="description">If checked, role will be removed after the set number of days.</p>';
+		echo '<p class="description">' . esc_html__( 'If checked, role will be removed after the set number of days.', 'members-for-kofi' ) . '</p>';
 	}
 
 	/**
@@ -602,6 +602,10 @@ class AdminSettings {
 	public static function render_auto_clear_logs_field(): void {
 		$options = get_option( 'members_for_kofi_options', array() );
 		$checked = isset( $options['auto_clear_logs'] ) ? (bool) $options['auto_clear_logs'] : true;
+		// A browser sends nothing for an unchecked box, and the sanitizer reads a
+		// missing value as on (the default for installs that predate the
+		// setting). Without this hidden "0", unticking the box never stuck.
+		echo '<input type="hidden" name="members_for_kofi_options[auto_clear_logs]" value="0">';
 		echo '<input type="checkbox" id="members_for_kofi_auto_clear_logs" name="members_for_kofi_options[auto_clear_logs]" value="1" ' . checked( $checked, true, false ) . '>';
 		echo '<p class="description">' . esc_html__( 'Enable automatic deletion of old logs based on retention period.', 'members-for-kofi' ) . '</p>';
 	}

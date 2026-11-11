@@ -28,7 +28,7 @@ msgstr "https://github.com/trudslev/members-for-kofi"
 #. Description of the plugin
 #: members-for-kofi.php
 msgid "Integrate with Ko-fi to manage WordPress users or roles via webhook."
-msgstr "Forbind Ko-fi med WordPress, så brugere og roller styres via webhook."
+msgstr "Forbind Ko-fi med WordPress, så brugere og roller kan administreres via webhooks."
 
 #. Author of the plugin
 #: members-for-kofi.php
@@ -111,7 +111,7 @@ msgstr "Verifikationstoken skal udfyldes."
 
 #: src/Admin/AdminSettings.php:193
 msgid "Role Expiry Days is required and must be a number when expiry is enabled."
-msgstr "Når udløb er slået til, skal rollens udløb udfyldes med et antal dage."
+msgstr "Når udløb er slået til, skal du angive rollens gyldighed i dage."
 
 #. translators: %s is the role name that was rejected.
 #: src/Admin/AdminSettings.php:213
@@ -409,8 +409,16 @@ msgstr "Supporter"
 
 #: src/Privacy/PersonalData.php:335
 msgid "When you support us on Ko-fi, Ko-fi sends this site your email address, the name and message you entered, the amount, and your membership tier. We use your email address to create or find your account here and give it the access your support pays for."
-msgstr "Når du støtter os på Ko-fi, sender Ko-fi din e-mailadresse, det navn og den besked, du skrev, beløbet og dit medlemsniveau til denne side. Vi bruger din e-mailadresse til at oprette eller finde din konto her og give den den adgang, din støtte betaler for."
+msgstr "Når du støtter os på Ko-fi, sender Ko-fi din e-mailadresse, det navn og den besked, du skrev, beløbet og dit medlemsniveau til denne side. Vi bruger din e-mailadresse til at oprette eller finde din konto her og give dig den adgang, din støtte betaler for."
 
 #: src/Privacy/PersonalData.php:336
 msgid "A record of each payment and of the access granted or removed is kept for the number of days set by the site owner, then deleted automatically when log cleanup is enabled. You can ask for a copy of this data, or for it to be erased, through the site's personal data request process."
 msgstr "Hver betaling og hver tildelt eller fjernet adgang registreres og gemmes i det antal dage, sidens ejer har valgt, og slettes derefter automatisk, når oprydning i logs er slået til. Du kan bede om en kopi af disse data eller om at få dem slettet via sidens procedure for anmodninger om persondata."
+
+#: src/Admin/AdminSettings.php
+msgid "Only assign roles to subscribers."
+msgstr "Tildel kun roller til abonnenter."
+
+#: src/Admin/AdminSettings.php
+msgid "If checked, role will be removed after the set number of days."
+msgstr "Hvis markeret, fjernes rollen efter det angivne antal dage."

@@ -375,4 +375,38 @@ class AdminSettingsTest extends TestCase {
 
 		$this->assertSame( $hashed, $this->settings->sanitize_options( $hashed ) );
 	}
+
+	/**
+	 * The settings form posts "0" or "1" strings, not booleans.
+	 *
+	 * @dataProvider auto_clear_form_values
+	 *
+	 * @param string $posted   What the form sends.
+	 * @param bool   $expected Stored value.
+	 */
+	public function test_auto_clear_logs_follows_the_posted_form_value( string $posted, bool $expected ): void {
+		$sanitized = $this->settings->sanitize_options(
+			array(
+				'verification_token' => 'test123',
+				'tier_role_map'      => array(),
+				'default_role'       => 'subscriber',
+				'auto_clear_logs'    => $posted,
+				'log_retention_days' => '30',
+			)
+		);
+
+		$this->assertSame( $expected, $sanitized['auto_clear_logs'] );
+	}
+
+	/**
+	 * Form values for auto_clear_logs: the hidden "0" alone, or the checkbox.
+	 *
+	 * @return array
+	 */
+	public function auto_clear_form_values(): array {
+		return array(
+			'unticked' => array( '0', false ),
+			'ticked'   => array( '1', true ),
+		);
+	}
 }

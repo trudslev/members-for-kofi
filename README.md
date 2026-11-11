@@ -336,6 +336,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.6.1**: "Automatically Clear Logs" can now be switched off: unticking it used to have no effect. Two settings labels that always showed in English are now translated, and three Danish wordings are improved.
 - **1.6.0**: Filters and actions for other plugins (see "For Developers: Hooks"): skip a payment, refuse to create an account, change the role, adjust new accounts, and react when an account is created, a role is assigned or removed, or a payment is logged. Filtered roles get the same checks as configured ones, and a faulty callback can never turn a payment into an error.
 - **1.5.0**: A supporter who changes their email address on the site keeps their membership: the old address is remembered, so Ko-fi's payments (which keep using it) reach the same account instead of creating a new one. `members_for_kofi_supports_email_change()` tells other plugins this is safe. Previous addresses are covered by the personal-data export and erase tools.
 - **1.4.0**: Other plugins and themes can read a supporter's membership with `members_for_kofi_get_membership()`, including when they first became a member (backfill older members with `wp members-for-kofi member-since set`). Adds a complete Danish translation, and the plugin's bundled translations now load. Webhooks accept only the hashed token from 1.2.0; a site whose settings were restored from a pre-1.2.0 backup must save the settings page once.
