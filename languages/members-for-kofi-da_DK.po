@@ -540,7 +540,7 @@ msgstr[1] "Fjerner alle %s poster i medlemsaktiviteten. Forespørgselsloggen bev
 #, php-format
 msgid "Delete %s entry in this log? This can't be undone."
 msgid_plural "Delete all %s entries in this log? This can't be undone."
-msgstr[0] "Ryd %s post i denne log? Det kan ikke fortrydes."
+msgstr[0] "Slet %s post i denne log? Det kan ikke fortrydes."
 msgstr[1] "Ryd alle %s poster i denne log? Det kan ikke fortrydes."
 
 #: src/Admin/LogsTab.php:726
