@@ -30,7 +30,9 @@ require_once dirname( __DIR__ ) . '/vendor/autoload.php';
 require_once __DIR__ . '/Integration/IntegrationTestCase.php';
 
 // Load environment variables from .env file.
-if ( file_exists( dirname( __DIR__ ) . '/.env' ) ) {
+// Readable only where the developer chose to share it: on a maintainer's
+// machine .env can hold credentials and be private to their user.
+if ( is_readable( dirname( __DIR__ ) . '/.env' ) ) {
 	$dotenv = Dotenv\Dotenv::createImmutable( dirname( __DIR__ ) );
 	$dotenv->load();
 
@@ -58,11 +60,10 @@ if ( ! function_exists( 'wp_json_encode' ) ) {
 // Clear any webhook failure counters left over from an earlier run: the
 // endpoint sheds requests from an address that keeps failing, and two suites
 // inside the same five-minute window would otherwise collide.
-$members_for_kofi_compose = dirname( __DIR__ ) . '/docker-compose.test.yml';
 shell_exec(
 	sprintf(
-		'docker compose -f %s run --rm -T wpcli wp eval %s 2>/dev/null',
-		escapeshellarg( $members_for_kofi_compose ),
+		'%s eval %s 2>/dev/null',
+		\MembersForKofi\Tests\Integration\IntegrationTestCase::wp_prefix(),
 		escapeshellarg( 'global $wpdb; $wpdb->query( "DELETE FROM {$wpdb->options} WHERE option_name LIKE \'%_transient_%members_for_kofi_wh_fail_%\'" );' )
 	)
 );
@@ -89,7 +90,13 @@ $members_for_kofi_token    = ( false === $members_for_kofi_token || '' === $memb
 // WordPress, so the wrapper is not loaded.
 $members_for_kofi_host = (string) parse_url( $members_for_kofi_site_url, PHP_URL_HOST );
 
-if ( ! in_array( $members_for_kofi_host, array( 'localhost', '127.0.0.1', '::1', 'host.docker.internal' ), true )
+// Inside the test environment the site is its compose service, `wordpress`.
+$members_for_kofi_local = array( 'localhost', '127.0.0.1', '::1', 'host.docker.internal' );
+if ( \MembersForKofi\Tests\Integration\IntegrationTestCase::in_stack() ) {
+	$members_for_kofi_local[] = 'wordpress'; // phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText -- The compose service's host name.
+}
+
+if ( ! in_array( $members_for_kofi_host, $members_for_kofi_local, true )
 	&& '1' !== getenv( 'KOFI_ALLOW_REMOTE_TESTS' ) ) {
 	fwrite(
 		STDERR,

@@ -263,7 +263,8 @@ so there is time to ship a fix before the details are public. See
 
 - **Docker** and the Compose plugin — the test suites run against a real
   WordPress install, so there is no way to run them without it
-- **PHP 7.4+** and **Composer** on the host
+- **Composer** on the host, to install the development dependencies. Both suites run PHP inside
+  the test containers, so no PHP is needed beyond what Composer itself uses
 - `make`
 
 ### Layout
@@ -351,6 +352,7 @@ part of the repository. Everything above works without it.
 
 ## Release History
 
+- **1.7.1**: Corrects one Danish wording and two formatting errors from 1.7.0. For developers: the test suites now need nothing but Docker, run inside their own containers and take about half as long.
 - **1.7.0**: A redesigned admin page. Settings follow Ko-fi's own setup steps and show whether Ko-fi's requests are arriving. Tiers Ko-fi sent that have no role can be added with one click. A new Members tab lists every member with their status and dates. The request log can show only refused requests and explains why each was refused. Complete Danish translation.
 - **1.6.1**: "Automatically Clear Logs" can now be switched off: unticking it used to have no effect. Two settings labels that always showed in English are now translated, and three Danish wordings are improved.
 - **1.6.0**: Filters and actions for other plugins (see "For Developers: Hooks"): skip a payment, refuse to create an account, change the role, adjust new accounts, and react when an account is created, a role is assigned or removed, or a payment is logged. Filtered roles get the same checks as configured ones, and a faulty callback can never turn a payment into an error.

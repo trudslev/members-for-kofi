@@ -5,7 +5,7 @@ Tags: ko-fi, membership, roles, webhook, user management
 Requires at least: 5.6
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 1.7.0
+Stable tag: 1.7.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -140,6 +140,11 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 
 == Changelog ==
 
+= 1.7.1 =
+* Translation: Danish wording corrected for deleting a single log entry.
+* Maintenance: Two formatting errors from 1.7.0 fixed. They had no effect on how the plugin works.
+* Development: The automated tests run faster and need nothing but Docker.
+
 = 1.7.0 =
 * Redesign: The settings page is reorganised around how you set it up. "Ko-fi connection" walks through the three steps in Ko-fi's own order (copy the webhook URL, paste the token, press Send test) and shows whether Ko-fi's requests are arriving and being accepted.
 * Feature: Tiers Ko-fi has sent that aren't mapped to a role are listed, and can be added with one click.
@@ -232,6 +237,9 @@ All of it is covered by WordPress's Export Personal Data and Erase Personal Data
 * Logging of user actions in database.
 
 == Upgrade Notice ==
+
+= 1.7.1 =
+A small maintenance release: one Danish wording fix. No settings change.
 
 = 1.7.0 =
 A redesigned admin page: a connection status, a Members tab, and a log viewer that can show only refused requests. No settings change.

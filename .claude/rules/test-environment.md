@@ -30,9 +30,19 @@ dependency on a test environment shared by other projects on one machine.
   two, never recursively: the working tree is mounted below them
 - PHPUnit runs as www-data, so it cannot read a developer's private `.env`; tests load `.env` only
   `is_readable()`. Its result cache goes to the container's `/tmp`, never into the working tree
-- `make test` runs `php ./vendor/bin/phpunit` in `wpcli`; `make test-integration` runs on the host
-  against `http://localhost:8101`. Integration tests talk to the site with `docker compose exec -T wpcli
-  wp …` and to the database with whichever client the image has (`mariadb` or `mysql`)
+- Both suites run inside `wpcli`: `make test` as `php ./vendor/bin/phpunit`, `make test-integration`
+  with `WP_TEST_IN_STACK=1` against `http://wordpress` (the compose service, over the test network).
+  Inside the stack the tests call `wp` and the database client (`mariadb -h db`) directly;
+  `IntegrationTestCase::wp_prefix()` / `db_argv()` are the one switch, and fall back to `docker compose
+  exec` when the suite is run on a host with its own PHP. Never call `docker` from a test directly:
+  inside the stack there is no Docker CLI or socket, by design
+- `WP_TEST_PORT` (default 8101) only publishes the site on 127.0.0.1 for a browser or curl; the
+  suites never use it. `wp-config.php` sets WP_HOME/WP_SITEURL from the request's host, so the site
+  works under both names. Host-specific ports belong in the untracked `Makefile.local`, never here
+- `bin/test-env-init.sh` puts constants in `wp config create --extra-php`: `wp config set` would
+  append them after the template's `if ( ! defined( 'WP_DEBUG' ) )` default, where they are ignored
+- `phpcbf` rewrites the string `'wordpress'` to `'WordPress'` (CapitalPDangit); the service name
+  needs a `phpcs:ignore WordPress.WP.CapitalPDangit.MisspelledInText`
 - Test targets go through `bin/with-test-env.sh`: what it started is stopped afterwards, also on
   failure or Ctrl-C, and volumes it created are removed (`down -v`). If only the web server was missing,
   only it is stopped. Started by `make test-env-up` or with `KEEP_TEST_ENV=1`, they stay up.

@@ -1,6 +1,6 @@
 # Members for Ko-fi
 
-WordPress plugin (v1.7.0, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
+WordPress plugin (v1.7.1, `members-for-kofi.php` header) that turns Ko-fi webhook payments into
 WordPress accounts and roles by tier, expires roles that are not renewed, and logs users and
 requests to two custom tables. Work happens on `develop`.
 
@@ -59,7 +59,7 @@ Tests run against a real install of the newest WordPress in Docker, never agains
 ```bash
 make test                    # unit/WP tests inside the container
 make test-case TEST=HooksTest
-make test-integration        # real HTTP requests against http://localhost:8101
+make test-integration        # real HTTP requests, run inside the stack against http://wordpress
 make test-all                # both
 make test-env-status         # anything still running?
 ./vendor/bin/phpcs           # WordPress Coding Standards; must be clean

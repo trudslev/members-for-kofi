@@ -73,13 +73,26 @@ if [ ! -f wp-includes/version.php ]; then
 fi
 
 if [ ! -f wp-config.php ]; then
-  wp config create --dbhost=db:3306 --dbname="$DB_NAME" --dbuser="$DB_USER" --dbpass="$DB_PASS" --skip-check --quiet
-  wp config set WP_DEBUG true --raw --type=constant >/dev/null
-  # WP-Cron fires loopback HTTP requests whenever a scheduled event is due.
-  # Those are full WordPress requests, so they run the plugin's schema upgrade
-  # check at unpredictable moments and can repair a broken schema behind a
-  # test's back. Cron is tested by invoking the hooks directly.
-  wp config set DISABLE_WP_CRON true --raw --type=constant >/dev/null
+  # Constants go in --extra-php, which comes before the template's own
+  # `if ( ! defined( 'WP_DEBUG' ) )` default; `wp config set` would add them
+  # after it, where they are ignored.
+  #
+  # WP_HOME/WP_SITEURL: the site answers to whichever name it is reached by,
+  # `wordpress` from the HTTP suite inside the test network, 127.0.0.1:PORT
+  # from a browser.
+  #
+  # DISABLE_WP_CRON: WP-Cron fires loopback HTTP requests whenever a scheduled
+  # event is due. Those are full WordPress requests, so they run the plugin's
+  # schema upgrade check at unpredictable moments and can repair a broken
+  # schema behind a test's back. Cron is tested by invoking the hooks directly.
+  wp config create --dbhost=db:3306 --dbname="$DB_NAME" --dbuser="$DB_USER" --dbpass="$DB_PASS" --skip-check --quiet --extra-php <<'PHP'
+define( 'WP_DEBUG', true );
+define( 'DISABLE_WP_CRON', true );
+if ( ! defined( 'WP_CLI' ) && isset( $_SERVER['HTTP_HOST'] ) ) {
+	define( 'WP_HOME', 'http://' . $_SERVER['HTTP_HOST'] );
+	define( 'WP_SITEURL', 'http://' . $_SERVER['HTTP_HOST'] );
+}
+PHP
 fi
 
 if ! wp core is-installed >/dev/null 2>&1; then
@@ -134,11 +147,13 @@ if [ "${TEST_ENV_HTTP:-0}" = 1 ]; then
   $COMPOSE --profile http up -d --wait wordpress >/dev/null
 
   echo ">>> Verifying the webhook endpoint responds..."
-  # Retry rather than checking once: Apache can still be starting.
+  # From inside the test network, as the HTTP suite will: the published port
+  # may not be reachable from where this script runs. Retry rather than check
+  # once: Apache can still be starting.
   attempt=0
   status=000
   until [ "$status" != "000" ] && [ "$status" != "404" ]; do
-    status=$(curl -s -o /dev/null -w '%{http_code}' -X POST "${SITE_URL}/webhook-kofi" --data 'data={}' || echo 000)
+    status=$($COMPOSE exec -T wpcli curl -s -o /dev/null -w '%{http_code}' -X POST http://wordpress/webhook-kofi --data 'data={}' || echo 000)
     attempt=$((attempt + 1))
     if [ "$attempt" -ge 30 ]; then
       echo "ERROR: webhook endpoint not reachable (HTTP ${status})." >&2

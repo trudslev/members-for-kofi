@@ -19,7 +19,9 @@ WP_TEST_PORT?=8101
 WP_VERSION?=latest
 PHP_VERSION?=8.3
 DB_IMAGE?=mariadb:11.4
-export WP_VERSION PHP_VERSION DB_IMAGE
+# WP_TEST_PORT is where the test site is published on 127.0.0.1, for a browser
+# or curl on the host; the suites themselves reach it inside the test network.
+export WP_VERSION PHP_VERSION DB_IMAGE WP_TEST_PORT
 PLUGIN_PATH_IN_CONTAINER:=/var/www/html/wp-content/plugins/members-for-kofi
 
 # Runs a command against the test site and stops the containers afterwards if
@@ -33,7 +35,11 @@ WPCLI_SITE:=$(TEST_COMPOSE) exec -T wpcli wp
 TEST_SITE_RUNNING:=[ -n "$$($(TEST_COMPOSE) ps -q --status running wpcli 2>/dev/null)" ]
 # Commands that need only the plugin's own files (i18n) run WP-CLI against this
 # checkout alone, without the test site.
-WPCLI_FILES:=docker run --rm -u 33:33 -v $(CURDIR):$(PLUGIN_PATH_IN_CONTAINER) -w $(PLUGIN_PATH_IN_CONTAINER) wordpress:cli-php$(PHP_VERSION) wp
+# They write into the working tree (languages/), so they run as your own user.
+# With rootless Docker, container root is your user instead: set
+# WPCLI_FILES_USER=0:0 (in .env or Makefile.local).
+WPCLI_FILES_USER?=$(shell id -u):$(shell id -g)
+WPCLI_FILES=docker run --rm -u $(WPCLI_FILES_USER) -e HOME=/tmp -v $(CURDIR):$(PLUGIN_PATH_IN_CONTAINER) -w $(PLUGIN_PATH_IN_CONTAINER) wordpress:cli-php$(PHP_VERSION) wp $(if $(filter 0:%,$(WPCLI_FILES_USER)),--allow-root)
 # The images the test site uses, pinned in docker-compose.test.yml.
 TEST_IMAGES=$$($(TEST_COMPOSE_ALL) config --images 2>/dev/null)
 
@@ -130,8 +136,8 @@ test-integration: vendor
 
 .PHONY: _test-integration
 _test-integration:
-	@echo "Running HTTP integration tests against http://localhost:$(WP_TEST_PORT)..."
-	WP_TEST_SITE_URL=http://localhost:$(WP_TEST_PORT) ./vendor/bin/phpunit --configuration phpunit-integration.xml
+	@echo "Running HTTP integration tests inside the WP-CLI container, against http://wordpress..."
+	$(TEST_COMPOSE) exec -T -w $(PLUGIN_PATH_IN_CONTAINER) -e WP_TEST_IN_STACK=1 -e WP_TEST_SITE_URL=http://wordpress wpcli php ./vendor/bin/phpunit --configuration phpunit-integration.xml --cache-result-file=/tmp/phpunit-integration.result.cache
 
 # One start and one stop around both suites.
 .PHONY: test-all
@@ -241,7 +247,9 @@ release: .releaseignore
 	if [ -n "$$tested" ] && [ "$$tested" != "$$declared" ]; then \
 		echo "WARNING: readme.txt says 'Tested up to: $$declared' but the test environment runs $$tested. Run 'make tested-up-to'."; \
 	fi
-	cd $(STAGE_DIR) && zip -rq $(ZIP_FULL) $(PLUGIN_SLUG)
+	@# Python's zipfile stands in where the zip tool is not installed.
+	cd $(STAGE_DIR) && if command -v zip >/dev/null 2>&1; then zip -rq $(ZIP_FULL) $(PLUGIN_SLUG); \
+	else python3 -m zipfile -c $(ZIP_FULL) $(PLUGIN_SLUG); fi
 	rm -rf $(STAGE_DIR)
 	@echo "Created artifact: $(ZIP_FULL)"
 

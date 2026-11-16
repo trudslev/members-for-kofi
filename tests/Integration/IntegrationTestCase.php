@@ -99,18 +99,73 @@ abstract class IntegrationTestCase extends TestCase {
 	}
 
 	/**
+	 * Whether the suite runs inside the test environment's WP-CLI container.
+	 *
+	 * `make test-integration` runs it there (WP_TEST_IN_STACK=1): WP-CLI and
+	 * the database client are then local, and the site is reached by its
+	 * service name. Without it, the suite runs on the host and reaches the
+	 * containers through `docker compose`.
+	 *
+	 * @return bool
+	 */
+	public static function in_stack(): bool {
+		return '1' === getenv( 'WP_TEST_IN_STACK' );
+	}
+
+	/**
+	 * The command line that runs WP-CLI against the test site, without
+	 * arguments.
+	 *
+	 * @return string
+	 */
+	public static function wp_prefix(): string {
+		if ( self::in_stack() ) {
+			return 'wp --path=/var/www/html';
+		}
+
+		return sprintf( 'docker compose -f %s exec -T wpcli wp', escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ) );
+	}
+
+	/**
+	 * The argv that runs the database's command-line client against the test
+	 * database, followed by `$args`.
+	 *
+	 * Talks to MySQL directly rather than through WP-CLI: booting WordPress at
+	 * all would run the plugin's schema upgrade.
+	 *
+	 * @param array<int,string> $args Client arguments, e.g. `-N`, `-e`, a statement.
+	 * @return array<int,string>
+	 */
+	public static function db_argv( array $args ): array {
+		$user = getenv( 'WORDPRESS_DB_USER' );
+		$pass = getenv( 'WORDPRESS_DB_PASSWORD' );
+		$name = getenv( 'WORDPRESS_TEST_DB_NAME' );
+
+		$login = array(
+			'-u' . ( false === $user || '' === $user ? 'wp' : $user ),
+			'-p' . ( false === $pass || '' === $pass ? 'wp' : $pass ),
+			false === $name || '' === $name ? 'wordpress_test' : $name,
+		);
+
+		// `mariadb` in the MariaDB image (the default), `mysql` in the MySQL one.
+		$client = 'exec "$(command -v mariadb || command -v mysql)" "$@"';
+
+		if ( self::in_stack() ) {
+			$prefix = array( 'sh', '-c', $client, 'db-client', '-h', 'db', '--skip-ssl' );
+		} else {
+			$prefix = array( 'docker', 'compose', '-f', dirname( __DIR__, 2 ) . '/docker-compose.test.yml', 'exec', '-T', 'db', 'sh', '-c', $client, 'db-client' );
+		}
+
+		return array_merge( $prefix, $login, $args );
+	}
+
+	/**
 	 * Runs a WP-CLI command against the test site.
 	 *
 	 * @param string $args Arguments to pass to `wp`.
 	 * @return string Trimmed stdout.
 	 */
 	protected static function wp( string $args ): string {
-		$command = sprintf(
-			'docker compose -f %s exec -T wpcli wp %s 2>/dev/null',
-			escapeshellarg( dirname( __DIR__, 2 ) . '/docker-compose.test.yml' ),
-			$args
-		);
-
-		return trim( (string) shell_exec( $command ) );
+		return trim( (string) shell_exec( self::wp_prefix() . ' ' . $args . ' 2>/dev/null' ) );
 	}
 }
